@@ -22,7 +22,7 @@ sys.path.insert(0, str(utool_path))
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../u/tools'))
 
 from u_boot_pylib import terminal
-from utool_pkg import cmdline, control
+from utool_pkg import cmdline, control, gitlab_parser
 
 
 class TestBase(unittest.TestCase):
@@ -310,3 +310,54 @@ class TestUtoolControl(TestBase):
         with terminal.capture():
             res = control.run_command(args)
         self.assertEqual(res, 1)
+
+
+class TestGitLabParser(TestBase):
+    """Test GitLab CI file parsing functionality"""
+
+    def test_parse_gitlab_ci_file(self):
+        """Test parsing of GitLab CI file"""
+        # Test with actual GitLab CI file if available
+        gitlab_data = gitlab_parser.parse_gitlab_ci_file()
+
+        # Should return a dictionary with roles and boards
+        self.assertIsInstance(gitlab_data, dict)
+        self.assertIn('roles', gitlab_data)
+        self.assertIn('boards', gitlab_data)
+        self.assertIsInstance(gitlab_data['roles'], list)
+        self.assertIsInstance(gitlab_data['boards'], list)
+
+    def test_validate_sjg_value(self):
+        """Test SJG value validation"""
+        # Test special case
+        self.assertTrue(gitlab_parser.validate_sjg_value('1'))
+
+        # Test with mock data
+        mock_data = {'roles': ['rpi4', 'rpi3', 'bbb'], 'boards': []}
+        self.assertTrue(gitlab_parser.validate_sjg_value('rpi4', mock_data))
+        self.assertFalse(gitlab_parser.validate_sjg_value('invalid', mock_data))
+
+    def test_validate_pytest_value(self):
+        """Test pytest value validation"""
+        # Test special case
+        self.assertTrue(gitlab_parser.validate_pytest_value('1'))
+
+        # Test with mock data
+        mock_data = {'roles': [], 'boards': ['sandbox', 'qemu_arm']}
+        self.assertTrue(gitlab_parser.validate_pytest_value('sandbox', mock_data))
+        self.assertFalse(gitlab_parser.validate_pytest_value('invalid', mock_data))
+
+    def test_get_choices(self):
+        """Test getting choice lists"""
+        sjg_choices = gitlab_parser.get_sjg_choices()
+        pytest_choices = gitlab_parser.get_pytest_choices()
+
+        # Should return lists
+        self.assertIsInstance(sjg_choices, list)
+        self.assertIsInstance(pytest_choices, list)
+
+        # Should include '1' as first choice
+        if sjg_choices:
+            self.assertEqual(sjg_choices[0], '1')
+        if pytest_choices:
+            self.assertEqual(pytest_choices[0], '1')

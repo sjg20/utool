@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0+
+# Copyright 2025 Canonical Ltd
+# Written by Simon Glass <simon.glass@canonical.com>
+
+# Dependencies for utool - U-Boot CI automation tool
+
+# YAML parsing for GitLab CI file
+PyYAML>=5.1
