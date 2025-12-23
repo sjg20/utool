@@ -1,0 +1,315 @@
+# SPDX-License-Identifier: GPL-2.0+
+# Copyright 2025 Canonical Ltd
+# Written by Simon Glass <simon.glass@canonical.com>
+
+"""Functional tests for utool CI automation tool"""
+
+# pylint: disable=import-error
+
+import argparse
+import os
+import tempfile
+import unittest
+
+from u_boot_pylib import command
+from u_boot_pylib import terminal
+from u_boot_pylib import tools
+from u_boot_pylib import tout
+from utool_pkg import cmdline, control
+
+# Capture stdout and stderr for silent command execution
+CAPTURE = {'capture': True, 'capture_stderr': True}
+
+
+class TestBase(unittest.TestCase):
+    """Base class for all utool tests"""
+    preserve_indir = False
+    preserve_outdirs = False
+    toolpath = None
+    verbosity = None
+    no_capture = None
+
+    @classmethod
+    def setup_test_args(cls, preserve_indir=False, preserve_outdirs=False,
+                        toolpath=None, verbosity=None, no_capture=None):
+        # pylint: disable=too-many-arguments
+        """Set up test arguments similar to other u-boot tools
+
+        Args:
+            preserve_indir (bool): Preserve input directories used by tests
+            preserve_outdirs (bool): Preserve output directories used by tests
+            toolpath (str): Path to tools directory
+            verbosity (int): Verbosity level for output
+            no_capture (bool): True to disable output capture during tests
+        """
+        cls.preserve_indir = preserve_indir
+        cls.preserve_outdirs = preserve_outdirs
+        cls.toolpath = toolpath
+        cls.verbosity = verbosity
+        cls.no_capture = no_capture
+        if no_capture is not None:
+            terminal.USE_CAPTURE = not no_capture
+
+
+def make_args(**kwargs):
+    """Create an argparse.Namespace with default CI arguments"""
+    defaults = {
+        'dry_run': False,
+        'verbose': False,
+        'debug': False,
+        'suites': False,
+        'pytest': None,
+        'world': False,
+        'sjg': None,
+        'force': False,
+        'null': False,
+        'cmd': 'ci'
+    }
+    defaults.update(kwargs)
+    return argparse.Namespace(**defaults)
+
+
+class TestUtoolCmdline(TestBase):
+    """Test the command line parsing"""
+
+    def test_ci_subcommand_parsing(self):
+        """Test that CI subcommand is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test basic CI command
+        args = parser.parse_args(['ci'])
+        self.assertEqual('ci', args.cmd)
+        self.assertFalse(args.suites)
+        self.assertIsNone(args.pytest)
+
+        # Test CI with flags
+        args = parser.parse_args(['ci', '--suites', '--pytest'])
+        self.assertTrue(args.suites)
+        self.assertEqual('1', args.pytest)
+
+        # Test short flags
+        args = parser.parse_args(['ci', '-s', '-p', '-w'])
+        self.assertTrue(args.suites)
+        self.assertEqual('1', args.pytest)
+        self.assertTrue(args.world)
+
+    def test_dry_run_flag(self):
+        """Test that dry-run flag is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test long flag
+        args = parser.parse_args(['--dry-run', 'ci'])
+        self.assertTrue(args.dry_run)
+
+        # Test short flag
+        args = parser.parse_args(['-n', 'ci'])
+        self.assertTrue(args.dry_run)
+
+        # Test without flag
+        args = parser.parse_args(['ci'])
+        self.assertFalse(args.dry_run)
+
+    def test_no_command_required(self):
+        """Test that a command is required"""
+        parser = cmdline.setup_parser()
+
+        # Test that no command raises SystemExit (argparse error)
+        with self.assertRaises(SystemExit):
+            with terminal.capture():
+                parser.parse_args([])
+
+
+class TestUtoolCIVars(TestBase):
+    """Test CI variable building logic"""
+
+    def test_build_ci_vars_no_ci(self):
+        """Test build_ci_vars with --null flag"""
+        args = make_args(null=True)
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': '0',
+            'WORLD': '0',
+            'SJG_LAB': ''
+        }
+        self.assertEqual(expected, ci_vars)
+
+    def test_build_ci_vars_defaults(self):
+        """Test build_ci_vars with no flags (defaults)"""
+        args = make_args()
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '1',
+            'PYTEST': '1',
+            'WORLD': '1',
+            'SJG_LAB': ''
+        }
+        self.assertEqual(expected, ci_vars)
+
+    def test_build_ci_vars_specific_flags(self):
+        """Test build_ci_vars with specific flags"""
+        args = make_args(suites=True, sjg='1')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '1',
+            'PYTEST': '0',
+            'WORLD': '0',
+            'SJG_LAB': '1'
+        }
+        self.assertEqual(expected, ci_vars)
+
+    def test_build_ci_vars_sjg_lab_value(self):
+        """Test build_ci_vars with sjg value"""
+        args = make_args(sjg='rpi4')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': '0',
+            'WORLD': '0',
+            'SJG_LAB': 'rpi4'
+        }
+        self.assertEqual(expected, ci_vars)
+
+    def test_build_ci_vars_all_flags(self):
+        """Test build_ci_vars with all flags enabled"""
+        args = make_args(suites=True, pytest='1', world=True, sjg='1')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '1',
+            'PYTEST': '1',
+            'WORLD': '1',
+            'SJG_LAB': '1'
+        }
+        self.assertEqual(expected, ci_vars)
+
+
+class TestUtoolCI(TestBase):
+    """Test the CI command functionality"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.test_dir = None
+        self.orig_cwd = os.getcwd()
+        tout.init(tout.NOTICE)
+
+    def tearDown(self):
+        """Clean up test environment"""
+        os.chdir(self.orig_cwd)
+        command.TEST_RESULT = None
+
+    def _create_git_repo(self):
+        """Create a temporary git repository for testing"""
+        self.test_dir = tempfile.mkdtemp()
+        os.chdir(self.test_dir)
+
+        # Initialise git repo
+        command.run('git', 'init', **CAPTURE)
+        command.run('git', 'config', 'user.name', 'Test User', **CAPTURE)
+        command.run('git', 'config', 'user.email', 'test@example.com',
+                    **CAPTURE)
+
+        # Create initial commit
+        tools.write_file('test.txt', 'test content', binary=False)
+        command.run('git', 'add', '.', **CAPTURE)
+        command.run('git', 'commit', '-m', 'Initial commit', **CAPTURE)
+
+    def test_ci_not_in_git_repo(self):
+        """Test CI command fails when not in git repository"""
+        # Use command.py's TEST_RESULT to simulate git failure
+        def raise_git_error(**_kwargs):
+            result = command.CommandResult(b'', b'not a git repo', b'', 1)
+            raise command.CommandExc('git failed', result)
+
+        command.TEST_RESULT = raise_git_error
+        args = make_args()
+        with self.assertRaises(command.CommandExc):
+            with terminal.capture():
+                control.do_ci(args)
+
+    def test_ci_dry_run(self):
+        """Test CI command shows git push in dry-run mode"""
+        self._create_git_repo()
+
+        args = make_args(dry_run=True)
+        with terminal.capture() as (out, _):
+            res = control.do_ci(args)
+        self.assertEqual(0, res)
+        self.assertEqual(
+            'git push -o ci.variable=SUITES=1 -o ci.variable=PYTEST=1 '
+            '-o ci.variable=WORLD=1 -o ci.variable=SJG_LAB= ci master\n',
+            out.getvalue())
+
+    def test_ci_specific_variables(self):
+        """Test CI command with specific variables"""
+        self._create_git_repo()
+
+        args = make_args(dry_run=True, suites=True, pytest='1', sjg='rpi4')
+        with terminal.capture() as (out, _):
+            res = control.do_ci(args)
+        self.assertEqual(0, res)
+        self.assertEqual(
+            'git push -o ci.variable=SUITES=1 -o ci.variable=PYTEST=1 '
+            '-o ci.variable=WORLD=0 -o ci.variable=SJG_LAB=rpi4 ci master\n',
+            out.getvalue())
+
+    def test_ci_no_ci_flag(self):
+        """Test CI command with --null flag sets all vars to 0"""
+        self._create_git_repo()
+
+        args = make_args(dry_run=True, null=True)
+        with terminal.capture() as (out, _):
+            res = control.do_ci(args)
+        self.assertEqual(0, res)
+        self.assertEqual(
+            'git push -o ci.variable=SUITES=0 -o ci.variable=PYTEST=0 '
+            '-o ci.variable=WORLD=0 -o ci.variable=SJG_LAB= ci master\n',
+            out.getvalue())
+
+    def test_exec_cmd_dry_run(self):
+        """Test exec_cmd in dry-run mode"""
+        args = make_args(dry_run=True, verbose=False)
+        with terminal.capture() as (out, err):
+            res = control.exec_cmd(['echo', 'test'], args)
+        self.assertIsNone(res)
+        self.assertFalse(out.getvalue())
+        self.assertFalse(err.getvalue())
+
+    def test_exec_cmd_normal(self):
+        """Test exec_cmd in normal mode"""
+        args = make_args(dry_run=False, verbose=False)
+        with terminal.capture() as (out, err):
+            res = control.exec_cmd(['true'], args)
+        self.assertIsNotNone(res)
+        self.assertEqual(0, res.return_code)
+        self.assertFalse(out.getvalue())
+        self.assertFalse(err.getvalue())
+
+
+class TestUtoolControl(TestBase):
+    """Test the control module functionality"""
+
+    def test_run_command_ci(self):
+        """Test run_command dispatches to CI correctly"""
+        args = make_args(cmd='ci', dry_run=True)
+
+        # Mock the CI function to avoid git operations
+        orig_do_ci = control.do_ci
+        control.do_ci = lambda args: 0
+
+        try:
+            with terminal.capture() as (out, err):
+                res = control.run_command(args)
+            self.assertEqual(0, res)
+            self.assertFalse(out.getvalue())
+            self.assertFalse(err.getvalue())
+        finally:
+            control.do_ci = orig_do_ci
+
+    def test_run_command_unknown(self):
+        """Test run_command with unknown command"""
+        args = make_args(cmd='unknown')
+        with terminal.capture() as (out, err):
+            res = control.run_command(args)
+        self.assertEqual(1, res)
+        self.assertFalse(out.getvalue())
+        self.assertEqual('Unknown command: unknown\n', err.getvalue())
