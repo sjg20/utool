@@ -7,6 +7,13 @@ utool - U-Boot Automation Tool
 
 This is a a simple tool to handle common tasks when developing U-Boot.
 
+Installation
+------------
+
+Install dependencies::
+
+    pip install -r requirements.txt
+
 Usage
 -----
 

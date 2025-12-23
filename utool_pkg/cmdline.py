@@ -9,6 +9,7 @@ Creates the argument parser and uses it to parse the arguments passed in
 
 import argparse
 import sys
+from . import gitlab_parser
 
 
 # Aliases for subcommands
@@ -40,13 +41,32 @@ class ErrorCatchingArgumentParser(argparse.ArgumentParser):
 def add_ci_subparser(subparsers):
     """Add the 'ci' subparser"""
     ci = subparsers.add_parser('ci', help='Push current branch to CI')
+
+    # Get valid choices from GitLab CI file
+    sjg_choices = gitlab_parser.get_sjg_choices()
+    pytest_choices = gitlab_parser.get_pytest_choices()
+
     ci.add_argument('--suites', '-s', action='store_true',
                     help='Enable SUITES')
+    pytest_help = 'Enable PYTEST'
+    if pytest_choices:
+        first_five = ', '.join(pytest_choices[:5])
+        suffix = '...' if len(pytest_choices) > 5 else ''
+        pytest_help += f' (choices: {first_five}{suffix})'
+
+    sjg_help = 'Set SJG_LAB'
+    if sjg_choices:
+        first_five = ', '.join(sjg_choices[:5])
+        suffix = '...' if len(sjg_choices) > 5 else ''
+        sjg_help += f' (choices: {first_five}{suffix})'
+
     ci.add_argument('--pytest', '-p', nargs='?', const='1', default=None,
-                    help='Enable PYTEST (optionally specify test spec)')
+                    choices=pytest_choices if pytest_choices else None,
+                    help=pytest_help)
     ci.add_argument('--world', '-w', action='store_true', help='Enable WORLD')
     ci.add_argument('--sjg', '-l', nargs='?', const='1', default=None,
-                    help='Set SJG_LAB (optionally specify board)')
+                    choices=sjg_choices if sjg_choices else None,
+                    help=sjg_help)
     ci.add_argument('--force', '-f', action='store_true',
                     help='Force push to remote branch')
     ci.add_argument('--null', '-0', action='store_true',

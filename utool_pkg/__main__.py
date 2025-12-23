@@ -41,7 +41,8 @@ def run_utool():
             getattr(args, 'no_capture', False),
             getattr(args, 'test_preserve_dirs', False),
             None, to_run, None,
-            [ftest.TestUtoolCmdline, ftest.TestUtoolCI, ftest.TestUtoolControl])
+            [ftest.TestUtoolCmdline, ftest.TestUtoolCI, ftest.TestUtoolControl,
+             ftest.TestGitLabParser])
         sys.exit(0 if result.wasSuccessful() else 1)
 
     # Run the appropriate command

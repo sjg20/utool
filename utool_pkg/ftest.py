@@ -15,7 +15,7 @@ from u_boot_pylib import command
 from u_boot_pylib import terminal
 from u_boot_pylib import tools
 from u_boot_pylib import tout
-from utool_pkg import cmdline, control
+from utool_pkg import cmdline, control, gitlab_parser
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -313,3 +313,49 @@ class TestUtoolControl(TestBase):
         self.assertEqual(1, res)
         self.assertFalse(out.getvalue())
         self.assertEqual('Unknown command: unknown\n', err.getvalue())
+
+
+class TestGitLabParser(TestBase):
+    """Test GitLab CI file parsing functionality"""
+
+    def test_gitlab_ci_parser(self):
+        """Test parsing of GitLab CI file"""
+        # Test with actual GitLab CI file if available
+        parser = gitlab_parser.GitLabCIParser()
+
+        # Should have roles and boards as lists
+        self.assertIsInstance(parser.roles, list)
+        self.assertIsInstance(parser.boards, list)
+        self.assertIsInstance(parser.job_names, list)
+
+    def test_validate_sjg_value(self):
+        """Test SJG value validation using parser"""
+        parser = gitlab_parser.GitLabCIParser()
+
+        # '1' means run all, so it's always valid (handled by caller)
+        # Test that roles list contains expected types
+        for role in parser.roles:
+            self.assertIsInstance(role, str)
+
+    def test_validate_pytest_value(self):
+        """Test pytest value validation using parser"""
+        parser = gitlab_parser.GitLabCIParser()
+
+        # Test that boards list contains expected types
+        for board in parser.boards:
+            self.assertIsInstance(board, str)
+
+    def test_get_choices(self):
+        """Test getting choice lists"""
+        sjg_choices = gitlab_parser.get_sjg_choices()
+        pytest_choices = gitlab_parser.get_pytest_choices()
+
+        # Should return lists
+        self.assertIsInstance(sjg_choices, list)
+        self.assertIsInstance(pytest_choices, list)
+
+        # Should include '1' as first choice
+        if sjg_choices:
+            self.assertEqual('1', sjg_choices[0])
+        if pytest_choices:
+            self.assertEqual('1', pytest_choices[0])
