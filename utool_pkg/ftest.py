@@ -55,6 +55,10 @@ class TestBase(unittest.TestCase):
         if no_capture is not None:
             terminal.USE_CAPTURE = not no_capture
 
+    def tearDown(self):
+        """Clean up and restore command.TEST_RESULT after each test"""
+        command.TEST_RESULT = None
+
 
 def make_args(**kwargs):
     """Create an argparse.Namespace with default CI arguments"""
@@ -70,6 +74,7 @@ def make_args(**kwargs):
         'null': False,
         'merge': False,
         'test_spec': None,
+        'dest': None,
         'cmd': 'ci'
     }
     defaults.update(kwargs)
@@ -408,6 +413,52 @@ class TestUtoolCI(TestBase):
         self.assertIsNotNone(res)
         self.assertEqual(res.return_code, 0)
 
+    def test_git_push_destination_parsing(self):
+        """Test git_push_branch destination parsing"""
+        cap = []
+
+        def mock_git(pipe_list, **_kwargs):
+            cap.append(pipe_list[0])
+            return command.CommandResult(stdout='', return_code=0)
+
+        command.TEST_RESULT = mock_git
+
+        # Test default destination (None means use current branch name)
+        args = make_args(dry_run=False, dest=None)
+        with terminal.capture():
+            control.git_push_branch('test-branch', args)
+        self.assertEqual(cap[-1], ['git', 'push', 'ci', 'test-branch'])
+
+        # Test custom destination branch
+        args = make_args(dry_run=False, dest='my-feature')
+        with terminal.capture():
+            control.git_push_branch('test-branch', args)
+        expected = ['git', 'push', 'ci', 'test-branch:my-feature']
+        self.assertEqual(cap[-1], expected)
+
+        # Test with CI variables
+        args = make_args(dry_run=False, dest='feature-test')
+        ci_vars = {'PYTEST': '1', 'SUITES': '0'}
+        with terminal.capture():
+            control.git_push_branch('test-branch', args, ci_vars=ci_vars)
+        expect = ['git', 'push', '-o', 'ci.variable=PYTEST=1', '-o',
+                  'ci.variable=SUITES=0', 'ci', 'test-branch:feature-test']
+        self.assertEqual(cap[-1], expect)
+
+        # Test with force flag
+        args = make_args(dry_run=False, dest='force-test', force=True)
+        with terminal.capture():
+            control.git_push_branch('test-branch', args)
+        self.assertEqual(cap[-1], ['git', 'push', '--force', 'ci',
+                                   'test-branch:force-test'])
+
+        # Test with upstream flag
+        args = make_args(dry_run=False, dest='upstream-test')
+        with terminal.capture():
+            control.git_push_branch('test-branch', args, upstream=True)
+        self.assertEqual(cap[-1], ['git', 'push', '-u', 'ci',
+                                   'test-branch:upstream-test'])
+
 
 class TestUtoolControl(TestBase):
     """Test the control module functionality"""
@@ -575,6 +626,7 @@ class TestUtoolMergeRequest(unittest.TestCase):
     def tearDown(self):
         os.chdir(self.old_cwd)
         shutil.rmtree(self.test_dir)
+        super().tearDown()
 
     def test_merge_request_parsing(self):
         """Test parsing of command line for merge request"""
@@ -591,3 +643,23 @@ class TestUtoolMergeRequest(unittest.TestCase):
         # Test default (no merge)
         args = parser.parse_args(['ci'])
         self.assertFalse(args.merge)
+
+    def test_destination_parsing(self):
+        """Test parsing of destination argument"""
+        parser = cmdline.setup_parser()
+
+        # Test default destination (None means use current branch name)
+        args = parser.parse_args(['ci'])
+        self.assertEqual(args.dest, None)
+
+        # Test custom branch name
+        args = parser.parse_args(['ci', '--dest', 'my-feature'])
+        self.assertEqual(args.dest, 'my-feature')
+
+        # Test branch with hash-like name
+        args = parser.parse_args(['ci', '-d', 'cherry-abc123'])
+        self.assertEqual(args.dest, 'cherry-abc123')
+
+        # Test short flag
+        args = parser.parse_args(['ci', '-d', 'develop'])
+        self.assertEqual(args.dest, 'develop')

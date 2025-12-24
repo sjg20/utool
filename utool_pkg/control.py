@@ -125,14 +125,15 @@ def run_or_show_command(cmd, args):
     return command.run_pipe([cmd], raise_on_error=True)
 
 
-def git_push_branch(branch, args, ci_vars=None, upstream=False):
+def git_push_branch(branch, args, ci_vars=None, upstream=False, dest=None):
     """Push a branch to the 'ci' remote with optional CI variables
 
     Args:
         branch (str): Branch name to push
-        args (argparse.Namespace): Command line arguments (contains force and dry_run flags)
+        args (argparse.Namespace): Command line arguments (contains force, dry_run, dest flags)
         ci_vars (dict): Optional CI variables to include as push options
         upstream (bool): Whether to set upstream with -u flag
+        dest (str): Destination branch name (defaults to args.dest or current branch name)
 
     Returns:
         CommandResult or None: Result of push command
@@ -149,7 +150,16 @@ def git_push_branch(branch, args, ci_vars=None, upstream=False):
         for key, value in ci_vars.items():
             push_cmd.extend(['-o', f'ci.variable={key}={value}'])
 
-    push_cmd.extend(['ci', branch])
+    # Determine destination branch - use provided dest, or fall back to args.dest, or current branch
+    dest_branch = dest or getattr(args, 'dest', None) or branch
+
+    # Always push to 'ci' remote, but to the specified destination branch
+    if dest_branch == branch:
+        # Same branch name, simple push
+        push_cmd.extend(['ci', branch])
+    else:
+        # Different branch name, use refspec
+        push_cmd.extend(['ci', f'{branch}:{dest_branch}'])
 
     return run_or_show_command(push_cmd, args)
 
