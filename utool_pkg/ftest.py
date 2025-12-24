@@ -8,6 +8,7 @@
 
 import argparse
 import os
+import shutil
 import tempfile
 import unittest
 
@@ -262,6 +263,56 @@ class TestUtoolCIVars(TestBase):
         }
         self.assertEqual(expected, ci_vars)
 
+    def test_build_commit_tags_no_skip(self):
+        """Test build_commit_tags with no skip flags (all enabled)"""
+        args = make_args(suites=True, pytest='1', world=True, sjg='1')
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        self.assertEqual('', tags)
+
+    def test_build_commit_tags_skip_all(self):
+        """Test build_commit_tags with --null flag (skip all)"""
+        args = make_args(null=True)
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        self.assertEqual(
+            '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]', tags)
+
+    def test_build_commit_tags_skip_specific(self):
+        """Test build_commit_tags with specific stages enabled"""
+        args = make_args(suites=True)  # Only suites enabled, others skip
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        self.assertEqual('[skip-pytest] [skip-world] [skip-sjg]', tags)
+
+    def test_build_commit_tags_skip_world_only(self):
+        """Test build_commit_tags with world skipped"""
+        # suites and pytest enabled, world skipped
+        args = make_args(suites=True, pytest='1')
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        self.assertEqual('[skip-world] [skip-sjg]', tags)
+
+    def test_commit_message_tag_integration(self):
+        """Test that tags are correctly integrated into commit message"""
+        tags = '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]'
+
+        # Empty description with tags
+        self.assertEqual(tags, control.build_desc('', tags))
+
+        # Existing description with tags
+        exp = ('This is a test commit\n\nSome details about the change\n\n'
+               '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]')
+        self.assertEqual(
+            exp, control.build_desc(
+                'This is a test commit\n\nSome details about the change', tags))
+
+        # No tags returns original description unchanged
+        self.assertEqual(
+            'Test description', control.build_desc('Test description', ''))
+
+        # Empty description with no tags
+        self.assertEqual('', control.build_desc('', ''))
 
 class TestUtoolCI(TestBase):
     """Test the CI command functionality"""
@@ -516,3 +567,36 @@ class TestGitLabParser(TestBase):
         self.assertEqual(parser1.roles, parser2.roles)
         self.assertEqual(parser1.boards, parser2.boards)
         self.assertEqual(parser1.job_names, parser2.job_names)
+
+
+class TestUtoolMergeRequest(unittest.TestCase):
+    """Tests for merge request functionality"""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.old_cwd = os.getcwd()
+        os.chdir(self.test_dir)
+        # Initialize git repo
+        command.run('git', 'init', **CAPTURE)
+        command.run('git', 'config', 'user.email', 'test@test.com', **CAPTURE)
+        command.run('git', 'config', 'user.name', 'Test User', **CAPTURE)
+
+    def tearDown(self):
+        os.chdir(self.old_cwd)
+        shutil.rmtree(self.test_dir)
+
+    def test_merge_request_parsing(self):
+        """Test parsing of command line for merge request"""
+        parser = cmdline.setup_parser()
+
+        # Test --merge flag
+        args = parser.parse_args(['ci', '--merge'])
+        self.assertTrue(args.merge)
+
+        # Test -m flag
+        args = parser.parse_args(['ci', '-m'])
+        self.assertTrue(args.merge)
+
+        # Test default (no merge)
+        args = parser.parse_args(['ci'])
+        self.assertFalse(args.merge)

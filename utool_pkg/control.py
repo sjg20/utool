@@ -11,7 +11,10 @@ the features of utool.
 import sys
 
 # pylint: disable=import-error
+from patman import patchstream
+from pickman import gitlab_api
 from u_boot_pylib import command
+from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
@@ -56,6 +59,49 @@ def build_ci_vars(args):
                 ci_vars['TEST_SPEC'] = args.test_spec
 
     return ci_vars
+
+
+def build_commit_tags(args, ci_vars):  # pylint: disable=unused-argument
+    """Build commit message tags based on CI variables for MR pipelines
+
+    Args:
+        args (argparse.Namespace): Arguments object with CI flags
+        ci_vars (dict): CI variables dictionary
+
+    Returns:
+        str: Space-separated commit message tags
+    """
+    tags = []
+
+    # Add skip tags for variables set to '0' or empty
+    if ci_vars.get('SUITES') == '0':
+        tags.append('[skip-suites]')
+    if ci_vars.get('PYTEST') == '0':
+        tags.append('[skip-pytest]')
+    if ci_vars.get('WORLD') == '0':
+        tags.append('[skip-world]')
+    if ci_vars.get('SJG_LAB') in ('0', ''):
+        tags.append('[skip-sjg]')
+
+    return ' '.join(tags)
+
+
+def build_desc(desc, tags):
+    """Append commit message tags to MR description
+
+    Args:
+        desc (str): Original description (empty string if no description)
+        tags (str): Space-separated tags to append
+
+    Returns:
+        str: Description with tags appended
+    """
+    if not tags:
+        return desc
+
+    if desc:
+        return f'{desc}\n\n{tags}'
+    return tags
 
 
 def exec_cmd(cmd, args):
@@ -241,10 +287,126 @@ def run_command(args):
         if result is not None:
             return result
 
+        if args.merge:
+            return do_merge_request(args)
         return do_ci(args)
 
     tout.error(f'Unknown command: {args.cmd}')
     return 1
+
+
+def extract_mr_title_description(branch, args):
+    """Extract title and description for merge request from patch series
+
+    Args:
+        branch (str): Current git branch name
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        tuple: (title_str, description_str, commit_tags) or
+            (None, None, None) if error
+    """
+    start = 0
+    end = 0
+
+    # Work out how many patches to send if we can
+    count = gitutil.count_commits_to_branch(branch) - start
+    series = patchstream.get_metadata(branch, start, count - end)
+
+    # For single commit, use commit subject/body; for multiple commits,
+    # require cover letter
+    if count - end == 1:
+        # Single commit - use the commit subject as title and body as
+        # description
+        commit = series.commits[0]
+        title = commit.subject
+        description = commit.msg if commit.msg else ''
+        tout.info('Using single commit subject and body for merge request')
+    else:
+        # Multiple commits - require cover letter
+        if not series.get('cover'):
+            tout.error('No cover letter found in patch series')
+            tout.notice('Use \'git format-patch --cover-letter\' or add a '
+                        'cover letter to your series')
+            return None, None, None
+        title = series.get('cover')
+        description = series.notes if series.notes else ''
+        tout.info('Using cover letter for merge request')
+
+    tout.info(f'Found {count - end} patches for branch {branch}')
+
+    if not title:
+        tout.error('Could not extract title')
+        return None, None, None
+
+    # Ensure title and description are strings
+    if isinstance(title, list):
+        # If title is a list, use the first non-empty line
+        title_str = next((line.strip() for line in title
+                           if line.strip()), '')
+    else:
+        title_str = str(title) if title is not None else ''
+
+    description_str = str(description) if description is not None else ''
+
+    # Build CI variables for pipeline creation
+    ci_vars = build_ci_vars(args)
+    # When creating MR, append commit message tags for pipeline control
+    commit_tags = ''
+    if hasattr(args, 'merge') and args.merge:
+        commit_tags = build_commit_tags(args, ci_vars)
+        description_str = build_desc(description_str, commit_tags)
+
+    return title_str, description_str, commit_tags
+
+
+def do_merge_request(args):
+    """Create a merge request using cover letter from patch series
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    tout.info('Creating merge request from patch series...')
+
+    # Get branch and extract title/description
+    branch = gitutil.get_branch()
+    mr_info = extract_mr_title_description(branch, args)
+    title_str, description_str, commit_tags = mr_info
+    if title_str is None:
+        return 1
+
+    if args.dry_run:
+        tout.notice(f'dry-run: Create MR \'{title_str}\'')
+        return 0
+
+    # Push branch with CI variables - respects --null flag
+    tout.info('Pushing branch...')
+    ci_vars = build_ci_vars(args)
+    git_push_branch(branch, args, ci_vars=ci_vars, upstream=True)
+
+    # Get remote URL and parse it using pickman's functions
+    remote_url = gitlab_api.get_remote_url('ci')
+    host, proj_path = gitlab_api.parse_url(remote_url)
+    if not host or not proj_path:
+        tout.error(f'Cannot parse remote URL: {remote_url}')
+        return 1
+
+    tout.info('Creating merge request...')
+    mr_url = gitlab_api.create_mr(host, proj_path, branch, 'master',
+                                  title_str, description_str)
+
+    if not mr_url:
+        tout.error('Failed to create merge request')
+        return 1
+
+    tout.notice(f'Merge request: {mr_url}')
+    if commit_tags:
+        tout.info(f'MR pipeline will use commit message tags: {commit_tags}')
+
+    return 0
 
 
 def do_ci(args):
