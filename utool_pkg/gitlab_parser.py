@@ -133,23 +133,3 @@ class GitLabCIParser:
     def job_names(self):
         """Get list of valid pytest job names"""
         return self._job_names
-
-
-def get_sjg_choices():
-    """Get list of valid SJG_LAB choices for argument parser
-
-    Returns:
-        list: Valid SJG_LAB role names including '1' for all
-    """
-    parser = GitLabCIParser()
-    return ['1'] + parser.roles
-
-
-def get_pytest_choices():
-    """Get list of valid pytest choices for argument parser
-
-    Returns:
-        list: Valid TEST_PY_BD board names including '1' for all
-    """
-    parser = GitLabCIParser()
-    return ['1'] + parser.boards
