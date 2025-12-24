@@ -9,7 +9,6 @@
 import argparse
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -22,6 +21,7 @@ sys.path.insert(0, str(utool_path))
 # Add u-boot tools to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../u/tools'))
 
+from u_boot_pylib import command
 from u_boot_pylib import terminal
 from utool_pkg import cmdline, control, gitlab_parser
 
@@ -336,6 +336,7 @@ class TestUtoolCI(TestBase):
     def tearDown(self):
         """Clean up test environment"""
         os.chdir(self.original_cwd)
+        super().tearDown()
 
     def _create_git_repo(self):
         """Create a temporary git repository for testing"""
@@ -343,17 +344,15 @@ class TestUtoolCI(TestBase):
         os.chdir(self.test_dir)
 
         # Initialise git repo (capture output to keep it silent)
-        subprocess.run(['git', 'init'], check=True, capture_output=True)
-        subprocess.run(['git', 'config', 'user.name', 'Test User'],
-                       check=True, capture_output=True)
-        subprocess.run(['git', 'config', 'user.email', 'test@example.com'],
-                       check=True, capture_output=True)
+        command.run('git', 'init', capture=True)
+        command.run('git', 'config', 'user.name', 'Test User', capture=True)
+        command.run('git', 'config', 'user.email', 'test@example.com',
+                    capture=True)
 
         # Create initial commit
         Path('test.txt').write_text('test content', encoding='utf-8')
-        subprocess.run(['git', 'add', '.'], check=True, capture_output=True)
-        subprocess.run(['git', 'commit', '-m', 'Initial commit'],
-                       check=True, capture_output=True)
+        command.run('git', 'add', '.', capture=True)
+        command.run('git', 'commit', '-m', 'Initial commit', capture=True)
 
     def test_ci_not_in_git_repo(self):
         """Test CI command fails when not in git repository"""
@@ -362,8 +361,8 @@ class TestUtoolCI(TestBase):
             os.chdir(tmpdir)
             args = make_args()
             with terminal.capture():
-                # Should raise CalledProcessError when git command fails
-                with self.assertRaises(subprocess.CalledProcessError):
+                # Should raise CommandExc when git command fails
+                with self.assertRaises(command.CommandExc):
                     control.do_ci(args)
 
     def test_ci_default_variables(self):
@@ -407,7 +406,7 @@ class TestUtoolCI(TestBase):
         with terminal.capture():
             res = control.run_or_show_command(['echo', 'test'], args)
         self.assertIsNotNone(res)
-        self.assertEqual(res.returncode, 0)
+        self.assertEqual(res.return_code, 0)
 
 
 class TestUtoolControl(TestBase):
@@ -568,11 +567,10 @@ class TestUtoolMergeRequest(unittest.TestCase):
         self.old_cwd = os.getcwd()
         os.chdir(self.test_dir)
         # Initialize git repo
-        subprocess.run(['git', 'init'], check=True, capture_output=True)
-        subprocess.run(['git', 'config', 'user.email', 'test@test.com'],
-                      check=True, capture_output=True)
-        subprocess.run(['git', 'config', 'user.name', 'Test User'],
-                      check=True, capture_output=True)
+        command.run('git', 'init', capture=True)
+        command.run('git', 'config', 'user.email', 'test@test.com',
+                    capture=True)
+        command.run('git', 'config', 'user.name', 'Test User', capture=True)
 
     def tearDown(self):
         os.chdir(self.old_cwd)

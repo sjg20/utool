@@ -8,12 +8,12 @@ This module provides various functions called by the main program to implement
 the features of st.
 """
 
-import subprocess
 import sys
 
 # Import patman modules
 sys.path.append('/home/sglass/u/tools')
 from patman import patchstream  # pylint: disable=import-error,wrong-import-position
+from u_boot_pylib import command  # pylint: disable=import-error,wrong-import-position
 from u_boot_pylib import gitutil  # pylint: disable=import-error,wrong-import-position
 from u_boot_pylib import tout  # pylint: disable=import-error,wrong-import-position
 from pickman import gitlab_api  # pylint: disable=import-error,wrong-import-position
@@ -113,7 +113,7 @@ def run_or_show_command(cmd, args):
         args (argparse.Namespace): Arguments object containing dry_run flag
 
     Returns:
-        subprocess.CompletedProcess or None: Result if run, None if dry-run
+        CommandResult or None: Result if run, None if dry-run
     """
     if args.dry_run:
         # Only show git push commands in dry-run mode
@@ -122,7 +122,7 @@ def run_or_show_command(cmd, args):
         return None
 
     tout.info(f"Running: {' '.join(cmd)}")
-    return subprocess.run(cmd, check=True)
+    return command.run_pipe([cmd], raise_on_error=True)
 
 
 def git_push_branch(branch, args, ci_vars=None, upstream=False):
@@ -135,7 +135,7 @@ def git_push_branch(branch, args, ci_vars=None, upstream=False):
         upstream (bool): Whether to set upstream with -u flag
 
     Returns:
-        subprocess.CompletedProcess or None: Result of push command
+        CommandResult or None: Result of push command
     """
     push_cmd = ['git', 'push']
 
@@ -415,9 +415,7 @@ def do_ci(args):
     Returns:
         int: Exit code
     """
-    result = subprocess.run(['git', 'branch', '--show-current'],
-                          capture_output=True, text=True, check=True)
-    branch = result.stdout.strip()
+    branch = command.output_one_line('git', 'branch', '--show-current')
 
     if not branch:
         tout.error('Could not determine current branch')
