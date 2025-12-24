@@ -8,6 +8,7 @@
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -266,6 +267,61 @@ class TestUtoolCIVars(TestBase):
         }
         self.assertEqual(ci_vars, expected)
 
+    def test_build_commit_tags_no_skip(self):
+        """Test build_commit_tags with no skip flags (all enabled)"""
+        args = make_args(suites=True, pytest='1', world=True, sjg='1')
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        self.assertEqual(tags, '')
+
+    def test_build_commit_tags_skip_all(self):
+        """Test build_commit_tags with --null flag (skip all)"""
+        args = make_args(null=True)
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        expected_tags = '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]'
+        self.assertEqual(tags, expected_tags)
+
+    def test_build_commit_tags_skip_specific(self):
+        """Test build_commit_tags with specific stages enabled"""
+        args = make_args(suites=True)  # Only suites enabled, others skip
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        expected_tags = '[skip-pytest] [skip-world] [skip-sjg]'
+        self.assertEqual(tags, expected_tags)
+
+    def test_build_commit_tags_skip_world_only(self):
+        """Test build_commit_tags with world skipped"""
+        args = make_args(suites=True, pytest='1')  # suites and pytest enabled, world skipped
+        ci_vars = control.build_ci_vars(args)
+        tags = control.build_commit_tags(args, ci_vars)
+        expected_tags = '[skip-world] [skip-sjg]'
+        self.assertEqual(tags, expected_tags)
+
+    def test_commit_message_tag_integration(self):
+        """Test that tags are correctly integrated into commit message description"""
+
+        # Test append_tags_to_description function directly
+
+        # Scenario 1: Empty description with tags
+        tags = '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]'
+        result = control.append_tags_to_description('', tags)
+        self.assertEqual(result, '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]')
+
+        # Scenario 2: Existing description with tags
+        description = 'This is a test commit\n\nSome details about the change'
+        result = control.append_tags_to_description(description, tags)
+        expected = ('This is a test commit\n\nSome details about the change\n\n'
+                   '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]')
+        self.assertEqual(result, expected)
+
+        # Scenario 3: No tags (should return original description unchanged)
+        result = control.append_tags_to_description('Test description', '')
+        self.assertEqual(result, 'Test description')
+
+        # Scenario 4: Empty description with no tags
+        result = control.append_tags_to_description('', '')
+        self.assertEqual(result, '')
 
 class TestUtoolCI(TestBase):
     """Test the CI command functionality"""
@@ -499,3 +555,38 @@ class TestGitLabParser(TestBase):
         self.assertEqual(parser1.roles, parser2.roles)
         self.assertEqual(parser1.boards, parser2.boards)
         self.assertEqual(parser1.job_names, parser2.job_names)
+
+
+class TestUtoolMergeRequest(unittest.TestCase):
+    """Tests for merge request functionality"""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.old_cwd = os.getcwd()
+        os.chdir(self.test_dir)
+        # Initialize git repo
+        subprocess.run(['git', 'init'], check=True, capture_output=True)
+        subprocess.run(['git', 'config', 'user.email', 'test@test.com'],
+                      check=True, capture_output=True)
+        subprocess.run(['git', 'config', 'user.name', 'Test User'],
+                      check=True, capture_output=True)
+
+    def tearDown(self):
+        os.chdir(self.old_cwd)
+        shutil.rmtree(self.test_dir)
+
+    def test_merge_request_parsing(self):
+        """Test parsing of command line for merge request"""
+        parser = cmdline.setup_parser()
+
+        # Test --merge flag
+        args = parser.parse_args(['ci', '--merge'])
+        self.assertTrue(args.merge)
+
+        # Test -m flag
+        args = parser.parse_args(['ci', '-m'])
+        self.assertTrue(args.merge)
+
+        # Test default (no merge)
+        args = parser.parse_args(['ci'])
+        self.assertFalse(args.merge)

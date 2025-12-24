@@ -59,6 +59,8 @@ def add_ci_subparser(subparsers):
                     help='Force push to remote branch')
     ci.add_argument('--null', '-0', action='store_true',
                     help='Set all CI vars to 0')
+    ci.add_argument('--merge', '-m', action='store_true',
+                    help='Create merge request')
     ci.add_argument('--test-spec', '-t', metavar='SPEC',
                     help="Override test spec (e.g. 'not sleep', 'test_ofplatdata')")
     return ci
