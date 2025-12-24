@@ -20,13 +20,13 @@ Usage
 ::
 
     # Push with specific tests
-    python -m utool_pkg ci -s -p -l rpi4
+    utool ci -s -p -l rpi4
 
     # Dry-run to see what would be executed
-    python -m utool_pkg --dry-run ci -w
+    utool --dry-run ci -w
 
     # Run tests
-    python -m utool_pkg test
+    utool test
 
 CI Options
 ----------
@@ -46,26 +46,26 @@ Pytest Targeting Examples
 ::
 
     # Show all available pytest targets and lab names
-    python -m utool_pkg ci -p help
-    python -m utool_pkg ci -l help
+    utool ci -p help
+    utool ci -l help
 
     # Run all pytest jobs
-    python -m utool_pkg ci -p
+    utool ci -p
 
     # Target by board name (runs any job with that TEST_PY_BD)
-    python -m utool_pkg ci -p coreboot
-    python -m utool_pkg ci -p sandbox
+    utool ci -p coreboot
+    utool ci -p sandbox
 
     # Target by exact job name (runs only that specific job)
-    python -m utool_pkg ci -p "sandbox with clang test.py"
-    python -m utool_pkg ci -p "sandbox64 test.py"
+    utool ci -p "sandbox with clang test.py"
+    utool ci -p "sandbox64 test.py"
 
     # Override test specification for targeted job
-    python -m utool_pkg ci -p coreboot -t "test_ofplatdata"
-    python -m utool_pkg ci -p "sandbox with clang test.py" -t "not sleep"
+    utool ci -p coreboot -t "test_ofplatdata"
+    utool ci -p "sandbox with clang test.py" -t "not sleep"
 
     # Run all pytest jobs with custom test specification
-    python -m utool_pkg ci -p -t "not sleep"
+    utool ci -p -t "not sleep"
 
 **Note**: Use board names (like ``coreboot``, ``sandbox``) to target all jobs
 for that board, or exact job names (like ``"sandbox with clang test.py"``) to
@@ -78,12 +78,12 @@ Merge Request Creation
 The tool can create GitLab merge requests with automated pipeline creation::
 
     # Create merge request
-    python -m utool_pkg ci --merge
+    utool ci --merge
 
     # Create merge request with specific CI stages (tags automatically added)
-    python -m utool_pkg ci --merge -0              # Adds [skip-suites] [skip-pytest] [skip-world] [skip-sjg]
-    python -m utool_pkg ci --merge --suites        # Adds [skip-pytest] [skip-world] [skip-sjg]
-    python -m utool_pkg ci --merge --world         # Adds [skip-suites] [skip-pytest] [skip-sjg]
+    utool ci --merge -0              # Adds [skip-suites] [skip-pytest] [skip-world] [skip-sjg]
+    utool ci --merge --suites        # Adds [skip-pytest] [skip-world] [skip-sjg]
+    utool ci --merge --world         # Adds [skip-suites] [skip-pytest] [skip-sjg]
 
 **Important**: Merge requests only support stage-level control (which stages
 run), not fine-grained selection of specific boards or test specifications.
@@ -119,9 +119,9 @@ Key findings about GitLab merge request and pipeline creation:
 4. **Recommended Workflow**:
 
    - For **parameterized variables** (``-l rpi4``, ``-p sandbox``): Use regular
-     ``ut ci`` first, create MR manually later
+     ``utool ci`` first, create MR manually later
    - For **simple skip flags** (``-0``, ``-w``): Use commit message tags with
-     ``ut ci --merge``
+     ``utool ci --merge``
 
 5. **Single Commit Support**: For branches with only one commit, the tool uses
    the commit subject as MR title and commit body as description, eliminating
@@ -136,7 +136,7 @@ Testing
 The tool includes comprehensive tests using the U-Boot test framework::
 
     # Run all tests
-    python -m utool_pkg test
+    utool test
 
     # Run specific test
-    python -m utool_pkg test test_ci_subcommand_parsing
+    utool test test_ci_subcommand_parsing
