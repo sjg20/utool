@@ -61,6 +61,8 @@ def add_ci_subparser(subparsers):
                     help='Create merge request')
     ci.add_argument('--test-spec', '-t', metavar='SPEC',
                     help="Override test spec (e.g. 'not sleep')")
+    ci.add_argument('--dest', '-d', metavar='BRANCH', default=None,
+                    help='Destination branch name (default: current branch)')
     return ci
 
 

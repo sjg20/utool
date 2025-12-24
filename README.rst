@@ -39,6 +39,7 @@ CI Options
 - ``-f, --force``: Force push
 - ``-0, --null``: Set all CI vars to 0
 - ``-m, --merge``: Create merge request using cover letter from patch series
+- ``-d, --dest BRANCH``: Destination branch name (default: current branch name)
 
 Pytest Targeting Examples
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -66,6 +67,11 @@ Pytest Targeting Examples
 
     # Run all pytest jobs with custom test specification
     utool ci -p -t "not sleep"
+
+    # Push to different branch names (always to 'ci' remote)
+    utool ci                     # Push to same branch name on 'ci' remote
+    utool ci -d my-feature       # Push current branch to 'my-feature' on 'ci' remote
+    utool ci -d cherry-abc123    # Push current branch to 'cherry-abc123' on 'ci' remote
 
 **Note**: Use board names (like ``coreboot``, ``sandbox``) to target all jobs
 for that board, or exact job names (like ``"sandbox with clang test.py"``) to
