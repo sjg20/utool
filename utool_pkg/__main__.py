@@ -18,6 +18,7 @@ sys.path.append('/home/sglass/u/tools')
 from u_boot_pylib import test_util
 from utool_pkg import cmdline
 from utool_pkg import control
+from utool_pkg import ftest
 
 
 def run_utool():
@@ -33,8 +34,6 @@ def run_utool():
 
     # Run tests if requested
     if args.cmd == 'test':
-        from utool_pkg import ftest  # pylint: disable=import-outside-toplevel
-
         to_run = (args.testname if hasattr(args, 'testname') and
                   args.testname not in [None, 'test'] else None)
         result = test_util.run_test_suites(

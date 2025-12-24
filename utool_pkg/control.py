@@ -16,6 +16,7 @@ sys.path.append('/home/sglass/u/tools')
 from patman import patchstream  # pylint: disable=import-error,wrong-import-position
 from u_boot_pylib import gitutil  # pylint: disable=import-error,wrong-import-position
 from u_boot_pylib import tout  # pylint: disable=import-error,wrong-import-position
+from pickman import gitlab_api  # pylint: disable=import-error,wrong-import-position
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
 
@@ -366,10 +367,6 @@ def do_merge_request(args):
     Returns:
         int: Exit code
     """
-    # Import pickman's GitLab API
-    sys.path.append('/home/sglass/u/tools')
-    from pickman import gitlab_api  # pylint: disable=import-error,wrong-import-position,import-outside-toplevel
-
     tout.info('Creating merge request from patch series...')
 
     # Get branch and extract title/description
