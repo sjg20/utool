@@ -241,7 +241,7 @@ class TestUtoolCIVars(TestBase):
         self.assertEqual(ci_vars, expected)
 
     def test_build_ci_vars_job_name_targeting(self):
-        """Test build_ci_vars with job name targeting (e.g. 'sandbox with clang test.py')"""
+        """Test build_ci_vars with job name targeting (e.g. 'sandbox clang')"""
         args = make_args(pytest='sandbox with clang test.py')
         ci_vars = control.build_ci_vars(args)
         expected = {
@@ -292,21 +292,23 @@ class TestUtoolCIVars(TestBase):
 
     def test_build_commit_tags_skip_world_only(self):
         """Test build_commit_tags with world skipped"""
-        args = make_args(suites=True, pytest='1')  # suites and pytest enabled, world skipped
+        # suites and pytest enabled, world skipped
+        args = make_args(suites=True, pytest='1')
         ci_vars = control.build_ci_vars(args)
         tags = control.build_commit_tags(args, ci_vars)
         expected_tags = '[skip-world] [skip-sjg]'
         self.assertEqual(tags, expected_tags)
 
     def test_commit_message_tag_integration(self):
-        """Test that tags are correctly integrated into commit message description"""
+        """Test tags integration into commit message description"""
 
         # Test append_tags_to_description function directly
 
         # Scenario 1: Empty description with tags
         tags = '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]'
         result = control.append_tags_to_description('', tags)
-        self.assertEqual(result, '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]')
+        expected = '[skip-suites] [skip-pytest] [skip-world] [skip-sjg]'
+        self.assertEqual(result, expected)
 
         # Scenario 2: Existing description with tags
         description = 'This is a test commit\n\nSome details about the change'
@@ -542,7 +544,8 @@ class TestGitLabParser(TestBase):
         job_names_str = ' '.join(parser.job_names)
         if 'test.py' in job_names_str:
             # Should have at least one job ending with test.py
-            has_test_py = any(job.endswith('test.py') for job in parser.job_names)
+            has_test_py = any(job.endswith('test.py')
+                              for job in parser.job_names)
             self.assertTrue(has_test_py)
 
     def test_parser_consistency(self):
