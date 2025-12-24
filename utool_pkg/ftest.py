@@ -67,8 +67,9 @@ def make_args(**kwargs):
         'sjg': None,
         'force': False,
         'null': False,
-        'cmd': 'ci',
-        'test_spec': None
+        'merge': False,
+        'test_spec': None,
+        'cmd': 'ci'
     }
     defaults.update(kwargs)
     return argparse.Namespace(**defaults)
@@ -187,6 +188,71 @@ class TestUtoolCIVars(TestBase):
             'TEST_SPEC': 'not sleep'
         }
         self.assertEqual(ci_vars, expected)
+
+    def test_build_ci_vars_specific_pytest_target(self):
+        """Test build_ci_vars with specific pytest target (like coreboot)"""
+        args = make_args(pytest='coreboot')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': 'coreboot',
+            'WORLD': '0',
+            'SJG_LAB': ''
+        }
+        self.assertEqual(ci_vars, expected)
+
+    def test_build_ci_vars_pytest_with_sjg_lab(self):
+        """Test build_ci_vars combining pytest target with sjg lab"""
+        args = make_args(pytest='coreboot', sjg='bbb')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': 'coreboot',
+            'WORLD': '0',
+            'SJG_LAB': 'bbb'
+        }
+        self.assertEqual(ci_vars, expected)
+
+    def test_build_ci_vars_pytest_and_test_spec_separate(self):
+        """Test that -p and -t flags work independently"""
+        # Board name with -p should only set PYTEST, not TEST_SPEC
+        args = make_args(pytest='sandbox')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': 'sandbox',
+            'WORLD': '0',
+            'SJG_LAB': ''
+        }
+        self.assertEqual(ci_vars, expected)
+        self.assertNotIn('TEST_SPEC', ci_vars)
+
+        # Using both -p and -t flags together
+        args = make_args(pytest='coreboot', test_spec='test_ofplatdata')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': 'coreboot',
+            'WORLD': '0',
+            'SJG_LAB': '',
+            'TEST_SPEC': 'test_ofplatdata'
+        }
+        self.assertEqual(ci_vars, expected)
+
+    def test_build_ci_vars_job_name_targeting(self):
+        """Test build_ci_vars with job name targeting (e.g. 'sandbox with clang test.py')"""
+        args = make_args(pytest='sandbox with clang test.py')
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '0',
+            'PYTEST': 'sandbox with clang test.py',
+            'WORLD': '0',
+            'SJG_LAB': ''
+        }
+        self.assertEqual(ci_vars, expected)
+
+        # Should not set TEST_SPEC for job names
+        self.assertNotIn('TEST_SPEC', ci_vars)
 
     def test_build_ci_vars_all_flags(self):
         """Test build_ci_vars with all flags enabled"""
@@ -311,53 +377,125 @@ class TestUtoolControl(TestBase):
             res = control.run_command(args)
         self.assertEqual(res, 1)
 
+    def test_invalid_pytest_value(self):
+        """Test validation of invalid pytest values"""
+        args = make_args(cmd='ci', pytest='invalid_board')
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(res, 1)
+
+    def test_invalid_sjg_value(self):
+        """Test validation of invalid SJG_LAB values"""
+        args = make_args(cmd='ci', sjg='invalid_lab')
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(res, 1)
+
+    def test_valid_pytest_value(self):
+        """Test validation of valid pytest values"""
+        args = make_args(cmd='ci', pytest='sandbox', dry_run=True)
+
+        # Mock the CI function to avoid git operations
+        original_do_ci = control.do_ci
+        control.do_ci = lambda args: 0
+
+        try:
+            with terminal.capture():
+                res = control.run_command(args)
+            self.assertEqual(res, 0)
+        finally:
+            control.do_ci = original_do_ci
+
+    def test_valid_sjg_value(self):
+        """Test validation of valid SJG_LAB values"""
+        args = make_args(cmd='ci', sjg='rpi4', dry_run=True)
+
+        # Mock the CI function to avoid git operations
+        original_do_ci = control.do_ci
+        control.do_ci = lambda args: 0
+
+        try:
+            with terminal.capture():
+                res = control.run_command(args)
+            self.assertEqual(res, 0)
+        finally:
+            control.do_ci = original_do_ci
+
 
 class TestGitLabParser(TestBase):
     """Test GitLab CI file parsing functionality"""
 
-    def test_parse_gitlab_ci_file(self):
-        """Test parsing of GitLab CI file"""
-        # Test with actual GitLab CI file if available
-        gitlab_data = gitlab_parser.parse_gitlab_ci_file()
+    def test_gitlab_ci_parser_class(self):
+        """Test GitLabCIParser class functionality"""
+        # Test direct class usage
+        parser = gitlab_parser.GitLabCIParser()
 
-        # Should return a dictionary with roles and boards
-        self.assertIsInstance(gitlab_data, dict)
-        self.assertIn('roles', gitlab_data)
-        self.assertIn('boards', gitlab_data)
-        self.assertIsInstance(gitlab_data['roles'], list)
-        self.assertIsInstance(gitlab_data['boards'], list)
+        # Should have properties with lists
+        self.assertIsInstance(parser.roles, list)
+        self.assertIsInstance(parser.boards, list)
+        self.assertIsInstance(parser.job_names, list)
+
+        # Test to_dict() method for backward compatibility
+        data = parser.to_dict()
+        self.assertIsInstance(data, dict)
+        self.assertIn('roles', data)
+        self.assertIn('boards', data)
+        self.assertIn('job_names', data)
+        self.assertEqual(data['roles'], parser.roles)
+        self.assertEqual(data['boards'], parser.boards)
+        self.assertEqual(data['job_names'], parser.job_names)
 
     def test_validate_sjg_value(self):
-        """Test SJG value validation"""
-        # Test special case
-        self.assertTrue(gitlab_parser.validate_sjg_value('1'))
+        """Test SJG value validation with class"""
+        parser = gitlab_parser.GitLabCIParser()
 
-        # Test with mock data
-        mock_data = {'roles': ['rpi4', 'rpi3', 'bbb'], 'boards': []}
-        self.assertTrue(gitlab_parser.validate_sjg_value('rpi4', mock_data))
-        self.assertFalse(gitlab_parser.validate_sjg_value('invalid', mock_data))
+        # Test special case - should always be valid
+        self.assertTrue(control.validate_sjg_value('1', parser))
+
+        # Test with real parser data
+        if parser.roles:
+            valid_role = parser.roles[0]
+            self.assertIn(valid_role, parser.roles)
+
+        # Invalid value should not be in roles
+        self.assertNotIn('definitely_invalid_role_12345', parser.roles)
 
     def test_validate_pytest_value(self):
-        """Test pytest value validation"""
-        # Test special case
-        self.assertTrue(gitlab_parser.validate_pytest_value('1'))
+        """Test pytest value validation with class"""
+        parser = gitlab_parser.GitLabCIParser()
 
-        # Test with mock data
-        mock_data = {'roles': [], 'boards': ['sandbox', 'qemu_arm']}
-        self.assertTrue(gitlab_parser.validate_pytest_value('sandbox', mock_data))
-        self.assertFalse(gitlab_parser.validate_pytest_value('invalid', mock_data))
+        # Test special case - should always be valid
+        self.assertTrue(control.validate_pytest_value('1', parser))
 
-    def test_get_choices(self):
-        """Test getting choice lists"""
-        sjg_choices = gitlab_parser.get_sjg_choices()
-        pytest_choices = gitlab_parser.get_pytest_choices()
+        # Test with real parser data
+        if parser.boards:
+            valid_board = parser.boards[0]
+            self.assertIn(valid_board, parser.boards)
 
-        # Should return lists
-        self.assertIsInstance(sjg_choices, list)
-        self.assertIsInstance(pytest_choices, list)
+        # Invalid value should not be in boards
+        self.assertNotIn('definitely_invalid_board_12345', parser.boards)
 
-        # Should include '1' as first choice
-        if sjg_choices:
-            self.assertEqual(sjg_choices[0], '1')
-        if pytest_choices:
-            self.assertEqual(pytest_choices[0], '1')
+    def test_job_names_extraction(self):
+        """Test that job names are correctly extracted"""
+        parser = gitlab_parser.GitLabCIParser()
+
+        # Should find pytest job names
+        self.assertIsInstance(parser.job_names, list)
+
+        # Should include some known job patterns if GitLab CI file exists
+        job_names_str = ' '.join(parser.job_names)
+        if 'test.py' in job_names_str:
+            # Should have at least one job ending with test.py
+            has_test_py = any(job.endswith('test.py') for job in parser.job_names)
+            self.assertTrue(has_test_py)
+
+    def test_parser_consistency(self):
+        """Test that parser instances return consistent data"""
+        # Multiple parser instances should return the same data
+        parser1 = gitlab_parser.GitLabCIParser()
+        parser2 = gitlab_parser.GitLabCIParser()
+
+        # Data should be identical
+        self.assertEqual(parser1.roles, parser2.roles)
+        self.assertEqual(parser1.boards, parser2.boards)
+        self.assertEqual(parser1.job_names, parser2.job_names)

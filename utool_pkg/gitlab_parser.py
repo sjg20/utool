@@ -40,122 +40,105 @@ def find_gitlab_ci_file():
     return None
 
 
-def parse_gitlab_ci_file(filepath=None):
-    """Parse GitLab CI file to extract valid values using YAML parser
+class GitLabCIParser:
+    """Parser for GitLab CI configuration files
 
-    Args:
-        filepath (str): Path to .gitlab-ci.yml file. If None, auto-detect.
-
-    Returns:
-        dict: Dictionary containing:
-            - 'roles': List of valid SJG_LAB role values
-            - 'boards': List of valid TEST_PY_BD board values
+    Parses the .gitlab-ci.yml file once and provides access to extracted data
+    through properties. This is more efficient than parsing the file multiple times.
     """
-    if filepath is None:
-        filepath = find_gitlab_ci_file()
 
-    if not filepath or not os.path.exists(filepath):
-        return {'roles': [], 'boards': []}
+    def __init__(self, filepath=None):
+        """Initialise parser and parse the GitLab CI file
 
-    roles = set()
-    boards = set()
+        Args:
+            filepath (str): Path to .gitlab-ci.yml file. If None, auto-detect.
+        """
+        self._filepath = filepath or find_gitlab_ci_file()
+        self._roles = []
+        self._boards = []
+        self._job_names = []
+        self._parse_file()
 
-    # Read file content once
-    with open(filepath, 'r', encoding='utf-8') as f:
-        content = f.read()
+    def _parse_file(self):
+        """Parse the GitLab CI file to extract roles, boards, and job names"""
+        if not self._filepath or not os.path.exists(self._filepath):
+            return
 
-    # Try YAML parsing first if available
-    if YAML_AVAILABLE:
-        data = yaml.safe_load(content)
+        roles = set()
+        boards = set()
+        job_names = set()
 
-        # Walk through all jobs to find ROLE and TEST_PY_BD values
-        for _, job_config in data.items():
-            if not isinstance(job_config, dict):
-                continue
+        # Read file content once
+        with open(self._filepath, 'r', encoding='utf-8') as f:
+            content = f.read()
 
-            # Look for variables section
-            variables = job_config.get('variables')
-            if not isinstance(variables, dict):
-                continue
+        # Try YAML parsing first if available
+        if YAML_AVAILABLE:
+            data = yaml.safe_load(content)
 
-            if 'ROLE' in variables:
-                roles.add(str(variables['ROLE']))
-            if 'TEST_PY_BD' in variables:
-                boards.add(str(variables['TEST_PY_BD']).strip('"'))
+            # Walk through all jobs to find ROLE, TEST_PY_BD values, and pytest job names
+            for job_name, job_config in data.items():
+                if not isinstance(job_config, dict):
+                    continue
 
-    # If YAML is not available, use regex fallback
-    else:
-        # Extract ROLE values - look for "ROLE: value" patterns
-        role_matches = re.findall(r'^[ \t]*ROLE:\s*([a-zA-Z0-9_-]+)',
-                                content, re.MULTILINE)
-        roles.update(role_matches)
+                # Collect pytest job names (jobs ending with 'test.py')
+                if isinstance(job_name, str) and job_name.endswith('test.py'):
+                    job_names.add(job_name)
 
-        # Extract TEST_PY_BD values - look for "TEST_PY_BD: value" patterns
-        board_matches = re.findall(r'^[ \t]*TEST_PY_BD:\s*"([^"]+)"',
-                                 content, re.MULTILINE)
-        boards.update(board_matches)
+                # Look for variables section
+                variables = job_config.get('variables')
+                if not isinstance(variables, dict):
+                    continue
 
-    return {
-        'roles': sorted(list(roles)),
-        'boards': sorted(list(boards))
-    }
+                if 'ROLE' in variables:
+                    roles.add(str(variables['ROLE']))
+                if 'TEST_PY_BD' in variables:
+                    boards.add(str(variables['TEST_PY_BD']).strip('"'))
 
+        # If YAML is not available, use regex fallback
+        else:
+            # Extract ROLE values - look for "ROLE: value" patterns
+            role_matches = re.findall(r'^[ \t]*ROLE:\s*([a-zA-Z0-9_-]+)',
+                                    content, re.MULTILINE)
+            roles.update(role_matches)
 
-def validate_sjg_value(value, gitlab_data=None):
-    """Validate an SJG_LAB value against GitLab CI file
+            # Extract TEST_PY_BD values - look for "TEST_PY_BD: value" patterns
+            board_matches = re.findall(r'^[ \t]*TEST_PY_BD:\s*"([^"]+)"',
+                                     content, re.MULTILINE)
+            boards.update(board_matches)
 
-    Args:
-        value (str): SJG_LAB value to validate
-        gitlab_data (dict): Parsed GitLab data, or None to auto-parse
+            # Extract pytest job names - look for lines ending with "test.py:"
+            job_matches = re.findall(r'^([^#\s][^:]*test\.py):', content, re.MULTILINE)
+            job_names.update(job_matches)
 
-    Returns:
-        bool: True if value is valid, False otherwise
-    """
-    if value == '1':  # Special case: '1' is always valid
-        return True
+        # Store sorted lists
+        self._roles = sorted(list(roles))
+        self._boards = sorted(list(boards))
+        self._job_names = sorted(list(job_names))
 
-    if gitlab_data is None:
-        gitlab_data = parse_gitlab_ci_file()
+    @property
+    def roles(self):
+        """Get list of valid SJG_LAB role values"""
+        return self._roles
 
-    return value in gitlab_data['roles']
+    @property
+    def boards(self):
+        """Get list of valid TEST_PY_BD board values"""
+        return self._boards
 
+    @property
+    def job_names(self):
+        """Get list of valid pytest job names"""
+        return self._job_names
 
-def validate_pytest_value(value, gitlab_data=None):
-    """Validate a pytest/TEST_PY_BD value against GitLab CI file
+    def to_dict(self):
+        """Return data as dictionary for backward compatibility
 
-    Args:
-        value (str): TEST_PY_BD value to validate
-        gitlab_data (dict): Parsed GitLab data, or None to auto-parse
-
-    Returns:
-        bool: True if value is valid, False otherwise
-    """
-    if value == '1':  # Special case: '1' is always valid
-        return True
-
-    if gitlab_data is None:
-        gitlab_data = parse_gitlab_ci_file()
-
-    return value in gitlab_data['boards']
-
-
-def get_sjg_choices():
-    """Get list of valid SJG_LAB choices for argument parser
-
-    Returns:
-        list: Valid SJG_LAB role names
-    """
-    gitlab_data = parse_gitlab_ci_file()
-    choices = ['1'] + gitlab_data['roles']  # '1' is always valid
-    return choices
-
-
-def get_pytest_choices():
-    """Get list of valid pytest choices for argument parser
-
-    Returns:
-        list: Valid TEST_PY_BD board names
-    """
-    gitlab_data = parse_gitlab_ci_file()
-    choices = ['1'] + gitlab_data['boards']  # '1' is always valid
-    return choices
+        Returns:
+            dict: Dictionary containing roles, boards, and job_names
+        """
+        return {
+            'roles': self._roles,
+            'boards': self._boards,
+            'job_names': self._job_names
+        }
