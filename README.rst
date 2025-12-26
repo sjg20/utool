@@ -28,6 +28,10 @@ Usage
     # Run tests
     utool test
 
+    # Run pytest (U-Boot test.py)
+    utool pytest
+    utool py test_dm -b qemu-riscv64
+
 CI Options
 ----------
 
@@ -135,6 +139,74 @@ Key findings about GitLab merge request and pipeline creation:
 
 6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
    python-gitlab for pipeline management.
+
+Pytest (U-Boot test.py)
+-----------------------
+
+The ``pytest`` command (alias ``py``) runs U-Boot's test.py test framework. It
+automatically sets up the cross-compiler, environment variables, and build
+directories.
+
+::
+
+    # Run all tests for sandbox board (default)
+    utool pytest
+
+    # Run specific test pattern (no quotes needed for multi-word specs)
+    utool py test_dm
+    utool py test_dm or test_env
+    utool py -b qemu-riscv64 not sleep
+
+    # Run tests for specific board
+    utool py test_dm -b qemu-riscv64
+    utool py -b qemu-x86_64
+
+    # Run with custom timeout (default: 300s)
+    utool py -T 600
+
+    # Show all test output (pytest -s)
+    utool py test_dm -s
+
+    # Skip building U-Boot (assume already built)
+    utool py --no-build
+
+    # Use custom build directory
+    utool py --build-dir /tmp/my-build
+
+    # Dry run to see command and environment
+    utool --dry-run py test_dm -b qemu-riscv64
+
+**Options**:
+
+- ``test_spec``: Test specification using pytest -k syntax (positional)
+- ``-b, --board BOARD``: Board name to test (default: sandbox)
+- ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
+- ``-s, --show-output``: Show all test output in real-time (pytest -s)
+- ``--no-build``: Skip building U-Boot (assume already built)
+- ``--build-dir DIR``: Override build directory
+
+**Automatic Setup**:
+
+- Sets ``CROSS_COMPILE`` using ``buildman -A BOARD``
+- Sets ``OPENSBI`` firmware path for RISC-V boards
+- Adds U-Boot test hooks to PATH
+- Uses organized build directories from config file
+- Builds U-Boot automatically before testing
+
+Configuration
+-------------
+
+Settings are stored in ``~/.utool`` (created on first run)::
+
+    [DEFAULT]
+    # Build directory for U-Boot out-of-tree builds
+    build_dir = /tmp/b
+
+    # OPENSBI firmware path for RISC-V testing
+    opensbi = ~/dev/riscv/riscv64-fw_dynamic.bin
+
+    # U-Boot test hooks directory
+    test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
 
 Testing
 -------

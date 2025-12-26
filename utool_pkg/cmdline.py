@@ -15,6 +15,7 @@ import sys
 ALIASES = {
     'ci': [],
     'test': ['t'],
+    'pytest': ['py'],
 }
 
 
@@ -85,6 +86,32 @@ def add_test_subparser(subparsers):
     return test
 
 
+def add_pytest_subparser(subparsers):
+    """Add the 'pytest' subparser"""
+    pyt = subparsers.add_parser(
+        'pytest', aliases=ALIASES['pytest'],
+        help='Run pytest tests for U-Boot')
+    pyt.add_argument(
+        'test_spec', type=str, nargs='*',
+        help="Test specification (e.g. 'test_dm', 'not sleep')")
+    pyt.add_argument(
+        '-b', '--board', metavar='BOARD', default='sandbox',
+        help='Board name to test (default: sandbox)')
+    pyt.add_argument(
+        '-T', '--timeout', type=int, metavar='SECS', default=300,
+        help='Test timeout in seconds (default: 300)')
+    pyt.add_argument(
+        '--no-build', action='store_true',
+        help='Skip building U-Boot (assume already built)')
+    pyt.add_argument(
+        '--build-dir', metavar='DIR',
+        help='Override build directory (default: /tmp/b/BOARD)')
+    pyt.add_argument(
+        '-s', '--show-output', action='store_true',
+        help='Show all test output in real-time (pytest -s)')
+    return pyt
+
+
 def setup_parser():
     """Set up command-line parser
 
@@ -107,6 +134,7 @@ def setup_parser():
     subparsers = parser.add_subparsers(dest='cmd', required=True)
     add_ci_subparser(subparsers)
     add_test_subparser(subparsers)
+    add_pytest_subparser(subparsers)
 
     return parser
 

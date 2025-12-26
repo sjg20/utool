@@ -73,8 +73,13 @@ def make_args(**kwargs):
         'force': False,
         'null': False,
         'merge': False,
-        'test_spec': None,
         'dest': None,
+        'board': 'sandbox',
+        'test_spec': [],
+        'timeout': 300,
+        'no_build': False,
+        'build_dir': None,
+        'show_output': False,
         'cmd': 'ci'
     }
     defaults.update(kwargs)
@@ -129,6 +134,39 @@ class TestUtoolCmdline(TestBase):
         with terminal.capture():
             with self.assertRaises(SystemExit):
                 parser.parse_args([])
+
+    def test_pytest_subcommand_parsing(self):
+        """Test that pytest subcommand is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test basic pytest command with defaults
+        args = parser.parse_args(['pytest'])
+        self.assertEqual(args.cmd, 'pytest')
+        self.assertEqual(args.board, 'sandbox')
+        self.assertEqual(args.test_spec, [])
+        self.assertEqual(args.timeout, 300)
+
+        # Test pytest with test spec specified
+        args = parser.parse_args(['pytest', 'test_dm'])
+        self.assertEqual(args.test_spec, ['test_dm'])
+        self.assertEqual(args.board, 'sandbox')  # default
+
+        # Test pytest with multi-word test spec (no quotes needed)
+        args = parser.parse_args(['pytest', '-b', 'coreboot', 'not', 'sleep'])
+        self.assertEqual(args.test_spec, ['not', 'sleep'])
+        self.assertEqual(args.board, 'coreboot')
+
+        # Test pytest with all flags
+        args = parser.parse_args(['pytest', 'test_dm', '-b', 'coreboot',
+                                 '-T', '600'])
+        self.assertEqual(args.board, 'coreboot')
+        self.assertEqual(args.test_spec, ['test_dm'])
+        self.assertEqual(args.timeout, 600)
+
+        # Test pytest alias (use cmdline.parse_args for alias resolution)
+        args = cmdline.parse_args(['py'])
+        self.assertEqual(args.cmd, 'pytest')
+        self.assertEqual(args.board, 'sandbox')
 
 
 class TestUtoolCIVars(TestBase):
@@ -498,6 +536,44 @@ class TestUtoolControl(TestBase):
         with terminal.capture():
             res = control.run_command(args)
         self.assertEqual(res, 1)
+
+    def test_pytest_command(self):
+        """Test pytest command execution"""
+        cap = []
+
+        def mock_test_py(pipe_list, **_kwargs):
+            cap.append(pipe_list[0])
+            return command.CommandResult(stdout='', return_code=0)
+
+        command.TEST_RESULT = mock_test_py
+
+        # Test basic pytest command
+        args = make_args(cmd='pytest', board='sandbox')
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(res, 0)
+
+        # Verify command structure
+        cmd = cap[-1]
+        self.assertEqual(cmd[0], './test/py/test.py')
+        self.assertIn('-B', cmd)
+        self.assertIn('sandbox', cmd)
+        # Default timeout (300) shouldn't add -o flag
+        self.assertNotIn('-o', cmd)
+
+        # Test pytest with test specification and custom timeout
+        args = make_args(cmd='pytest', board='malta', test_spec=['test_dm'],
+                        timeout=600)
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(res, 0)
+
+        cmd = cap[-1]
+        self.assertIn('malta', cmd)
+        self.assertIn('-k', cmd)
+        self.assertIn('test_dm', cmd)
+        self.assertIn('-o', cmd)
+        self.assertIn('faulthandler_timeout=600', cmd)
 
     def test_valid_pytest_value(self):
         """Test validation of valid pytest values"""

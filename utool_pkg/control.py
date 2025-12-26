@@ -8,6 +8,8 @@ This module provides various functions called by the main program to implement
 the features of st.
 """
 
+import configparser
+import os
 import sys
 
 # Import patman modules
@@ -19,6 +21,55 @@ from u_boot_pylib import tout  # pylint: disable=import-error,wrong-import-posit
 from pickman import gitlab_api  # pylint: disable=import-error,wrong-import-position
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
+
+# Default config file content
+DEFAULT_CONFIG = '''# utool config file
+
+[DEFAULT]
+# Build directory for U-Boot out-of-tree builds
+build_dir = /tmp/b
+
+# OPENSBI firmware path for RISC-V testing
+opensbi = ~/dev/riscv/riscv64-fw_dynamic.bin
+
+# U-Boot test hooks directory
+test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
+'''
+
+# Global settings storage
+SETTINGS = {'config': None}
+
+
+def get_settings():
+    """Get or create the global settings instance
+
+    Returns:
+        configparser.ConfigParser: Settings object
+    """
+    if SETTINGS['config'] is None:
+        SETTINGS['config'] = configparser.ConfigParser()
+        fname = os.path.expanduser('~/.utool')
+        if not os.path.exists(fname):
+            tout.notice(f'Creating config file: {fname}')
+            with open(fname, 'w', encoding='utf-8') as fil:
+                fil.write(DEFAULT_CONFIG)
+        SETTINGS['config'].read(fname)
+    return SETTINGS['config']
+
+
+def get_setting(name, fallback=None):
+    """Get a setting by name
+
+    Args:
+        name (str): Name of setting to retrieve
+        fallback (str or None): Value to return if the setting is missing
+
+    Returns:
+        str: Setting value with ~ and env vars expanded
+    """
+    settings = get_settings()
+    raw = settings.get('DEFAULT', name, fallback=fallback)
+    return os.path.expandvars(os.path.expanduser(raw))
 
 
 def build_ci_vars(args):
@@ -301,6 +352,9 @@ def run_command(args):
             return do_merge_request(args)
         return do_ci(args)
 
+    if args.cmd == 'pytest':
+        return do_pytest(args)
+
     tout.error(f'Unknown command: {args.cmd}')
     return 1
 
@@ -437,4 +491,101 @@ def do_ci(args):
 
     git_push_branch(branch, args, ci_vars=ci_vars)
 
+    return 0
+
+
+def pytest_env(board):
+    """Set up environment variables for pytest testing
+
+    Args:
+        board (str): Board name
+
+    Returns:
+        dict: Environment variables that were set (not the full environment)
+    """
+    env_vars = {}
+
+    # Set up cross-compiler using buildman
+    try:
+        cross_compile = command.output_one_line('buildman', '-A', board)
+        if cross_compile:
+            env_vars['CROSS_COMPILE'] = cross_compile
+    except command.CommandExc:
+        tout.warning(f'Could not determine cross-compiler for {board}')
+
+    if 'riscv' in board:
+        opensbi = get_setting('opensbi')
+        if opensbi and os.path.exists(opensbi):
+            env_vars['OPENSBI'] = opensbi
+        else:
+            tout.warning('No OPENSBI firmware found for RISC-V')
+
+    test_hooks_path = get_setting('test_hooks')
+    if test_hooks_path and os.path.exists(test_hooks_path):
+        current_path = os.environ.get('PATH', '')
+        if test_hooks_path not in current_path:
+            env_vars['PATH'] = f"{current_path}:{test_hooks_path}"
+
+    return env_vars
+
+
+def do_pytest(args):
+    """Handle pytest command - run pytest tests for U-Boot
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    tout.info(f'Running pytest for board: {args.board}')
+
+    env_vars = pytest_env(args.board)
+
+    cmd = ['./test/py/test.py']
+    cmd.extend(['-B', args.board])
+
+    if args.build_dir:
+        build_dir = args.build_dir
+    else:
+        base_dir = get_setting('build_dir', '/tmp/b')
+        build_dir = f'{base_dir}/{args.board}'
+    cmd.extend(['--build-dir', build_dir])
+
+    if not args.no_build:
+        cmd.append('--build')
+
+    cmd.extend(['--id', 'na'])
+
+    if args.test_spec:
+        cmd.extend(['-k', ' '.join(args.test_spec)])
+
+    if args.timeout != 300:
+        cmd.extend(['-o', f'faulthandler_timeout={args.timeout}'])
+
+    cmd.append('-q')
+    if args.show_output:
+        cmd.append('-s')
+
+    if args.dry_run:
+        tout.notice(f"Would run: {' '.join(cmd)}")
+        if env_vars:
+            tout.notice("Environment variables:")
+            for key, value in env_vars.items():
+                tout.notice(f"  {key}={value}")
+        return 0
+
+    tout.notice(f"+ {' '.join(cmd)}")
+    for key, value in env_vars.items():
+        tout.notice(f"+ export {key}={value}")
+
+    env = os.environ.copy()
+    env.update(env_vars)
+    result = command.run_pipe([cmd], raise_on_error=False, env=env, capture=False)
+
+    if result.return_code != 0:
+        tout.error('pytest failed')
+        return result.return_code
+
+    tout.notice('pytest passed')
     return 0
