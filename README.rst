@@ -136,6 +136,18 @@ Key findings about GitLab merge request and pipeline creation:
 6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
    python-gitlab for pipeline management.
 
+Configuration
+-------------
+
+Settings are stored in ``~/.utool`` (created on first run)::
+
+    [DEFAULT]
+    # Build directory for U-Boot out-of-tree builds
+    build_dir = /tmp/b
+
+    # U-Boot test hooks directory
+    test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
+
 Testing
 -------
 

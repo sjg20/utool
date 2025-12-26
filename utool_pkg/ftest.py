@@ -16,7 +16,7 @@ from u_boot_pylib import command
 from u_boot_pylib import terminal
 from u_boot_pylib import tools
 from u_boot_pylib import tout
-from utool_pkg import cmdline, control, gitlab_parser
+from utool_pkg import cmdline, control, gitlab_parser, settings
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -673,3 +673,80 @@ class TestUtoolMergeRequest(unittest.TestCase):
         # Test short flag
         args = parser.parse_args(['ci', '-d', 'develop'])
         self.assertEqual(args.dest, 'develop')
+
+
+class TestSettings(unittest.TestCase):
+    """Tests for settings module"""
+
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.config_file = os.path.join(self.test_dir, '.utool')
+        # Reset global settings state
+        settings.SETTINGS['config'] = None
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
+        settings.SETTINGS['config'] = None
+
+    def test_get_all_creates_config(self):
+        """Test that get_all creates config file if missing"""
+        # Patch expanduser to use our test directory
+        orig_expanduser = os.path.expanduser
+        os.path.expanduser = lambda p: p.replace('~', self.test_dir)
+
+        try:
+            with terminal.capture():
+                cfg = settings.get_all()
+            self.assertIsNotNone(cfg)
+            self.assertTrue(os.path.exists(self.config_file))
+        finally:
+            os.path.expanduser = orig_expanduser
+
+    def test_get_with_fallback(self):
+        """Test get returns fallback for missing keys"""
+        # Create a minimal config file
+        tools.write_file(self.config_file,
+                         b'[DEFAULT]\nbuild_dir = /tmp/test\n')
+
+        orig_expanduser = os.path.expanduser
+        os.path.expanduser = lambda p: p.replace('~', self.test_dir)
+
+        try:
+            with terminal.capture():
+                # Existing setting
+                self.assertEqual('/tmp/test', settings.get('build_dir'))
+                # Missing setting with fallback
+                val = settings.get('missing', 'default')
+                self.assertEqual('default', val)
+        finally:
+            os.path.expanduser = orig_expanduser
+
+    def test_get_expands_paths(self):
+        """Test that get expands ~ and env vars"""
+        tools.write_file(self.config_file,
+                         b'[DEFAULT]\ntest_path = ~/mydir\n')
+
+        orig_expanduser = os.path.expanduser
+        os.path.expanduser = lambda p: p.replace('~', self.test_dir)
+
+        try:
+            with terminal.capture():
+                result = settings.get('test_path')
+            self.assertEqual(f'{self.test_dir}/mydir', result)
+        finally:
+            os.path.expanduser = orig_expanduser
+
+    def test_get_none_fallback(self):
+        """Test that get returns None when fallback is None"""
+        tools.write_file(self.config_file,
+                         b'[DEFAULT]\nbuild_dir = /tmp/test\n')
+
+        orig_expanduser = os.path.expanduser
+        os.path.expanduser = lambda p: p.replace('~', self.test_dir)
+
+        try:
+            with terminal.capture():
+                result = settings.get('missing_key', fallback=None)
+            self.assertIsNone(result)
+        finally:
+            os.path.expanduser = orig_expanduser

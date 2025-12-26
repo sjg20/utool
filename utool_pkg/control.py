@@ -18,6 +18,7 @@ from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
+from utool_pkg.settings import get_all
 
 
 def build_ci_vars(args):
@@ -290,6 +291,9 @@ def run_command(args):
     """
     # Set verbosity level
     tout.init(tout.INFO if args.verbose else tout.NOTICE)
+
+    # Ensure settings file exists
+    get_all()
 
     tout.info(f'Running command: {args.cmd}')
 
