@@ -64,6 +64,26 @@ def list_qemu_boards():
     return sorted(boards)
 
 
+def get_uboot_dir():
+    """Get the U-Boot source directory
+
+    Checks if current directory is a U-Boot tree, otherwise uses $USRC.
+
+    Returns:
+        str: Path to U-Boot source directory, or None if not found
+    """
+    # Check if current directory is a U-Boot tree
+    if os.path.exists('./test/py/test.py'):
+        return os.getcwd()
+
+    # Try USRC environment variable
+    usrc = os.environ.get('USRC')
+    if usrc and os.path.exists(os.path.join(usrc, 'test/py/test.py')):
+        return usrc
+
+    return None
+
+
 def build_pytest_cmd(args):
     """Build the pytest command line
 
@@ -132,6 +152,17 @@ def do_pytest(args):
         tout.error('Board is required: use -b BOARD or set $b (use -l to list)')
         return 1
     args.board = board
+
+    # Find U-Boot source directory
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    # Change to U-Boot directory if needed
+    if uboot_dir != os.getcwd():
+        tout.info(f'Changing to U-Boot directory: {uboot_dir}')
+        os.chdir(uboot_dir)
 
     tout.info(f'Running pytest for board: {args.board}')
 

@@ -206,6 +206,15 @@ automatically sets up environment variables and build directories.
 - Uses organized build directories from config file
 - Builds U-Boot automatically before testing
 
+**Source Directory**:
+
+The pytest command must be run from a U-Boot source tree. If you're not in a
+U-Boot directory, set the ``USRC`` environment variable to point to your U-Boot
+source::
+
+    export USRC=~/u
+    utool py -b sandbox    # Works from any directory
+
 Configuration
 -------------
 

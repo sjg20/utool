@@ -16,7 +16,7 @@ from u_boot_pylib import command
 from u_boot_pylib import terminal
 from u_boot_pylib import tools
 from u_boot_pylib import tout
-from utool_pkg import cmdline, control, gitlab_parser, settings
+from utool_pkg import cmdline, cmdpy, control, gitlab_parser, settings
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -513,6 +513,20 @@ class TestUtoolCI(TestBase):
 class TestUtoolControl(TestBase):
     """Test the control module functionality"""
 
+    def setUp(self):
+        """Set up test environment with fake U-Boot tree"""
+        self.test_dir = tempfile.mkdtemp()
+        self.orig_cwd = os.getcwd()
+        os.chdir(self.test_dir)
+        os.makedirs('test/py')
+        tools.write_file('test/py/test.py', '# test', binary=False)
+
+    def tearDown(self):
+        """Clean up test environment"""
+        os.chdir(self.orig_cwd)
+        shutil.rmtree(self.test_dir)
+        command.TEST_RESULT = None
+
     def test_run_command_ci(self):
         """Test run_command dispatches to CI correctly"""
         args = make_args(cmd='ci', dry_run=True)
@@ -696,6 +710,73 @@ class TestUtoolControl(TestBase):
         self.assertEqual(0, res)
         self.assertIn('qemu-arm', out.getvalue())
         self.assertIn('qemu-riscv64', out.getvalue())
+
+    def test_get_uboot_dir_current(self):
+        """Test get_uboot_dir finds U-Boot in current directory"""
+        # setUp already created fake U-Boot tree in self.test_dir
+        result = cmdpy.get_uboot_dir()
+        self.assertEqual(self.test_dir, result)
+
+    def test_get_uboot_dir_usrc_env(self):
+        """Test get_uboot_dir uses $USRC when not in U-Boot tree"""
+        # Create a non-U-Boot directory
+        non_uboot_dir = tempfile.mkdtemp()
+        orig_usrc = os.environ.get('USRC')
+
+        try:
+            # Change to non-U-Boot directory
+            os.chdir(non_uboot_dir)
+            # Point USRC to the setUp-created U-Boot tree
+            os.environ['USRC'] = self.test_dir
+
+            result = cmdpy.get_uboot_dir()
+            self.assertEqual(self.test_dir, result)
+        finally:
+            os.chdir(self.test_dir)  # Restore for tearDown
+            if orig_usrc is not None:
+                os.environ['USRC'] = orig_usrc
+            elif 'USRC' in os.environ:
+                del os.environ['USRC']
+            shutil.rmtree(non_uboot_dir)
+
+    def test_get_uboot_dir_not_found(self):
+        """Test get_uboot_dir returns None when no U-Boot tree found"""
+        non_uboot_dir = tempfile.mkdtemp()
+        orig_usrc = os.environ.get('USRC')
+
+        try:
+            os.chdir(non_uboot_dir)
+            if 'USRC' in os.environ:
+                del os.environ['USRC']
+
+            result = cmdpy.get_uboot_dir()
+            self.assertIsNone(result)
+        finally:
+            os.chdir(self.test_dir)  # Restore for tearDown
+            if orig_usrc is not None:
+                os.environ['USRC'] = orig_usrc
+            shutil.rmtree(non_uboot_dir)
+
+    def test_pytest_not_in_uboot_tree(self):
+        """Test pytest fails when not in U-Boot tree and no $USRC"""
+        non_uboot_dir = tempfile.mkdtemp()
+        orig_usrc = os.environ.get('USRC')
+
+        try:
+            os.chdir(non_uboot_dir)
+            if 'USRC' in os.environ:
+                del os.environ['USRC']
+
+            args = make_args(cmd='pytest', board='sandbox')
+            with terminal.capture() as (_, err):
+                res = control.run_command(args)
+            self.assertEqual(1, res)
+            self.assertIn('Not in a U-Boot tree', err.getvalue())
+        finally:
+            os.chdir(self.test_dir)  # Restore for tearDown
+            if orig_usrc is not None:
+                os.environ['USRC'] = orig_usrc
+            shutil.rmtree(non_uboot_dir)
 
 
 class TestGitLabParser(TestBase):
