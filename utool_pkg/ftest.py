@@ -69,8 +69,16 @@ def make_args(**kwargs):
         'force': False,
         'null': False,
         'merge': False,
-        'test_spec': None,
         'dest': None,
+        'board': None,
+        'test_spec': [],
+        'timeout': 300,
+        'no_build': False,
+        'build_dir': None,
+        'show_output': False,
+        'timing': None,
+        'list_boards': False,
+        'quiet': False,
         'cmd': 'ci'
     }
     defaults.update(kwargs)
@@ -125,6 +133,40 @@ class TestUtoolCmdline(TestBase):
         with self.assertRaises(SystemExit):
             with terminal.capture():
                 parser.parse_args([])
+
+    def test_pytest_subcommand_parsing(self):
+        """Test that pytest subcommand is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test basic pytest command - board is required but not enforced by
+        # argparse (checked in do_pytest)
+        args = parser.parse_args(['pytest'])
+        self.assertEqual(args.cmd, 'pytest')
+        self.assertIsNone(args.board)
+        self.assertEqual(args.test_spec, [])
+        self.assertEqual(args.timeout, 300)
+
+        # Test pytest with board specified
+        args = parser.parse_args(['pytest', '-b', 'sandbox', 'test_dm'])
+        self.assertEqual(args.test_spec, ['test_dm'])
+        self.assertEqual(args.board, 'sandbox')
+
+        # Test pytest with multi-word test spec (no quotes needed)
+        args = parser.parse_args(['pytest', '-b', 'coreboot', 'not', 'sleep'])
+        self.assertEqual(args.test_spec, ['not', 'sleep'])
+        self.assertEqual(args.board, 'coreboot')
+
+        # Test pytest with all flags
+        args = parser.parse_args(['pytest', '-b', 'coreboot', 'test_dm',
+                                 '-T', '600'])
+        self.assertEqual(args.board, 'coreboot')
+        self.assertEqual(args.test_spec, ['test_dm'])
+        self.assertEqual(args.timeout, 600)
+
+        # Test pytest alias (use cmdline.parse_args for alias resolution)
+        args = cmdline.parse_args(['py', '-b', 'sandbox'])
+        self.assertEqual(args.cmd, 'pytest')
+        self.assertEqual(args.board, 'sandbox')
 
 
 class TestUtoolCIVars(TestBase):
@@ -402,12 +444,12 @@ class TestUtoolCI(TestBase):
             out.getvalue())
 
     def test_exec_cmd_dry_run(self):
-        """Test exec_cmd in dry-run mode"""
+        """Test exec_cmd in dry-run mode shows command"""
         args = make_args(dry_run=True, verbose=False)
         with terminal.capture() as (out, err):
             res = control.exec_cmd(['echo', 'test'], args)
         self.assertIsNone(res)
-        self.assertFalse(out.getvalue())
+        self.assertEqual('echo test\n', out.getvalue())
         self.assertFalse(err.getvalue())
 
     def test_exec_cmd_normal(self):
@@ -516,6 +558,44 @@ class TestUtoolControl(TestBase):
         self.assertIn('ci -l help', out.getvalue())
         self.assertEqual('Invalid SJG_LAB value: invalid_lab\n', err.getvalue())
 
+    def test_pytest_command(self):
+        """Test pytest command execution"""
+        cap = []
+
+        def mock_test_py(pipe_list, **_kwargs):
+            cap.append(pipe_list[0])
+            return command.CommandResult(stdout='', return_code=0)
+
+        command.TEST_RESULT = mock_test_py
+
+        # Test basic pytest command
+        args = make_args(cmd='pytest', board='sandbox')
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(res, 0)
+
+        # Verify command structure
+        cmd = cap[-1]
+        self.assertTrue(cmd[0].endswith('/test/py/test.py'))
+        self.assertIn('-B', cmd)
+        self.assertIn('sandbox', cmd)
+        # Default timeout (300) shouldn't add -o flag
+        self.assertNotIn('-o', cmd)
+
+        # Test pytest with test specification and custom timeout
+        args = make_args(cmd='pytest', board='malta', test_spec=['test_dm'],
+                        timeout=600)
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(res, 0)
+
+        cmd = cap[-1]
+        self.assertIn('malta', cmd)
+        self.assertIn('-k', cmd)
+        self.assertIn('test_dm', cmd)
+        self.assertIn('-o', cmd)
+        self.assertIn('faulthandler_timeout=600', cmd)
+
     def test_valid_pytest_value(self):
         """Test validation of valid pytest values"""
         args = make_args(cmd='ci', pytest='sandbox', dry_run=True)
@@ -549,6 +629,73 @@ class TestUtoolControl(TestBase):
             self.assertFalse(err.getvalue())
         finally:
             control.do_ci = orig_do_ci
+
+    def test_pytest_board_required(self):
+        """Test that pytest requires a board"""
+        args = make_args(cmd='pytest', board=None)
+        with terminal.capture() as (_, err):
+            res = control.run_command(args)
+        self.assertEqual(1, res)
+        self.assertIn('Board is required', err.getvalue())
+
+    def test_pytest_board_from_env(self):
+        """Test that pytest uses $b environment variable"""
+        cap = []
+
+        def mock_test_py(pipe_list, **_kwargs):
+            cap.append(pipe_list[0])
+            return command.CommandResult(stdout='', return_code=0)
+
+        command.TEST_RESULT = mock_test_py
+        orig_env = os.environ.get('b')
+
+        try:
+            os.environ['b'] = 'sandbox'
+            args = make_args(cmd='pytest', board=None)
+            with terminal.capture():
+                res = control.run_command(args)
+            self.assertEqual(0, res)
+            self.assertIn('sandbox', cap[-1])
+        finally:
+            if orig_env is not None:
+                os.environ['b'] = orig_env
+            elif 'b' in os.environ:
+                del os.environ['b']
+
+    def test_pytest_quiet_mode(self):
+        """Test that quiet mode adds correct flags"""
+        cap = []
+
+        def mock_test_py(pipe_list, **_kwargs):
+            cap.append(pipe_list[0])
+            return command.CommandResult(stdout='', return_code=0)
+
+        command.TEST_RESULT = mock_test_py
+
+        args = make_args(cmd='pytest', board='sandbox', quiet=True)
+        with terminal.capture():
+            res = control.run_command(args)
+        self.assertEqual(0, res)
+
+        cmd = cap[-1]
+        self.assertIn('--no-header', cmd)
+        self.assertIn('--quiet-hooks', cmd)
+
+    def test_pytest_list_boards(self):
+        """Test listing QEMU boards"""
+        def mock_buildman(**_kwargs):
+            return command.CommandResult(
+                stdout='qemu : 2 boards\n   qemu-arm qemu-riscv64\n',
+                return_code=0)
+
+        command.TEST_RESULT = mock_buildman
+
+        args = make_args(cmd='pytest', list_boards=True)
+        with terminal.capture() as (out, _):
+            res = control.run_command(args)
+        self.assertEqual(0, res)
+        self.assertIn('qemu-arm', out.getvalue())
+        self.assertIn('qemu-riscv64', out.getvalue())
 
 
 class TestGitLabParser(TestBase):

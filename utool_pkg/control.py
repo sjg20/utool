@@ -18,7 +18,9 @@ from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
-from utool_pkg.settings import get_all
+from utool_pkg.cmdpy import do_pytest
+from utool_pkg import settings
+from utool_pkg.util import exec_cmd
 
 
 def build_ci_vars(args):
@@ -103,26 +105,6 @@ def build_desc(desc, tags):
     if desc:
         return f'{desc}\n\n{tags}'
     return tags
-
-
-def exec_cmd(cmd, args):
-    """Run a command or show what would be run in dry-run mode
-
-    Args:
-        cmd (list): Command to run
-        args (argparse.Namespace): Arguments object containing dry_run flag
-
-    Returns:
-        CommandResult or None: Result if run, None if dry-run
-    """
-    if args.dry_run:
-        # Only show git push commands in dry-run mode
-        if cmd[0] == 'git' and cmd[1] == 'push':
-            tout.notice(' '.join(cmd))
-        return None
-
-    tout.info(f"Running: {' '.join(cmd)}")
-    return command.run_one(*cmd)
 
 
 def git_push_branch(branch, args, ci_vars=None, upstream=False, dest=None):
@@ -293,7 +275,7 @@ def run_command(args):
     tout.init(tout.INFO if args.verbose else tout.NOTICE)
 
     # Ensure settings file exists
-    get_all()
+    settings.get_all()
 
     tout.info(f'Running command: {args.cmd}')
 
@@ -306,6 +288,9 @@ def run_command(args):
         if args.merge:
             return do_merge_request(args)
         return do_ci(args)
+
+    if args.cmd == 'pytest':
+        return do_pytest(args)
 
     tout.error(f'Unknown command: {args.cmd}')
     return 1

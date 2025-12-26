@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: GPL-2.0+
+# Copyright 2025 Canonical Ltd
+# Written by Simon Glass <simon.glass@canonical.com>
+
+"""Utility functions for utool
+
+This module provides common utility functions used across utool modules.
+"""
+
+# pylint: disable=import-error
+from u_boot_pylib import command
+from u_boot_pylib import tout
+
+
+def exec_cmd(cmd, args, env=None, capture=True):
+    """Run a command or show what would be run in dry-run mode
+
+    Args:
+        cmd (list): Command to run
+        args (argparse.Namespace): Arguments object containing dry_run flag
+        env (dict): Optional environment variables to set
+        capture (bool): Whether to capture output (default True)
+
+    Returns:
+        CommandResult or None: Result if run, None if dry-run
+    """
+    if args.dry_run:
+        tout.notice(' '.join(cmd))
+        if env:
+            for key, value in env.items():
+                tout.notice(f"  {key}={value}")
+        return None
+
+    tout.info(f"Running: {' '.join(cmd)}")
+    return command.run_pipe([cmd], env=env, capture=capture,
+                            raise_on_error=False)

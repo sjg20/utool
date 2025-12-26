@@ -14,6 +14,7 @@ import sys
 # Aliases for subcommands
 ALIASES = {
     'test': ['t'],
+    'pytest': ['py'],
 }
 
 
@@ -83,6 +84,42 @@ def add_test_subparser(subparsers):
     return test
 
 
+def add_pytest_subparser(subparsers):
+    """Add the 'pytest' subparser"""
+    pyt = subparsers.add_parser(
+        'pytest', aliases=ALIASES['pytest'],
+        help='Run pytest tests for U-Boot')
+    pyt.add_argument(
+        'test_spec', type=str, nargs='*',
+        help="Test specification (e.g. 'test_dm', 'not sleep')")
+    pyt.add_argument(
+        '-b', '--board', metavar='BOARD',
+        help='Board name to test (required; use -l to list QEMU boards)')
+    pyt.add_argument(
+        '-l', '--list', action='store_true', dest='list_boards',
+        help='List available QEMU boards')
+    pyt.add_argument(
+        '-T', '--timeout', type=int, metavar='SECS', default=300,
+        help='Test timeout in seconds (default: 300)')
+    pyt.add_argument(
+        '--no-build', action='store_true',
+        help='Skip building U-Boot (assume already built)')
+    pyt.add_argument(
+        '--build-dir', metavar='DIR',
+        help='Override build directory (default: /tmp/b/BOARD)')
+    pyt.add_argument(
+        '-s', '--show-output', action='store_true',
+        help='Show all test output in real-time (pytest -s)')
+    pyt.add_argument(
+        '-t', '--timing', type=float, nargs='?', const=0.1, default=None,
+        metavar='SECS',
+        help='Show test timing (default min: 0.1s)')
+    pyt.add_argument(
+        '-q', '--quiet', action='store_true',
+        help='Quiet mode: only show build output, progress, and result')
+    return pyt
+
+
 def setup_parser():
     """Set up command-line parser
 
@@ -105,6 +142,7 @@ def setup_parser():
     subparsers = parser.add_subparsers(dest='cmd', required=True)
     add_ci_subparser(subparsers)
     add_test_subparser(subparsers)
+    add_pytest_subparser(subparsers)
 
     return parser
 

@@ -28,6 +28,10 @@ Usage
     # Run tests
     utool test
 
+    # Run pytest (U-Boot test.py)
+    utool pytest
+    utool py test_dm -b qemu-riscv64
+
 CI Options
 ----------
 
@@ -136,6 +140,72 @@ Key findings about GitLab merge request and pipeline creation:
 6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
    python-gitlab for pipeline management.
 
+Pytest (U-Boot test.py)
+-----------------------
+
+The ``pytest`` command (alias ``py``) runs U-Boot's test.py test framework. It
+automatically sets up environment variables and build directories.
+
+::
+
+    # List available QEMU boards
+    utool py -l
+
+    # Run tests for a board (board is required)
+    utool py -b sandbox
+    utool py -b qemu-riscv64
+
+    # Use $b environment variable as default board
+    export b=sandbox
+    utool py -q                    # Uses $b
+
+    # Run specific test pattern (no quotes needed for multi-word specs)
+    utool py -b sandbox test_dm
+    utool py -b sandbox test_dm or test_env
+    utool py -b qemu-riscv64 not sleep
+
+    # Quiet mode: only show build errors, progress, and result
+    utool py -qb sandbox
+
+    # Run with custom timeout (default: 300s)
+    utool py -b sandbox -T 600
+
+    # Show test timing (tests taking > 0.1s by default)
+    utool py -b sandbox -t
+    utool py -b sandbox -t 0.5     # Only show tests > 0.5s
+
+    # Show all test output (pytest -s)
+    utool py -b sandbox test_dm -s
+
+    # Skip building U-Boot (assume already built)
+    utool py -b sandbox --no-build
+
+    # Use custom build directory
+    utool py -b sandbox --build-dir /tmp/my-build
+
+    # Dry run to see command and environment
+    utool --dry-run py -b qemu-riscv64 test_dm
+
+**Options**:
+
+- ``test_spec``: Test specification using pytest -k syntax (positional)
+- ``-b, --board BOARD``: Board name to test (required, or set ``$b``)
+- ``-l, --list``: List available QEMU boards
+- ``-q, --quiet``: Quiet mode - only show build errors, progress, and result
+- ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
+- ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
+- ``-s, --show-output``: Show all test output in real-time (pytest -s)
+- ``--no-build``: Skip building U-Boot (assume already built)
+- ``--build-dir DIR``: Override build directory
+
+**Automatic Setup**:
+
+- Uses ``--buildman`` flag for cross-compiler setup
+- Sets ``OPENSBI`` firmware path for RISC-V boards
+- Adds U-Boot test hooks to PATH
+- Uses organized build directories from config file
+- Builds U-Boot automatically before testing
+
 Configuration
 -------------
 
@@ -144,6 +214,9 @@ Settings are stored in ``~/.utool`` (created on first run)::
     [DEFAULT]
     # Build directory for U-Boot out-of-tree builds
     build_dir = /tmp/b
+
+    # OPENSBI firmware path for RISC-V testing
+    opensbi = ~/dev/riscv/riscv64-fw_dynamic.bin
 
     # U-Boot test hooks directory
     test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
