@@ -215,6 +215,45 @@ source::
     export USRC=~/u
     utool py -b sandbox    # Works from any directory
 
+Setup
+-----
+
+The ``setup`` command downloads and installs dependencies needed for testing
+various architectures::
+
+    # Install all components
+    utool setup
+
+    # List available components
+    utool setup -l
+
+    # Install specific component
+    utool setup qemu
+    utool setup opensbi
+    utool setup tfa
+    utool setup xtensa
+
+    # Force reinstall
+    utool setup opensbi -f
+
+**Components**:
+
+- ``qemu``: Install QEMU packages for all architectures (arm, riscv, x86, ppc,
+  xtensa). Uses ``apt-get`` with sudo.
+- ``opensbi``: Download pre-built OpenSBI firmware for RISC-V (both 32-bit and
+  64-bit) from GitHub releases.
+- ``tfa``: Clone and build ARM Trusted Firmware for QEMU SBSA board. Requires
+  ``aarch64-linux-gnu-`` cross-compiler.
+- ``xtensa``: Download Xtensa dc233c toolchain from foss-xtensa releases and
+  configure ``~/.buildman``.
+
+**Installed locations** (configurable in ``~/.utool``):
+
+- OpenSBI: ``~/dev/blobs/opensbi/fw_dynamic.bin`` (64-bit),
+  ``fw_dynamic_rv32.bin`` (32-bit)
+- TF-A: ``~/dev/blobs/tfa/bl1.bin``, ``fip.bin``
+- Xtensa: ``~/dev/blobs/xtensa/2020.07/xtensa-dc233c-elf/``
+
 Configuration
 -------------
 
@@ -224,8 +263,15 @@ Settings are stored in ``~/.utool`` (created on first run)::
     # Build directory for U-Boot out-of-tree builds
     build_dir = /tmp/b
 
-    # OPENSBI firmware path for RISC-V testing
-    opensbi = ~/dev/riscv/riscv64-fw_dynamic.bin
+    # Directory for firmware blobs (OpenSBI, TF-A, etc.)
+    blobs_dir = ~/dev/blobs
+
+    # OPENSBI firmware paths for RISC-V testing (built by 'utool setup')
+    opensbi = ~/dev/blobs/opensbi/fw_dynamic.bin
+    opensbi_rv32 = ~/dev/blobs/opensbi/fw_dynamic_rv32.bin
+
+    # TF-A firmware directory for ARM SBSA testing
+    tfa_dir = ~/dev/blobs/tfa
 
     # U-Boot test hooks directory
     test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks

@@ -4,19 +4,21 @@
 
 """Functional tests for utool CI automation tool"""
 
-# pylint: disable=import-error
+# pylint: disable=import-error,too-many-lines
 
 import argparse
 import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from u_boot_pylib import command
 from u_boot_pylib import terminal
 from u_boot_pylib import tools
 from u_boot_pylib import tout
-from utool_pkg import cmdline, cmdpy, control, gitlab_parser, settings
+from utool_pkg import (cmdline, cmdpy, control, gitlab_parser, settings,
+                       setup)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -387,7 +389,7 @@ class TestUtoolCI(TestBase):
                     **CAPTURE)
 
         # Create initial commit
-        tools.write_file('test.txt', 'test content', binary=False)
+        tools.write_file('test.txt', b'test content')
         command.run('git', 'add', '.', **CAPTURE)
         command.run('git', 'commit', '-m', 'Initial commit', **CAPTURE)
 
@@ -519,7 +521,7 @@ class TestUtoolControl(TestBase):
         self.orig_cwd = os.getcwd()
         os.chdir(self.test_dir)
         os.makedirs('test/py')
-        tools.write_file('test/py/test.py', '# test', binary=False)
+        tools.write_file('test/py/test.py', b'# test')
 
     def tearDown(self):
         """Clean up test environment"""
@@ -978,3 +980,186 @@ class TestSettings(unittest.TestCase):
             self.assertIsNone(result)
         finally:
             os.path.expanduser = orig_expanduser
+
+
+class TestSetupSubcommand(TestBase):
+    """Tests for the setup subcommand"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.test_dir = tempfile.mkdtemp()
+        self.orig_cwd = os.getcwd()
+        tout.init(tout.NOTICE)
+
+    def tearDown(self):
+        """Clean up test environment"""
+        os.chdir(self.orig_cwd)
+        shutil.rmtree(self.test_dir)
+        command.TEST_RESULT = None
+
+    def test_setup_subcommand_parsing(self):
+        """Test that setup subcommand is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test basic setup command
+        args = parser.parse_args(['setup'])
+        self.assertEqual('setup', args.cmd)
+        self.assertIsNone(args.component)
+        self.assertFalse(args.list_components)
+        self.assertFalse(args.force)
+
+        # Test setup with component
+        args = parser.parse_args(['setup', 'opensbi'])
+        self.assertEqual('opensbi', args.component)
+
+        # Test setup with --list flag
+        args = parser.parse_args(['setup', '-l'])
+        self.assertTrue(args.list_components)
+
+        # Test setup with --force flag
+        args = parser.parse_args(['setup', 'tfa', '-f'])
+        self.assertEqual('tfa', args.component)
+        self.assertTrue(args.force)
+
+    def test_setup_list_components(self):
+        """Test listing available components"""
+        args = argparse.Namespace(
+            cmd='setup',
+            component=None,
+            list_components=True,
+            force=False,
+            dry_run=False,
+            verbose=False,
+            debug=False
+        )
+        with terminal.capture() as (out, _):
+            res = setup.do_setup(args)
+        self.assertEqual(0, res)
+        output = out.getvalue()
+        self.assertIn('qemu', output)
+        self.assertIn('opensbi', output)
+        self.assertIn('tfa', output)
+        self.assertIn('xtensa', output)
+
+    def test_setup_unknown_component(self):
+        """Test setup with unknown component"""
+        args = argparse.Namespace(
+            cmd='setup',
+            component='unknown_component',
+            list_components=False,
+            force=False,
+            dry_run=False,
+            verbose=False,
+            debug=False
+        )
+        with terminal.capture() as (_, err):
+            res = setup.do_setup(args)
+        self.assertEqual(1, res)
+        self.assertIn('Unknown component', err.getvalue())
+
+    def test_setup_qemu_all_installed(self):
+        """Test setup_qemu when all packages are installed"""
+        args = argparse.Namespace(dry_run=False, force=False)
+        with mock.patch('utool_pkg.setup.command.output'):
+            with terminal.capture() as (out, _):
+                res = setup.setup_qemu(args)
+        self.assertEqual(0, res)
+        self.assertIn('All QEMU packages are installed', out.getvalue())
+
+    def test_setup_qemu_dry_run(self):
+        """Test setup_qemu in dry-run mode with missing packages"""
+        def mock_output(*cmd):
+            """Mock command.output to simulate missing qemu-system-ppc"""
+            if 'qemu-system-ppc' in cmd:
+                result = command.CommandResult(return_code=1, stdout='',
+                                                stderr='', exception=None)
+                raise command.CommandExc('Package not found', result)
+
+        args = argparse.Namespace(dry_run=True, force=False)
+        with mock.patch('utool_pkg.setup.command.output', mock_output):
+            with terminal.capture() as (out, _):
+                res = setup.setup_qemu(args)
+        self.assertEqual(0, res)
+        self.assertIn('Would run:', out.getvalue())
+
+    def test_setup_opensbi_dry_run(self):
+        """Test setup_opensbi in dry-run mode"""
+        args = argparse.Namespace(dry_run=True, force=False)
+        with terminal.capture() as (out, _):
+            res = setup.setup_opensbi(self.test_dir, args)
+        self.assertEqual(0, res)
+        self.assertIn('Would download OpenSBI', out.getvalue())
+
+    def test_setup_opensbi_already_present(self):
+        """Test setup_opensbi when files already exist"""
+        # Create fake opensbi files
+        opensbi_dir = os.path.join(self.test_dir, 'opensbi')
+        os.makedirs(opensbi_dir)
+        tools.write_file(os.path.join(opensbi_dir, 'fw_dynamic.bin'), b'fake')
+        tools.write_file(os.path.join(opensbi_dir, 'fw_dynamic_rv32.bin'),
+                         b'fake')
+
+        args = argparse.Namespace(dry_run=False, force=False)
+        with terminal.capture() as (out, _):
+            res = setup.setup_opensbi(self.test_dir, args)
+        self.assertEqual(0, res)
+        self.assertIn('already present', out.getvalue())
+
+    def test_setup_tfa_dry_run(self):
+        """Test setup_tfa in dry-run mode"""
+        args = argparse.Namespace(dry_run=True, force=False)
+        with terminal.capture() as (out, _):
+            res = setup.setup_tfa(self.test_dir, args)
+        self.assertEqual(0, res)
+        self.assertIn('Would build TF-A', out.getvalue())
+
+    def test_setup_tfa_already_present(self):
+        """Test setup_tfa when files already exist"""
+        # Create fake TF-A files
+        tfa_dir = os.path.join(self.test_dir, 'tfa')
+        os.makedirs(tfa_dir)
+        tools.write_file(os.path.join(tfa_dir, 'bl1.bin'), b'fake')
+        tools.write_file(os.path.join(tfa_dir, 'fip.bin'), b'fake')
+
+        args = argparse.Namespace(dry_run=False, force=False)
+        with terminal.capture() as (out, _):
+            res = setup.setup_tfa(self.test_dir, args)
+        self.assertEqual(0, res)
+        self.assertIn('already present', out.getvalue())
+
+    def test_setup_xtensa_dry_run(self):
+        """Test setup_xtensa in dry-run mode"""
+        args = argparse.Namespace(dry_run=True, force=False)
+        with terminal.capture() as (out, _):
+            res = setup.setup_xtensa(self.test_dir, args)
+        self.assertEqual(0, res)
+        self.assertIn('Would download Xtensa', out.getvalue())
+
+    def test_setup_xtensa_already_present(self):
+        """Test setup_xtensa when toolchain already exists"""
+        # Create fake xtensa toolchain
+        toolchain_dir = os.path.join(
+            self.test_dir, 'xtensa/2020.07/xtensa-dc233c-elf/bin')
+        os.makedirs(toolchain_dir)
+        tools.write_file(os.path.join(toolchain_dir, 'xtensa-dc233c-elf-gcc'),
+                         b'fake')
+
+        args = argparse.Namespace(dry_run=False, force=False)
+        with terminal.capture() as (out, _):
+            res = setup.setup_xtensa(self.test_dir, args)
+        self.assertEqual(0, res)
+        self.assertIn('already present', out.getvalue())
+
+    def test_setup_components_dict(self):
+        """Test that SETUP_COMPONENTS has expected entries"""
+        self.assertIn('qemu', setup.SETUP_COMPONENTS)
+        self.assertIn('opensbi', setup.SETUP_COMPONENTS)
+        self.assertIn('tfa', setup.SETUP_COMPONENTS)
+        self.assertIn('xtensa', setup.SETUP_COMPONENTS)
+
+    def test_qemu_packages_dict(self):
+        """Test that QEMU_PACKAGES has expected entries"""
+        self.assertIn('qemu-system-arm', setup.QEMU_PACKAGES)
+        self.assertIn('qemu-system-misc', setup.QEMU_PACKAGES)
+        self.assertIn('qemu-system-ppc', setup.QEMU_PACKAGES)
+        self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)

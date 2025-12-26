@@ -20,6 +20,7 @@ from u_boot_pylib import tout
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
 from utool_pkg.cmdpy import do_pytest
 from utool_pkg import settings
+from utool_pkg.setup import do_setup
 from utool_pkg.util import exec_cmd
 
 
@@ -291,6 +292,9 @@ def run_command(args):
 
     if args.cmd == 'pytest':
         return do_pytest(args)
+
+    if args.cmd == 'setup':
+        return do_setup(args)
 
     tout.error(f'Unknown command: {args.cmd}')
     return 1

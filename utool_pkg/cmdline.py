@@ -120,6 +120,22 @@ def add_pytest_subparser(subparsers):
     return pyt
 
 
+def add_setup_subparser(subparsers):
+    """Add the 'setup' subparser"""
+    setup = subparsers.add_parser(
+        'setup', help='Build firmware blobs needed for testing')
+    setup.add_argument(
+        'component', type=str, nargs='?', default=None,
+        help="Component to build (e.g. 'opensbi'), or omit to build all")
+    setup.add_argument(
+        '-l', '--list', action='store_true', dest='list_components',
+        help='List available components')
+    setup.add_argument(
+        '-f', '--force', action='store_true',
+        help='Force rebuild even if already built')
+    return setup
+
+
 def setup_parser():
     """Set up command-line parser
 
@@ -143,6 +159,7 @@ def setup_parser():
     add_ci_subparser(subparsers)
     add_test_subparser(subparsers)
     add_pytest_subparser(subparsers)
+    add_setup_subparser(subparsers)
 
     return parser
 

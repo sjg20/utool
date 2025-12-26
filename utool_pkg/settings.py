@@ -20,6 +20,16 @@ DEFAULT_CONFIG = '''# utool config file
 # Build directory for U-Boot out-of-tree builds
 build_dir = /tmp/b
 
+# Directory for firmware blobs (OpenSBI, etc.)
+blobs_dir = ~/dev/blobs
+
+# OPENSBI firmware paths for RISC-V testing (built by 'utool setup')
+opensbi = ~/dev/blobs/opensbi/fw_dynamic.bin
+opensbi_rv32 = ~/dev/blobs/opensbi/fw_dynamic_rv32.bin
+
+# TF-A firmware directory for ARM SBSA testing (built by 'utool setup')
+tfa_dir = ~/dev/blobs/tfa
+
 # U-Boot test hooks directory
 test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
 '''
