@@ -109,6 +109,10 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '-s', '--show-output', action='store_true',
         help='Show all test output in real-time (pytest -s)')
+    pyt.add_argument(
+        '-t', '--timing', type=float, nargs='?', const=0.1, default=None,
+        metavar='SECS',
+        help='Show test timing (default min: 0.1s)')
     return pyt
 
 

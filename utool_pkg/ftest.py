@@ -80,6 +80,7 @@ def make_args(**kwargs):
         'no_build': False,
         'build_dir': None,
         'show_output': False,
+        'timing': None,
         'cmd': 'ci'
     }
     defaults.update(kwargs)

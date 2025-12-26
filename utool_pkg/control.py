@@ -566,6 +566,9 @@ def do_pytest(args):
     cmd.append('-q')
     if args.show_output:
         cmd.append('-s')
+    if args.timing is not None:
+        cmd.extend(['--timing', '--durations=0',
+                    f'--durations-min={args.timing}'])
 
     if args.dry_run:
         tout.notice(f"Would run: {' '.join(cmd)}")
@@ -581,7 +584,8 @@ def do_pytest(args):
 
     env = os.environ.copy()
     env.update(env_vars)
-    result = command.run_pipe([cmd], raise_on_error=False, env=env, capture=False)
+    result = command.run_pipe([cmd], raise_on_error=False, env=env,
+                               capture=False)
 
     if result.return_code != 0:
         tout.error('pytest failed')
