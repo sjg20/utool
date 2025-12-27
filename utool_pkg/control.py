@@ -10,6 +10,8 @@ the features of utool.
 
 import sys
 
+import gitlab
+
 # pylint: disable=import-error
 from patman import patchstream
 from pickman import gitlab_api
@@ -335,8 +337,8 @@ def extract_mr_info(branch, args):
             tout.notice('Use \'git format-patch --cover-letter\' or add a '
                         'cover letter to your series')
             return None, None, None
-        title = cover[0]
-        desc = cover[1:]
+        title = cover[0]  # pylint: disable=unsubscriptable-object
+        desc = cover[1:]  # pylint: disable=unsubscriptable-object
         tout.info('Using cover letter for merge request')
 
     tout.info(f'Found {count - end} patches for branch {branch}')
@@ -356,7 +358,7 @@ def extract_mr_info(branch, args):
     return title, desc_with_tags, commit_tags
 
 
-def do_merge_request(args):
+def do_merge_request(args):  # pylint: disable=too-many-locals
     """Create a merge request using cover letter from patch series
 
     Args:
@@ -374,6 +376,28 @@ def do_merge_request(args):
     if title is None:
         return 1
 
+    # Get remote URL and parse it using pickman's functions
+    remote_url = gitlab_api.get_remote_url('ci')
+    host, proj = gitlab_api.parse_url(remote_url)
+    if not host or not proj:
+        tout.error(f'Cannot parse remote URL: {remote_url}')
+        return 1
+
+    # Check if MR already exists for this branch
+    existing_mr = None
+    try:
+        token = gitlab_api.get_token()
+        if token:
+            glab = gitlab.Gitlab(f'https://{host}', private_token=token)
+            project = glab.projects.get(proj)
+            mrs = project.mergerequests.list(source_branch=branch,
+                                             state='opened')
+            if mrs:
+                existing_mr = mrs[0]
+    except gitlab.GitlabError as exc:
+        tout.error(f'Could not check for existing MR: {exc}')
+        return 1
+
     if args.dry_run:
         tout.notice(f'dry-run: Create MR \'{title}\'')
         return 0
@@ -383,21 +407,23 @@ def do_merge_request(args):
     ci_vars = build_ci_vars(args)
     git_push_branch(branch, args, ci_vars=ci_vars)
 
-    # Get remote URL and parse it using pickman's functions
-    remote_url = gitlab_api.get_remote_url('ci')
-    host, proj = gitlab_api.parse_url(remote_url)
-    if not host or not proj:
-        tout.error(f'Cannot parse remote URL: {remote_url}')
-        return 1
-
-    tout.info('Creating merge request...')
-    mr_url = gitlab_api.create_mr(host, proj, branch, 'master', title, desc)
-
-    if not mr_url:
-        tout.error('Failed to create merge request')
-        return 1
-
-    tout.notice(f'Merge request: {mr_url}')
+    if existing_mr:
+        # Update existing MR
+        tout.info('Updating existing merge request...')
+        existing_mr.title = title
+        existing_mr.description = desc
+        existing_mr.save()
+        mr_url = existing_mr.web_url
+        tout.notice(f'Merge request updated: {mr_url}')
+    else:
+        # Create new MR
+        tout.info('Creating merge request...')
+        mr_url = gitlab_api.create_mr(host, proj, branch, 'master',
+                                      title, desc)
+        if not mr_url:
+            tout.error('Failed to create merge request')
+            return 1
+        tout.notice(f'Merge request: {mr_url}')
     if commit_tags:
         tout.info(f'MR pipeline will use commit message tags: {commit_tags}')
 

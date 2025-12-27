@@ -6,3 +6,6 @@
 
 # YAML parsing for GitLab CI file
 PyYAML>=5.1
+
+# GitLab API access
+python-gitlab>=3.0
