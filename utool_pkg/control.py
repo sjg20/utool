@@ -300,7 +300,7 @@ def run_command(args):
     return 1
 
 
-def extract_mr_title_description(branch, args):
+def extract_mr_info(branch, args):
     """Extract title and description for merge request from patch series
 
     Args:
@@ -325,17 +325,18 @@ def extract_mr_title_description(branch, args):
         # description
         commit = series.commits[0]
         title = commit.subject
-        description = commit.msg if commit.msg else ''
+        desc = commit.msg.splitlines() if commit.msg else []
         tout.info('Using single commit subject and body for merge request')
     else:
         # Multiple commits - require cover letter
-        if not series.get('cover'):
+        cover = series.cover
+        if not cover:
             tout.error('No cover letter found in patch series')
             tout.notice('Use \'git format-patch --cover-letter\' or add a '
                         'cover letter to your series')
             return None, None, None
-        title = series.get('cover')
-        description = series.notes if series.notes else ''
+        title = cover[0]
+        desc = cover[1:]
         tout.info('Using cover letter for merge request')
 
     tout.info(f'Found {count - end} patches for branch {branch}')
@@ -344,25 +345,15 @@ def extract_mr_title_description(branch, args):
         tout.error('Could not extract title')
         return None, None, None
 
-    # Ensure title and description are strings
-    if isinstance(title, list):
-        # If title is a list, use the first non-empty line
-        title_str = next((line.strip() for line in title
-                           if line.strip()), '')
-    else:
-        title_str = str(title) if title is not None else ''
-
-    description_str = str(description) if description is not None else ''
-
     # Build CI variables for pipeline creation
     ci_vars = build_ci_vars(args)
     # When creating MR, append commit message tags for pipeline control
     commit_tags = ''
     if hasattr(args, 'merge') and args.merge:
         commit_tags = build_commit_tags(args, ci_vars)
-        description_str = build_desc(description_str, commit_tags)
+    desc_with_tags = build_desc('\n'.join(desc), commit_tags)
 
-    return title_str, description_str, commit_tags
+    return title, desc_with_tags, commit_tags
 
 
 def do_merge_request(args):
@@ -378,13 +369,13 @@ def do_merge_request(args):
 
     # Get branch and extract title/description
     branch = gitutil.get_branch()
-    mr_info = extract_mr_title_description(branch, args)
-    title_str, description_str, commit_tags = mr_info
-    if title_str is None:
+    mr_info = extract_mr_info(branch, args)
+    title, desc, commit_tags = mr_info
+    if title is None:
         return 1
 
     if args.dry_run:
-        tout.notice(f'dry-run: Create MR \'{title_str}\'')
+        tout.notice(f'dry-run: Create MR \'{title}\'')
         return 0
 
     # Push branch with CI variables - respects --null flag
@@ -394,14 +385,13 @@ def do_merge_request(args):
 
     # Get remote URL and parse it using pickman's functions
     remote_url = gitlab_api.get_remote_url('ci')
-    host, proj_path = gitlab_api.parse_url(remote_url)
-    if not host or not proj_path:
+    host, proj = gitlab_api.parse_url(remote_url)
+    if not host or not proj:
         tout.error(f'Cannot parse remote URL: {remote_url}')
         return 1
 
     tout.info('Creating merge request...')
-    mr_url = gitlab_api.create_mr(host, proj_path, branch, 'master',
-                                  title_str, description_str)
+    mr_url = gitlab_api.create_mr(host, proj, branch, 'master', title, desc)
 
     if not mr_url:
         tout.error('Failed to create merge request')
