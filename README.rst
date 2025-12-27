@@ -5,7 +5,23 @@
 utool - U-Boot Automation Tool
 ==============================
 
-This is a a simple tool to handle common tasks when developing U-Boot.
+This is a simple tool to handle common tasks when developing U-Boot,
+including pushing to CI, running tests, and setting up firmware dependencies.
+
+Subcommands
+-----------
+
+``ci``
+    Push current branch to GitLab CI with configurable test stages
+
+``pytest`` (alias: ``py``)
+    Run U-Boot's test.py framework with automatic environment setup
+
+``setup``
+    Download and build firmware blobs needed for testing (OpenSBI, TF-A, etc.)
+
+``test``
+    Run utool's own test suite
 
 Installation
 ------------
@@ -14,34 +30,55 @@ Install dependencies::
 
     pip install -r requirements.txt
 
-Usage
------
+Settings
+--------
+
+utool stores settings in ``~/.utool``, created on first run. Key settings
+include build directories, firmware paths, and test hook locations. See the
+Configuration_ section below for details.
+
+CI Subcommand
+-------------
+
+The ``ci`` subcommand pushes the current branch to GitLab CI for testing. It
+configures which test stages to run and can optionally create a Gitlab
+merge request (MR).
+
+The basic idea is that you create a branch with your changes, add a patman
+cover letter to the HEAD commit (ideally) and then type:
 
 ::
 
-    # Push with specific tests
-    utool ci -s -p -l rpi4
+    utool ci -m
+
+This pushes your branch to CI and adds a MR for the changes. It will also kick
+off various builds and tests, as defined by `.gitlab-ci.yml`.
+
+This is all very well, but you almost as easily push the branch with git and
+then create an MR manually. But utool provides a few more features. It allows
+you to select which CI stages run, for cases where you are iterating on a
+particular problem, or know that your change only affects a certain part of the
+CI process. For lab and pytests, it also allows you to run on just a single
+board or test. You can even set the test-spec to use.
+
+Some simple examples:::
+
+    # Push and run only on the SJG lab with the 'rpi4' board
+    utool ci -l rpi4
 
     # Dry-run to see what would be executed
     utool --dry-run ci -w
 
-    # Run tests
-    utool test
-
-    # Run pytest (U-Boot test.py)
-    utool pytest
-    utool py test_dm -b qemu-riscv64
-
-CI Options
-----------
+**Options**
 
 - ``-s, --suites``: Enable SUITES
 - ``-p, --pytest [BOARD]``: Enable PYTEST (optionally specify board name)
-- ``-t, --test-spec SPEC``: Override test specification (e.g. "not sleep", "test_ofplatdata")
+- ``-t, --test-spec SPEC``: Override test specification (e.g. "not sleep",
+  "test_ofplatdata")
 - ``-w, --world``: Enable WORLD
 - ``-l, --sjg [BOARD]``: Set SJG_LAB (optionally specify board)
-- ``-f, --force``: Force push
-- ``-0, --null``: Set all CI vars to 0
+- ``-f, --force``: Force push (required when rewriting branch history)
+- ``-0, --null``: Skip all CI stages (no builds/tests run, MR can merge immediately)
 - ``-m, --merge``: Create merge request using cover letter from patch series
 - ``-d, --dest BRANCH``: Destination branch name (default: current branch name)
 
@@ -74,8 +111,8 @@ Pytest Targeting Examples
 
     # Push to different branch names (always to 'ci' remote)
     utool ci                     # Push to same branch name on 'ci' remote
-    utool ci -d my-feature       # Push current branch to 'my-feature' on 'ci' remote
-    utool ci -d cherry-abc123    # Push current branch to 'cherry-abc123' on 'ci' remote
+    utool ci -d my-feature       # Push to 'my-feature' on 'ci' remote
+    utool ci -d cherry-abc123    # Push to 'cherry-abc123' on 'ci' remote
 
 **Note**: Use board names (like ``coreboot``, ``sandbox``) to target all jobs
 for that board, or exact job names (like ``"sandbox with clang test.py"``) to
@@ -83,7 +120,7 @@ target specific job variants. Use ``-p help`` or ``-l help`` to see all
 available choices.
 
 Merge Request Creation
-----------------------
+~~~~~~~~~~~~~~~~~~~~~~
 
 The tool can create GitLab merge requests with automated pipeline creation::
 
@@ -100,88 +137,40 @@ run), not fine-grained selection of specific boards or test specifications.
 For precise targeting like ``-p coreboot`` or ``-t "test_ofplatdata"``, use
 regular CI pushes instead of merge requests.
 
-GitLab API Behavior and Variable Limitations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Key findings about GitLab merge request and pipeline creation:
-
-1. **Variable Scope Limitation**: GitLab CI variables passed via
-   ``git push -o ci.variable="FOO=bar"`` only apply to **push pipelines**.
-   Merge request pipelines created automatically when opening an MR do **not**
-   inherit these variables - they always use the default values from
-   ``.gitlab-ci.yml``.
-
-2. **Pipeline Types**:
-
-   - **Push Pipeline**: Created by ``git push``, inherits CI variables from
-     push options
-   - **Merge Request Pipeline**: Created automatically when MR is opened, uses
-     default YAML variables only
-
-3. **Workflow Solution - Commit Message Tags**: To control MR pipelines, use
-   commit message tags:
-
-   - ``[skip-suites]`` - Skip test_suites stage
-   - ``[skip-pytest]`` - Skip pytest/test.py stages
-   - ``[skip-world]`` - Skip world_build stage
-   - ``[skip-sjg]`` - Skip sjg-lab stage
-
-4. **Recommended Workflow**:
-
-   - For **parameterized variables** (``-l rpi4``, ``-p sandbox``): Use regular
-     ``utool ci`` first, create MR manually later
-   - For **simple skip flags** (``-0``, ``-w``): Use commit message tags with
-     ``utool ci --merge``
-
-5. **Single Commit Support**: For branches with only one commit, the tool uses
-   the commit subject as MR title and commit body as description, eliminating
-   the need for a cover letter.
-
-6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
-   python-gitlab for pipeline management.
-
-Pytest (U-Boot test.py)
------------------------
+Pytest Subcommand
+-----------------
 
 The ``pytest`` command (alias ``py``) runs U-Boot's test.py test framework. It
 automatically sets up environment variables and build directories.
 
-::
+The basic idea is that you specify a board and optionally a test pattern::
+
+    utool py -b sandbox test_dm
+
+This builds U-Boot for the specified board, sets up the environment (including
+cross-compiler via buildman, firmware paths for RISC-V/ARM, and test hooks),
+then runs the matching tests.
+
+Running U-Boot's test.py manually requires setting several environment variables
+and remembering the correct flags. utool handles this automatically, letting you
+focus on which tests to run. It also supports quiet mode for less verbose output
+and timing information to identify slow tests.
+
+Some simple examples::
 
     # List available QEMU boards
     utool py -l
 
-    # Run tests for a board (board is required)
+    # Run tests for a board
     utool py -b sandbox
-    utool py -b qemu-riscv64
 
-    # Use $b environment variable as default board
-    export b=sandbox
-    utool py -q                    # Uses $b
-
-    # Run specific test pattern (no quotes needed for multi-word specs)
+    # Run specific test pattern
     utool py -b sandbox test_dm
-    utool py -b sandbox test_dm or test_env
     utool py -b qemu-riscv64 not sleep
 
-    # Quiet mode: only show build errors, progress, and result
-    utool py -qb sandbox
-
-    # Run with custom timeout (default: 300s)
-    utool py -b sandbox -T 600
-
-    # Show test timing (tests taking > 0.1s by default)
-    utool py -b sandbox -t
-    utool py -b sandbox -t 0.5     # Only show tests > 0.5s
-
-    # Show all test output (pytest -s)
-    utool py -b sandbox test_dm -s
-
-    # Skip building U-Boot (assume already built)
-    utool py -b sandbox --no-build
-
-    # Use custom build directory
-    utool py -b sandbox --build-dir /tmp/my-build
+    # Quiet mode with $b environment variable as default board
+    export b=sandbox
+    utool py -q
 
     # Dry run to see command and environment
     utool --dry-run py -b qemu-riscv64 test_dm
@@ -193,7 +182,7 @@ automatically sets up environment variables and build directories.
 - ``-l, --list``: List available QEMU boards
 - ``-q, --quiet``: Quiet mode - only show build errors, progress, and result
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
-- ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
+- ``-t, --timing [SECS]``: Show test timing (default minimum: 0.1s)
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
 - ``--no-build``: Skip building U-Boot (assume already built)
 - ``--build-dir DIR``: Override build directory
@@ -222,7 +211,9 @@ subdirectory is automatically appended if present.
 
 Use ``-c/--show-cmd`` to display the QEMU command line without running tests::
 
-    utool py -b qemu-riscv64 -c
+    $ utool py -b qemu-riscv64 -c
+    qemu-system-riscv64 -m 1G -nographic -netdev user,id=net0,tftp=/tmp/b/qemu-riscv64
+      -device virtio-net-device,netdev=net0 ... -M virt -bios /tmp/b/qemu-riscv64/u-boot
 
 This parses the hook configuration files and expands variables like
 ``${U_BOOT_BUILD_DIR}`` and ``${OPENSBI}``, showing exactly what QEMU command
@@ -238,11 +229,18 @@ source::
     export USRC=~/u
     utool py -b sandbox    # Works from any directory
 
-Setup
------
+Setup Subcommand
+----------------
 
 The ``setup`` command downloads and installs dependencies needed for testing
-various architectures::
+various architectures.
+
+Testing U-Boot on different architectures requires firmware blobs and emulators
+that aren't always easy to obtain. For example, RISC-V testing needs OpenSBI
+firmware, ARM SBSA needs TF-A, and QEMU packages are needed for emulation. This
+command automates fetching and installing these dependencies.
+
+::
 
     # Install all components
     utool setup
@@ -251,10 +249,7 @@ various architectures::
     utool setup -l
 
     # Install specific component
-    utool setup qemu
     utool setup opensbi
-    utool setup tfa
-    utool setup xtensa
 
     # Force reinstall
     utool setup opensbi -f
@@ -302,7 +297,7 @@ Settings are stored in ``~/.utool`` (created on first run)::
 Testing
 -------
 
-The tool includes comprehensive tests using the U-Boot test framework::
+Similar to other Python tools in U-Boot, utool includes a good set of tests::
 
     # Run all tests
     utool test
@@ -315,3 +310,46 @@ Terminology
 
 'Merge request' (two words, no hyphen) is standard prose, being a request to
 merge.
+
+Technical Notes
+---------------
+
+GitLab API Behavior and Variable Limitations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Key findings about GitLab merge request and pipeline creation:
+
+1. **Variable Scope Limitation**: GitLab CI variables passed via
+   ``git push -o ci.variable="FOO=bar"`` only apply to **push pipelines**.
+   Merge request pipelines created automatically when opening an MR do **not**
+   inherit these variables - they always use the default values from
+   ``.gitlab-ci.yml``.
+
+2. **Pipeline Types**:
+
+   - **Push Pipeline**: Created by ``git push``, inherits CI variables from
+     push options
+   - **Merge Request Pipeline**: Created automatically when MR is opened, uses
+     default YAML variables only
+
+3. **Workflow Solution - MR Description Tags**: To control MR pipelines, utool
+   adds tags to the MR description:
+
+   - ``[skip-suites]`` - Skip test_suites stage
+   - ``[skip-pytest]`` - Skip pytest/test.py stages
+   - ``[skip-world]`` - Skip world_build stage
+   - ``[skip-sjg]`` - Skip sjg-lab stage
+
+4. **Recommended Workflow**:
+
+   - For **parameterized variables** (``-l rpi4``, ``-p sandbox``): Use regular
+     ``utool ci`` first, create MR manually later
+   - For **simple skip flags** (``-0``, ``-w``): Use MR description tags with
+     ``utool ci --merge``
+
+5. **Single Commit Support**: For branches with only one commit, the tool uses
+   the commit subject as MR title and commit body as description, eliminating
+   the need for a cover letter.
+
+6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
+   python-gitlab for pipeline management.
