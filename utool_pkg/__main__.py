@@ -32,10 +32,10 @@ def run_utool():
     if not args.debug:
         sys.tracebacklimit = 0
 
-    # Run tests if requested
-    if args.cmd == 'test':
+    # Run self-tests if requested
+    if args.cmd == 'selftest':
         to_run = (args.testname if hasattr(args, 'testname') and
-                  args.testname not in [None, 'test'] else None)
+                  args.testname not in [None, 'selftest'] else None)
         result = test_util.run_test_suites(
             'utool', args.debug, args.verbose,
             getattr(args, 'no_capture', False),
@@ -44,7 +44,7 @@ def run_utool():
             [ftest.TestUtoolCmdline, ftest.TestUtoolCIVars, ftest.TestUtoolCI,
              ftest.TestUtoolControl, ftest.TestGitLabParser,
              ftest.TestUtoolMergeRequest, ftest.TestSettings,
-             ftest.TestSetupSubcommand])
+             ftest.TestSetupSubcommand, ftest.TestBuildSubcommand])
         sys.exit(0 if result.wasSuccessful() else 1)
 
     # Run the appropriate command

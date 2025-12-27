@@ -650,11 +650,19 @@ class TestUtoolControl(TestBase):  # pylint: disable=too-many-public-methods
 
     def test_pytest_board_required(self):
         """Test that pytest requires a board"""
-        args = make_args(cmd='pytest', board=None)
-        with terminal.capture() as (_, err):
-            res = control.run_command(args)
-        self.assertEqual(1, res)
-        self.assertIn('Board is required', err.getvalue())
+        orig_env = os.environ.get('b')
+        if 'b' in os.environ:
+            del os.environ['b']
+
+        try:
+            args = make_args(cmd='pytest', board=None)
+            with terminal.capture() as (_, err):
+                res = control.run_command(args)
+            self.assertEqual(1, res)
+            self.assertIn('Board is required', err.getvalue())
+        finally:
+            if orig_env is not None:
+                os.environ['b'] = orig_env
 
     def test_pytest_board_from_env(self):
         """Test that pytest uses $b environment variable"""

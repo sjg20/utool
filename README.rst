@@ -11,17 +11,20 @@ including pushing to CI, running tests, and setting up firmware dependencies.
 Subcommands
 -----------
 
+``build`` (alias: ``b``)
+    Build U-Boot for a specified board using buildman
+
 ``ci``
     Push current branch to GitLab CI with configurable test stages
 
 ``pytest`` (alias: ``py``)
     Run U-Boot's test.py framework with automatic environment setup
 
+``selftest`` (alias: ``st``)
+    Run utool's own test suite
+
 ``setup``
     Download and build firmware blobs needed for testing (OpenSBI, TF-A, etc.)
-
-``test``
-    Run utool's own test suite
 
 Installation
 ------------
@@ -300,10 +303,10 @@ Testing
 Similar to other Python tools in U-Boot, utool includes a good set of tests::
 
     # Run all tests
-    utool test
+    utool selftest
 
     # Run specific test
-    utool test test_ci_subcommand_parsing
+    utool selftest test_ci_subcommand_parsing
 
 Terminology
 -----------
