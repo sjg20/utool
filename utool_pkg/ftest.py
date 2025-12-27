@@ -514,7 +514,7 @@ class TestUtoolCI(TestBase):
                           'test-branch:upstream-test'], list(cap[-1]))
 
 
-class TestUtoolControl(TestBase):
+class TestUtoolControl(TestBase):  # pylint: disable=too-many-public-methods
     """Test the control module functionality"""
 
     def setUp(self):
@@ -781,6 +781,99 @@ class TestUtoolControl(TestBase):
             if orig_usrc is not None:
                 os.environ['USRC'] = orig_usrc
             shutil.rmtree(non_uboot_dir)
+
+    def test_parse_hook_config(self):
+        """Test parsing hook config files"""
+        config_content = b'''# Comment line
+console_impl=qemu
+qemu_machine="virt"
+qemu_binary=qemu-system-riscv64
+qemu_extra_args="-m 1G -nographic"
+qemu_kernel_args="-bios ${OPENSBI} -kernel ${U_BOOT_BUILD_DIR}/u-boot.bin"
+'''
+        config_path = os.path.join(self.test_dir, 'conf.test')
+        tools.write_file(config_path, config_content)
+
+        config = cmdpy.parse_hook_config(config_path)
+
+        self.assertEqual('qemu', config['console_impl'])
+        self.assertEqual('virt', config['qemu_machine'])
+        self.assertEqual('qemu-system-riscv64', config['qemu_binary'])
+        self.assertEqual('-m 1G -nographic', config['qemu_extra_args'])
+        self.assertIn('${OPENSBI}', config['qemu_kernel_args'])
+
+    def test_parse_hook_config_nonexistent(self):
+        """Test parsing non-existent config file returns empty dict"""
+        config = cmdpy.parse_hook_config('/nonexistent/path')
+        self.assertEqual({}, config)
+
+    def test_expand_vars(self):
+        """Test shell variable expansion"""
+        env = {
+            'OPENSBI': '/path/to/opensbi.bin',
+            'BUILD_DIR': '/tmp/build',
+        }
+
+        # Test simple expansion
+        result = cmdpy.expand_vars('${OPENSBI}', env)
+        self.assertEqual('/path/to/opensbi.bin', result)
+
+        # Test multiple variables
+        result = cmdpy.expand_vars('-bios ${OPENSBI} -dir ${BUILD_DIR}',
+                                         env)
+        self.assertEqual('-bios /path/to/opensbi.bin -dir /tmp/build', result)
+
+        # Test unknown variable remains unchanged
+        result = cmdpy.expand_vars('${UNKNOWN}', env)
+        self.assertEqual('${UNKNOWN}', result)
+
+    @mock.patch('utool_pkg.cmdpy.settings')
+    @mock.patch('utool_pkg.cmdpy.socket')
+    def test_get_qemu_command(self, mock_socket, mock_settings):
+        """Test building QEMU command from config"""
+        # Set up mock hostname
+        mock_socket.gethostname.return_value = 'testhost'
+
+        # Create config directory structure
+        hooks_dir = os.path.join(self.test_dir, 'hooks')
+        bin_dir = os.path.join(hooks_dir, 'bin')
+        host_dir = os.path.join(bin_dir, 'testhost')
+        os.makedirs(host_dir)
+
+        # Create config file
+        config_content = b'''console_impl=qemu
+qemu_machine=virt
+qemu_binary=qemu-system-riscv64
+qemu_extra_args="-m 1G"
+qemu_kernel_args="-kernel ${U_BOOT_BUILD_DIR}/u-boot.bin"
+'''
+        config_path = os.path.join(host_dir, 'conf.testboard_na')
+        tools.write_file(config_path, config_content)
+
+        # Mock settings
+        mock_settings.get.side_effect = lambda key, fallback=None: {
+            'test_hooks': hooks_dir,
+            'build_dir': '/tmp/b',
+        }.get(key, fallback)
+
+        args = make_args(cmd='pytest', board='testboard', build_dir=None)
+        result = cmdpy.get_qemu_command('testboard', args)
+
+        self.assertIn('qemu-system-riscv64', result)
+        self.assertIn('-M virt', result)
+        self.assertIn('-m 1G', result)
+        self.assertIn('/tmp/b/testboard/u-boot.bin', result)
+
+    @mock.patch('utool_pkg.cmdpy.settings')
+    def test_get_qemu_command_no_hooks(self, mock_settings):
+        """Test get_qemu_command fails when test_hooks not configured"""
+        mock_settings.get.return_value = None
+
+        args = make_args(cmd='pytest', board='testboard')
+        with terminal.capture():
+            result = cmdpy.get_qemu_command('testboard', args)
+
+        self.assertIsNone(result)
 
 
 class TestGitLabParser(TestBase):

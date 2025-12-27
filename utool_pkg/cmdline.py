@@ -117,6 +117,9 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '-q', '--quiet', action='store_true',
         help='Quiet mode: only show build output, progress, and result')
+    pyt.add_argument(
+        '-c', '--show-cmd', action='store_true',
+        help='Show QEMU command line without running tests')
     return pyt
 
 

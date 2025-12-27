@@ -9,6 +9,8 @@ test framework.
 """
 
 import os
+import re
+import socket
 
 # pylint: disable=import-error
 from u_boot_pylib import command
@@ -178,7 +180,150 @@ def build_pytest_cmd(args):
     return cmd
 
 
-def do_pytest(args):
+def parse_hook_config(config_path):
+    """Parse shell variable assignments from a hook config file
+
+    Args:
+        config_path (str): Path to the config file
+
+    Returns:
+        dict: Dictionary of variable names to values
+    """
+    variables = {}
+    if not os.path.exists(config_path):
+        return variables
+
+    with open(config_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            # Skip comments and empty lines
+            if not line or line.startswith('#'):
+                continue
+            # Match variable assignments: name=value or name="value"
+            match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$', line)
+            if match:
+                name, value = match.groups()
+                # Remove surrounding quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                variables[name] = value
+    return variables
+
+
+def expand_vars(value, env):
+    """Expand shell-style variable references in a string
+
+    Args:
+        value (str): String potentially containing ${VAR} references
+        env (dict): Environment variables for substitution
+
+    Returns:
+        str: String with variables expanded
+    """
+    def replace_var(match):
+        var_name = match.group(1)
+        return env.get(var_name, f'${{{var_name}}}')
+
+    return re.sub(r'\$\{([^}]+)\}', replace_var, value)
+
+
+def get_board_config(board):
+    """Get the hook configuration for a board
+
+    Args:
+        board (str): Board name
+
+    Returns:
+        dict: Configuration with keys like 'console_impl', 'qemu_binary',
+            'qemu_machine', 'qemu_extra_args', 'qemu_kernel_args', etc.,
+            or None if not found
+    """
+    hooks = settings.get('test_hooks')
+    if not hooks:
+        tout.error('test_hooks not configured in settings')
+        return None
+
+    hooks_bin = os.path.join(hooks, 'bin')
+    if not os.path.exists(hooks_bin):
+        tout.error(f'Hooks bin directory not found: {hooks_bin}')
+        return None
+
+    hostname = socket.gethostname()
+    board_id = 'na'  # Default board identifier
+
+    # Build config file path
+    cfg = os.path.join(hooks_bin, hostname, f'conf.{board}_{board_id}')
+
+    # Resolve symlinks
+    if os.path.islink(cfg):
+        cfg = os.path.realpath(cfg)
+
+    if not os.path.exists(cfg):
+        tout.error(f'Config file not found: {cfg}')
+        return None
+
+    return parse_hook_config(cfg)
+
+
+def get_qemu_command(board, args):
+    """Build the QEMU command line from hook-config files
+
+    Args:
+        board (str): Board name
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        str: QEMU command line, or None if not a QEMU board
+    """
+    config = get_board_config(board)
+    if not config:
+        return None
+
+    # Check if this is a QEMU board
+    if config.get('console_impl') != 'qemu':
+        tout.warning(f'Board {board} is not a QEMU board '
+                     f'(console_impl={config.get("console_impl")})')
+        return None
+
+    # Build environment for variable expansion
+    if args.build_dir:
+        build_dir = args.build_dir
+    else:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = f'{base_dir}/{board}'
+
+    env = os.environ.copy()
+    env['U_BOOT_BUILD_DIR'] = build_dir
+    env['UBOOT_TRAVIS_BUILD_DIR'] = build_dir
+
+    # Add OPENSBI if configured
+    pytest_vars = pytest_env(board)
+    env.update(pytest_vars)
+
+    # Extract QEMU command components
+    qemu_binary = config.get('qemu_binary', 'qemu-system-unknown')
+    qemu_machine = config.get('qemu_machine', '')
+    qemu_extra_args = config.get('qemu_extra_args', '')
+    qemu_kernel_args = config.get('qemu_kernel_args', '')
+
+    # Expand variables
+    qemu_extra_args = expand_vars(qemu_extra_args, env)
+    qemu_kernel_args = expand_vars(qemu_kernel_args, env)
+
+    # Build command line
+    cmd_parts = [qemu_binary]
+    if qemu_extra_args:
+        cmd_parts.append(qemu_extra_args)
+    cmd_parts.append(f'-M {qemu_machine}')
+    if qemu_kernel_args:
+        cmd_parts.append(qemu_kernel_args)
+
+    return ' '.join(cmd_parts)
+
+
+def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-branches
     """Handle pytest command - run pytest tests for U-Boot
 
     Args:
@@ -202,6 +347,14 @@ def do_pytest(args):
         tout.error('Board is required: use -b BOARD or set $b (use -l to list)')
         return 1
     args.board = board
+
+    # Handle --show-cmd option
+    if getattr(args, 'show_cmd', False):
+        qemu_cmd = get_qemu_command(board, args)
+        if qemu_cmd:
+            print(qemu_cmd)
+            return 0
+        return 1
 
     # Find U-Boot source directory
     uboot_dir = get_uboot_dir()

@@ -197,14 +197,37 @@ automatically sets up environment variables and build directories.
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
 - ``--no-build``: Skip building U-Boot (assume already built)
 - ``--build-dir DIR``: Override build directory
+- ``-c, --show-cmd``: Show QEMU command line without running tests
 
 **Automatic Setup**:
 
 - Uses ``--buildman`` flag for cross-compiler setup
 - Sets ``OPENSBI`` firmware path for RISC-V boards
-- Adds U-Boot test hooks to PATH
+- Adds U-Boot test hooks to PATH (see below)
 - Uses organized build directories from config file
 - Builds U-Boot automatically before testing
+
+**Test Hooks Search Order**:
+
+The pytest command searches for test hooks in the following order:
+
+1. **Local hooks** from the U-Boot source tree: ``$USRC/test/hooks/bin``
+2. **Configured hooks** from settings: ``test_hooks`` in ``~/.utool``
+
+Local hooks take precedence, so you can test with hooks from the U-Boot tree
+being tested without modifying your global configuration. The ``bin``
+subdirectory is automatically appended if present.
+
+**Debugging QEMU Configuration**:
+
+Use ``-c/--show-cmd`` to display the QEMU command line without running tests::
+
+    utool py -b qemu-riscv64 -c
+
+This parses the hook configuration files and expands variables like
+``${U_BOOT_BUILD_DIR}`` and ``${OPENSBI}``, showing exactly what QEMU command
+would be executed. This helps diagnose issues with missing firmware, incorrect
+paths, or misconfigured hooks.
 
 **Source Directory**:
 
