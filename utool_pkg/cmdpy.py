@@ -370,11 +370,11 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
 
     tout.info(f'Running pytest for board: {args.board}')
 
-    env = pytest_env(args.board)
+    pytest_vars = pytest_env(args.board)
     cmd = build_pytest_cmd(args)
 
     env = os.environ.copy()
-    env.update(env)
+    env.update(pytest_vars)
     result = exec_cmd(cmd, args, env=env, capture=False)
 
     if result is None:  # dry-run
