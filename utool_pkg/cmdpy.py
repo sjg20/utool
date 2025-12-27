@@ -88,11 +88,27 @@ def pytest_env(board):
     if 'sbsa' in board:
         setup_sbsa_env(board, env)
 
+    # Build PATH with hooks directories
+    path_parts = []
+
+    # Local hooks from U-Boot tree take precedence
+    uboot_dir = get_uboot_dir()
+    if uboot_dir:
+        local_hooks = os.path.join(uboot_dir, 'test/hooks/bin')
+        if os.path.exists(local_hooks):
+            path_parts.append(local_hooks)
+
+    # Then configured hooks from settings
     hooks = settings.get('test_hooks')
     if hooks and os.path.exists(hooks):
+        hooks_bin = os.path.join(hooks, 'bin')
+        if os.path.exists(hooks_bin):
+            hooks = hooks_bin
+        path_parts.append(hooks)
+
+    if path_parts:
         current_path = os.environ.get('PATH', '')
-        if hooks not in current_path:
-            env['PATH'] = f"{current_path}:{hooks}"
+        env['PATH'] = ':'.join(path_parts) + ':' + current_path
 
     return env
 
