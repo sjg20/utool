@@ -103,8 +103,16 @@ def list_qemu_boards():
     Returns:
         list: Sorted list of QEMU board names
     """
-    result = command.run_pipe([['buildman', '-nv', 'qemu']], capture=True,
-                               capture_stderr=True, raise_on_error=False)
+    uboot_dir = get_uboot_dir()
+    orig_dir = os.getcwd()
+    try:
+        if uboot_dir:
+            os.chdir(uboot_dir)
+        result = command.run_pipe([['buildman', '-nv', 'qemu']], capture=True,
+                                   capture_stderr=True, raise_on_error=False)
+    finally:
+        os.chdir(orig_dir)
+
     if result.return_code != 0:
         return []
 
