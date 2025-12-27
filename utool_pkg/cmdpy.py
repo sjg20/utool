@@ -18,6 +18,57 @@ from utool_pkg import settings
 from utool_pkg.util import exec_cmd
 
 
+def setup_riscv_env(board, env):
+    """Set up OPENSBI environment for RISC-V boards
+
+    Args:
+        board (str): Board name
+        env (dict): Environment variables dict to update
+    """
+    # Select 32-bit or 64-bit OpenSBI based on board name
+    if 'riscv32' in board:
+        opensbi = settings.get('opensbi_rv32', fallback=None)
+        # Fallback: derive rv32 path from rv64 path
+        if not opensbi:
+            rv64_path = settings.get('opensbi', fallback=None)
+            if rv64_path:
+                opensbi = rv64_path.replace('.bin', '_rv32.bin')
+    else:
+        opensbi = settings.get('opensbi', fallback=None)
+    if opensbi and os.path.exists(opensbi):
+        env['OPENSBI'] = opensbi
+    elif opensbi:
+        tout.warning(f'OPENSBI firmware not found: {opensbi}')
+    else:
+        tout.warning(f'No OPENSBI firmware configured for {board}')
+
+
+def setup_sbsa_env(board, env):
+    """Set up TF-A environment for SBSA boards
+
+    Args:
+        board (str): Board name
+        env (dict): Environment variables dict to update
+    """
+    tfa_dir = settings.get('tfa_dir', fallback=None)
+    # Fallback: derive tfa_dir from blobs_dir
+    if not tfa_dir:
+        blobs_dir = settings.get('blobs_dir', fallback=None)
+        if blobs_dir:
+            tfa_dir = os.path.join(blobs_dir, 'tfa')
+    if tfa_dir and os.path.exists(tfa_dir):
+        # Add TF-A directory to binman search path
+        current = os.environ.get('BINMAN_INDIRS', '')
+        if current:
+            env['BINMAN_INDIRS'] = f'{current}:{tfa_dir}'
+        else:
+            env['BINMAN_INDIRS'] = tfa_dir
+    elif tfa_dir:
+        tout.warning(f'TF-A directory not found: {tfa_dir}')
+    else:
+        tout.warning(f'No TF-A directory configured for {board}')
+
+
 def pytest_env(board):
     """Set up environment variables for pytest testing
 
@@ -27,22 +78,21 @@ def pytest_env(board):
     Returns:
         dict: Environment variables that were set (not the full environment)
     """
-    env_vars = {}
+    env = {}
 
     if 'riscv' in board:
-        opensbi = settings.get('opensbi')
-        if opensbi and os.path.exists(opensbi):
-            env_vars['OPENSBI'] = opensbi
-        else:
-            tout.warning('No OPENSBI firmware found for RISC-V')
+        setup_riscv_env(board, env)
+
+    if 'sbsa' in board:
+        setup_sbsa_env(board, env)
 
     hooks = settings.get('test_hooks')
     if hooks and os.path.exists(hooks):
         current_path = os.environ.get('PATH', '')
         if hooks not in current_path:
-            env_vars['PATH'] = f"{current_path}:{hooks}"
+            env['PATH'] = f"{current_path}:{hooks}"
 
-    return env_vars
+    return env
 
 
 def list_qemu_boards():
@@ -166,11 +216,11 @@ def do_pytest(args):
 
     tout.info(f'Running pytest for board: {args.board}')
 
-    env_vars = pytest_env(args.board)
+    env = pytest_env(args.board)
     cmd = build_pytest_cmd(args)
 
     env = os.environ.copy()
-    env.update(env_vars)
+    env.update(env)
     result = exec_cmd(cmd, args, env=env, capture=False)
 
     if result is None:  # dry-run
