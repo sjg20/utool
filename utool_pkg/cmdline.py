@@ -15,6 +15,7 @@ import sys
 ALIASES = {
     'test': ['t'],
     'pytest': ['py'],
+    'build': ['b'],
 }
 
 
@@ -123,6 +124,44 @@ def add_pytest_subparser(subparsers):
     return pyt
 
 
+def add_build_subparser(subparsers):
+    """Add the 'build' subparser"""
+    build = subparsers.add_parser(
+        'build', aliases=ALIASES['build'],
+        help='Build U-Boot for a board')
+    build.add_argument(
+        'board', nargs='?', metavar='BOARD',
+        help='Board name to build')
+    build.add_argument(
+        '-l', '--lto', action='store_true',
+        help='Enable Link Time Optimization')
+    build.add_argument(
+        '-F', '--fresh', action='store_true',
+        help='Remove output directory before building (clean build)')
+    build.add_argument(
+        '-t', '--target', metavar='TARGET',
+        help='Build a specific make target (e.g. u-boot.bin)')
+    build.add_argument(
+        '-O', '--objdump', action='store_true',
+        help='Write disassembly of u-boot and SPL builds')
+    build.add_argument(
+        '-j', '--jobs', type=int, metavar='JOBS',
+        help='Number of jobs to run at once (passed to make)')
+    build.add_argument(
+        '-s', '--size', action='store_true',
+        help='Show size information for executables')
+    build.add_argument(
+        '-f', '--force-reconfig', action='store_true',
+        help='Force reconfiguration')
+    build.add_argument(
+        '-I', '--in-tree', action='store_true',
+        help='Build in the source tree instead of a separate directory')
+    build.add_argument(
+        '-T', '--trace', action='store_true',
+        help='Enable function tracing (FTRACE=1)')
+    return build
+
+
 def add_setup_subparser(subparsers):
     """Add the 'setup' subparser"""
     setup = subparsers.add_parser(
@@ -159,6 +198,7 @@ def setup_parser():
         help='Show what would be executed without running commands')
 
     subparsers = parser.add_subparsers(dest='cmd', required=True)
+    add_build_subparser(subparsers)
     add_ci_subparser(subparsers)
     add_test_subparser(subparsers)
     add_pytest_subparser(subparsers)

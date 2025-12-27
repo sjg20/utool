@@ -19,7 +19,7 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from utool_pkg import (cmdline, cmdpy, control, gitlab_parser, settings,
+from utool_pkg import (build, cmdline, cmdpy, control, gitlab_parser, settings,
                        setup)
 
 # Capture stdout and stderr for silent command execution
@@ -1317,3 +1317,79 @@ class TestSetupSubcommand(TestBase):
         self.assertIn('qemu-system-misc', setup.QEMU_PACKAGES)
         self.assertIn('qemu-system-ppc', setup.QEMU_PACKAGES)
         self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)
+
+
+class TestBuildSubcommand(TestBase):
+    """Test build subcommand functionality"""
+
+    def test_build_subcommand_parsing(self):
+        """Test that build subcommand parses correctly"""
+        args = cmdline.parse_args(['build', 'sandbox'])
+        self.assertEqual('build', args.cmd)
+        self.assertEqual('sandbox', args.board)
+
+    def test_build_alias(self):
+        """Test that 'b' alias works for build"""
+        args = cmdline.parse_args(['b', 'sandbox'])
+        self.assertEqual('build', args.cmd)
+        self.assertEqual('sandbox', args.board)
+
+    def test_build_lto_flag(self):
+        """Test -l/--lto flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-l'])
+        self.assertTrue(args.lto)
+
+        args = cmdline.parse_args(['build', 'sandbox', '--lto'])
+        self.assertTrue(args.lto)
+
+    def test_build_fresh_flag(self):
+        """Test -F/--fresh flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-F'])
+        self.assertTrue(args.fresh)
+
+    def test_build_target_option(self):
+        """Test -t/--target option"""
+        args = cmdline.parse_args(['build', 'sandbox', '-t', 'u-boot.bin'])
+        self.assertEqual('u-boot.bin', args.target)
+
+    def test_build_jobs_option(self):
+        """Test -j/--jobs option"""
+        args = cmdline.parse_args(['build', 'sandbox', '-j', '8'])
+        self.assertEqual(8, args.jobs)
+
+    def test_build_size_flag(self):
+        """Test -s/--size flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-s'])
+        self.assertTrue(args.size)
+
+    def test_build_objdump_flag(self):
+        """Test -O/--objdump flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-O'])
+        self.assertTrue(args.objdump)
+
+    def test_build_force_reconfig_flag(self):
+        """Test -f/--force-reconfig flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-f'])
+        self.assertTrue(args.force_reconfig)
+
+    def test_build_in_tree_flag(self):
+        """Test -I/--in-tree flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-I'])
+        self.assertTrue(args.in_tree)
+
+    def test_build_trace_flag(self):
+        """Test -T/--trace flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-T'])
+        self.assertTrue(args.trace)
+
+    def test_get_build_dir(self):
+        """Test get_build_dir function"""
+        with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+            result = build.get_build_dir('sandbox')
+        self.assertEqual('/tmp/b/sandbox', result)
+
+    def test_get_build_dir_custom(self):
+        """Test get_build_dir with custom directory"""
+        with mock.patch.object(settings, 'get', return_value='/custom/build'):
+            result = build.get_build_dir('snow')
+        self.assertEqual('/custom/build/snow', result)

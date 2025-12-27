@@ -17,7 +17,7 @@ from u_boot_pylib import command
 from u_boot_pylib import tout
 
 from utool_pkg import settings
-from utool_pkg.util import exec_cmd
+from utool_pkg.util import exec_cmd, get_uboot_dir
 
 
 def setup_riscv_env(board, env):
@@ -138,26 +138,6 @@ def list_qemu_boards():
         if line.startswith('   '):
             boards.extend(line.split())
     return sorted(boards)
-
-
-def get_uboot_dir():
-    """Get the U-Boot source directory
-
-    Checks if current directory is a U-Boot tree, otherwise uses $USRC.
-
-    Returns:
-        str: Path to U-Boot source directory, or None if not found
-    """
-    # Check if current directory is a U-Boot tree
-    if os.path.exists('./test/py/test.py'):
-        return os.getcwd()
-
-    # Try USRC environment variable
-    usrc = os.environ.get('USRC')
-    if usrc and os.path.exists(os.path.join(usrc, 'test/py/test.py')):
-        return usrc
-
-    return None
 
 
 def build_pytest_cmd(args):

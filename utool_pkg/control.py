@@ -20,6 +20,7 @@ from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
+from utool_pkg.build import do_build
 from utool_pkg.cmdpy import do_pytest
 from utool_pkg import settings
 from utool_pkg.setup import do_setup
@@ -281,6 +282,9 @@ def run_command(args):
     settings.get_all()
 
     tout.info(f'Running command: {args.cmd}')
+
+    if args.cmd == 'build':
+        return do_build(args)
 
     if args.cmd == 'ci':
         # Validate CI arguments and handle help requests

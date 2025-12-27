@@ -11,6 +11,9 @@ including pushing to CI, running tests, and setting up firmware dependencies.
 Subcommands
 -----------
 
+``build`` (alias: ``b``)
+    Build U-Boot for a specified board using buildman
+
 ``ci``
     Push current branch to GitLab CI with configurable test stages
 
@@ -136,6 +139,46 @@ The tool can create GitLab merge requests with automated pipeline creation::
 run), not fine-grained selection of specific boards or test specifications.
 For precise targeting like ``-p coreboot`` or ``-t "test_ofplatdata"``, use
 regular CI pushes instead of merge requests.
+
+Build Subcommand
+----------------
+
+The ``build`` command (alias ``b``) builds U-Boot for a specified board using
+buildman. It handles changing to the U-Boot source directory and sets up the
+output directory.
+
+::
+
+    # Build sandbox board
+    utool b sandbox
+
+    # Build with LTO enabled
+    utool b sandbox -l
+
+    # Clean build (remove output directory first)
+    utool b sandbox -F
+
+    # Build specific target
+    utool b sandbox -t u-boot.bin
+
+    # Show size after build
+    utool b sandbox -s
+
+    # Enable function tracing
+    utool b sandbox -T
+
+**Options**:
+
+- ``BOARD``: Board name to build (positional argument)
+- ``-l, --lto``: Enable Link Time Optimization
+- ``-F, --fresh``: Remove output directory before building (clean build)
+- ``-t, --target TARGET``: Build a specific make target
+- ``-O, --objdump``: Write disassembly of u-boot and SPL builds
+- ``-j, --jobs JOBS``: Number of jobs to run at once
+- ``-s, --size``: Show size information for executables
+- ``-f, --force-reconfig``: Force reconfiguration
+- ``-I, --in-tree``: Build in the source tree instead of a separate directory
+- ``-T, --trace``: Enable function tracing (FTRACE=1)
 
 Pytest Subcommand
 -----------------
