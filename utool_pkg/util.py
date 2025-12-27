@@ -34,6 +34,24 @@ def get_uboot_dir():
     return None
 
 
+def setup_uboot_dir():
+    """Find and change to the U-Boot source directory
+
+    Returns:
+        str: Path to U-Boot source directory, or None if not found
+    """
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return None
+
+    if uboot_dir != os.getcwd():
+        tout.info(f'Changing to U-Boot directory: {uboot_dir}')
+        os.chdir(uboot_dir)
+
+    return uboot_dir
+
+
 def exec_cmd(cmd, args, env=None, capture=True):
     """Run a command or show what would be run in dry-run mode
 

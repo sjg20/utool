@@ -17,7 +17,7 @@ from u_boot_pylib import command
 from u_boot_pylib import tout
 
 from utool_pkg import settings
-from utool_pkg.util import exec_cmd, get_uboot_dir
+from utool_pkg.util import exec_cmd, get_uboot_dir, setup_uboot_dir
 
 
 def setup_riscv_env(board, env):
@@ -360,16 +360,8 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
             return 0
         return 1
 
-    # Find U-Boot source directory
-    uboot_dir = get_uboot_dir()
-    if not uboot_dir:
-        tout.error('Not in a U-Boot tree and $USRC not set')
+    if not setup_uboot_dir():
         return 1
-
-    # Change to U-Boot directory if needed
-    if uboot_dir != os.getcwd():
-        tout.info(f'Changing to U-Boot directory: {uboot_dir}')
-        os.chdir(uboot_dir)
 
     tout.info(f'Running pytest for board: {args.board}')
 

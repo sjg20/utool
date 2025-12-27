@@ -20,6 +20,7 @@ from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
 from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
+from utool_pkg.build import do_build
 from utool_pkg.cmdpy import do_pytest
 from utool_pkg import settings
 from utool_pkg.setup import do_setup
@@ -282,24 +283,29 @@ def run_command(args):
 
     tout.info(f'Running command: {args.cmd}')
 
-    if args.cmd == 'ci':
+    if args.cmd == 'build':
+        ret = do_build(args)
+
+    elif args.cmd == 'ci':
         # Validate CI arguments and handle help requests
-        result = validate_ci_args(args)
-        if result is not None:
-            return result
+        ret = validate_ci_args(args)
+        if ret is None:
+            if args.merge:
+                ret = do_merge_request(args)
+            else:
+                ret = do_ci(args)
 
-        if args.merge:
-            return do_merge_request(args)
-        return do_ci(args)
+    elif args.cmd == 'pytest':
+        ret = do_pytest(args)
 
-    if args.cmd == 'pytest':
-        return do_pytest(args)
+    elif args.cmd == 'setup':
+        ret = do_setup(args)
 
-    if args.cmd == 'setup':
-        return do_setup(args)
+    else:
+        tout.error(f'Unknown command: {args.cmd}')
+        ret = 1
 
-    tout.error(f'Unknown command: {args.cmd}')
-    return 1
+    return ret
 
 
 def extract_mr_info(branch, args):
