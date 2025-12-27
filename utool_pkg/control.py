@@ -381,7 +381,7 @@ def do_merge_request(args):
     # Push branch with CI variables - respects --null flag
     tout.info('Pushing branch...')
     ci_vars = build_ci_vars(args)
-    git_push_branch(branch, args, ci_vars=ci_vars, upstream=True)
+    git_push_branch(branch, args, ci_vars=ci_vars)
 
     # Get remote URL and parse it using pickman's functions
     remote_url = gitlab_api.get_remote_url('ci')
