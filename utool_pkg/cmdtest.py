@@ -391,57 +391,86 @@ def ensure_dm_init_files():
     return run_pytest('test_ut.py::test_ut_dm_init')
 
 
-def build_sandbox_args(sandbox, args):
+def parse_test_specs(tests):
+    """Parse test arguments into list of (suite, pattern) tuples
+
+    Handles formats:
+        - None or ['all'] -> [('all', None)]
+        - ['dm'] -> [('dm', None)]
+        - ['dm', 'video*'] -> [('dm', 'video*')]
+        - ['dm video*'] -> [('dm', 'video*')]
+        - ['log', 'lib'] -> [('log', None), ('lib', None)]
+
+    Args:
+        tests (list): Test arguments from command line
+
+    Returns:
+        list: List of (suite, pattern) tuples
+    """
+    if not tests or tests == ['all']:
+        return [('all', None)]
+
+    # Single arg with space -> suite + pattern
+    if len(tests) == 1:
+        parts = tests[0].split(None, 1)
+        suite = parts[0]
+        pattern = parts[1] if len(parts) > 1 else None
+        return [(suite, pattern)]
+
+    # Two args: could be suite+pattern or two suites
+    # If second arg contains glob chars, treat as pattern
+    if len(tests) == 2 and any(c in tests[1] for c in '*?['):
+        return [(tests[0], tests[1])]
+
+    # Multiple suites
+    return [(suite, None) for suite in tests]
+
+
+def build_sandbox_args(sandbox, specs, flattree):
     """Build sandbox command line arguments
 
     Args:
         sandbox (str): Path to sandbox executable
-        args (argparse.Namespace): Arguments from cmdline
+        specs (list): List of (suite, pattern) tuples
+        flattree (bool): Whether to run flattree tests
 
     Returns:
         list: Command and arguments to run
     """
-    if args.tests:
-        ut_args = ' '.join(args.tests)
-    else:
-        ut_args = 'all'
-
-    cmd = f'ut {ut_args}'
-
     # Skip flat tree tests by default
     sandbox_args = [sandbox, '-T']
-    if not args.flattree:
+    if not flattree:
         sandbox_args.append('-F')
-    sandbox_args.extend(['-c', cmd])
+
+    # Build ut commands separated by semicolons
+    cmds = []
+    for suite, pattern in specs:
+        if pattern:
+            cmds.append(f'ut {suite} {pattern}')
+        else:
+            cmds.append(f'ut {suite}')
+    sandbox_args.extend(['-c', '; '.join(cmds)])
 
     return sandbox_args
 
 
-def calc_predicted_count(sandbox, args):
-    """Calculate predicted test count based on arguments
+def calc_predicted_count(sandbox, specs, flattree):
+    """Calculate predicted test count based on test specs
 
     Args:
         sandbox (str): Path to sandbox executable
-        args (argparse.Namespace): Arguments from cmdline
+        specs (list): List of (suite, pattern) tuples
+        flattree (bool): Whether flattree tests are enabled
 
     Returns:
         int: Predicted number of test runs
     """
-    if not args.tests or args.tests == ['all']:
-        return sum(predict_test_count(sandbox, suite, args.flattree)
+    if specs == [('all', None)]:
+        return sum(predict_test_count(sandbox, suite, flattree)
                    for suite in get_suites_from_nm(sandbox))
 
-    # Handle 'suite', 'suite pattern', or ['suite', 'pattern'] formats
-    if len(args.tests) == 1:
-        parts = args.tests[0].split(None, 1)
-        suite = parts[0]
-        pattern = parts[1] if len(parts) > 1 else None
-    elif len(args.tests) == 2:
-        suite, pattern = args.tests
-    else:
-        return 0
-
-    return predict_test_count(sandbox, suite, args.flattree, pattern)
+    return sum(predict_test_count(sandbox, suite, flattree, pattern)
+               for suite, pattern in specs)
 
 
 def setup_test_env():
@@ -457,30 +486,16 @@ def setup_test_env():
     return env
 
 
-def handle_test_result(proc, prog):
-    """Handle the result after tests complete
+def show_error_output(prog):
+    """Show last few lines of output when no tests ran
 
     Args:
-        proc (cros_subprocess.Popen): Completed process
-        prog (TestProgress): Progress tracker
-
-    Returns:
-        int: Exit code (0 for success, 1 for failure)
+        prog (TestProgress): Progress tracker with output
     """
-    prog.clear_progress()
-
-    if not (proc.returncode or prog.failures or prog.failed_tests):
-        return 0
-
-    if not prog.run:
-        # No tests ran - show last few lines of output for error message
-        all_output = ''.join(prog.output_lines)
-        for line in all_output.splitlines()[-5:]:
-            if line.strip():
-                print(line)
-    elif prog.failed_tests:
-        print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed')
-    return 1
+    all_output = ''.join(prog.output_lines)
+    for line in all_output.splitlines()[-5:]:
+        if line.strip():
+            print(line)
 
 
 def run_tests(args):
@@ -502,7 +517,9 @@ def run_tests(args):
         tout.error('Not in a U-Boot tree and $USRC not set')
         return 1
 
-    sandbox_args = build_sandbox_args(sandbox, args)
+    specs = parse_test_specs(args.tests)
+    sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
+
     if args.dry_run:
         tout.notice(' '.join(sandbox_args))
         return 0
@@ -511,7 +528,7 @@ def run_tests(args):
     if needs_dm_init(args) and not ensure_dm_init_files():
         return 1
 
-    predicted = calc_predicted_count(sandbox, args)
+    predicted = calc_predicted_count(sandbox, specs, args.flattree)
     if predicted:
         tout.notice(f'Running {predicted} tests')
     prog = TestProgress(predicted)
@@ -525,7 +542,13 @@ def run_tests(args):
                                  env=env)
     proc.communicate_filter(prog.handle_output)
 
-    return handle_test_result(proc, prog)
+    prog.clear_progress()
+    if prog.failed_tests:
+        print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed')
+    elif not prog.run and proc.returncode:
+        show_error_output(prog)
+
+    return 1 if prog.failed_tests else proc.returncode
 
 
 def do_test(args):
