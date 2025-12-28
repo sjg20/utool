@@ -10,6 +10,7 @@ in sandbox.
 
 import os
 import re
+import struct
 import subprocess
 import sys
 
@@ -19,6 +20,7 @@ from u_boot_pylib import cros_subprocess
 from u_boot_pylib import tout
 
 from utool_pkg import settings
+from utool_pkg.util import get_uboot_dir
 
 
 def get_sandbox_path():
@@ -32,6 +34,111 @@ def get_sandbox_path():
     if os.path.exists(sandbox_path):
         return sandbox_path
     return None
+
+
+def get_section_info(sandbox):
+    """Get .data.rel.ro section address and file offset
+
+    Args:
+        sandbox (str): Path to sandbox executable
+
+    Returns:
+        tuple: (section_addr, section_offset) or (None, None) if not found
+    """
+    result = command.run_one('readelf', '-S', sandbox, capture=True)
+    match = re.search(r'\.data\.rel\.ro\s+PROGBITS\s+([0-9a-f]+)\s+([0-9a-f]+)',
+                      result.stdout)
+    if match:
+        return int(match.group(1), 16), int(match.group(2), 16)
+    return None, None
+
+
+def get_test_flags(sandbox, suite):
+    """Get flags for all tests in a suite by parsing the binary
+
+    Reads the unit_test structs from the linker list to extract flags.
+
+    struct unit_test {
+        const char *file;     // offset 0
+        const char *name;     // offset 8
+        int (*func)();        // offset 16
+        int flags;            // offset 24
+        ...
+    };
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        suite (str): Suite name to get flags for
+
+    Returns:
+        list: List of (test_name, flags) tuples
+    """
+    # Get symbol addresses
+    result = command.run_one('nm', sandbox, capture=True)
+    pattern = rf'([0-9a-f]+) D _u_boot_list_2_ut_{suite}_2_(\w+)'
+    tests = re.findall(pattern, result.stdout)
+
+    if not tests:
+        return []
+
+    section_addr, section_offset = get_section_info(sandbox)
+    if section_addr is None:
+        return []
+
+    test_flags = []
+    with open(sandbox, 'rb') as fh:
+        for addr_str, name in tests:
+            addr = int(addr_str, 16)
+            file_offset = section_offset + (addr - section_addr)
+            fh.seek(file_offset)
+            data = fh.read(28)
+            if len(data) < 28:
+                continue
+            _, _, _, flags = struct.unpack('<QQQI', data)
+            test_flags.append((name, flags))
+
+    return test_flags
+
+
+# Unit test flags from include/test/test.h
+UTF_FLAT_TREE = 0x08
+UTF_LIVE_TREE = 0x10
+UTF_DM = 0x80
+
+
+def predict_test_count(sandbox, suite, flattree=False):
+    """Predict how many times tests will run
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        suite (str): Suite name
+        flattree (bool): Whether flattree tests are enabled (-f flag)
+
+    Returns:
+        int: Predicted number of test runs
+    """
+    test_flags = get_test_flags(sandbox, suite)
+    if not test_flags:
+        return 0
+
+    count = 0
+    for name, flags in test_flags:
+        # Tests with UTF_FLAT_TREE only run on flat tree
+        if flags & UTF_FLAT_TREE:
+            if flattree:
+                count += 1
+            continue
+
+        # All other tests run once on live tree
+        count += 1
+
+        # Tests with UTF_DM run again on flat tree, except video tests
+        if flattree and flags & UTF_DM and not flags & UTF_LIVE_TREE:
+            # Video tests skip flattree (except video_base)
+            if 'video' not in name or 'video_base' in name:
+                count += 1
+
+    return count
 
 
 def get_suites_from_nm(sandbox):
@@ -137,8 +244,8 @@ def list_tests(args):
 class TestProgress:  # pylint: disable=R0902
     """Track and display test progress"""
 
-    def __init__(self):
-        self.total = 0
+    def __init__(self, predicted_total=0):
+        self.total = predicted_total
         self.run = 0
         self.suite = ''
         self.failures = 0
@@ -164,7 +271,9 @@ class TestProgress:  # pylint: disable=R0902
             # Parse "Running N suite tests"
             match = re.match(r'Running (\d+) (\w+) tests', line)
             if match:
-                self.total = int(match.group(1))
+                # Only use U-Boot's count if we don't have a prediction
+                if not self.total:
+                    self.total = int(match.group(1))
                 self.suite = match.group(2)
                 continue
 
@@ -217,7 +326,66 @@ class TestProgress:  # pylint: disable=R0902
         sys.stdout.flush()
 
 
-def run_tests(args):
+# Tests that require test_ut_dm_init to create data files
+HOST_TESTS = ['cmd_host', 'host', 'host_dup']
+
+
+def needs_dm_init(args):
+    """Check if tests require dm init data files
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        bool: True if dm init is needed
+    """
+    if not args.tests:
+        return True  # Running all tests
+
+    for test in args.tests:
+        # Check if running dm suite or all tests
+        if test in ('dm', 'all'):
+            return True
+        # Check for specific host tests
+        for host_test in HOST_TESTS:
+            if host_test in test:
+                return True
+    return False
+
+
+def ensure_dm_init_files(uboot_dir):
+    """Ensure dm init data files exist, creating them if needed
+
+    Args:
+        uboot_dir (str): Path to U-Boot source directory
+
+    Returns:
+        bool: True if files exist or were created successfully
+    """
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
+    test_file = os.path.join(persistent_dir, '2MB.ext2.img')
+
+    if os.path.exists(test_file):
+        return True
+
+    tout.notice('Creating dm test data files...')
+    pytest_cmd = [
+        'python3', '-m', 'pytest', '-q',
+        'test/py/tests/test_ut.py::test_ut_dm_init',
+        '-B', 'sandbox',
+        '--build-dir', os.path.join(build_dir, 'sandbox'),
+    ]
+    result = subprocess.run(pytest_cmd, cwd=uboot_dir, capture_output=True,
+                            check=False)
+    if result.returncode:
+        tout.error('Failed to create dm test data files')
+        tout.error(result.stderr.decode('utf-8', errors='replace'))
+        return False
+    return True
+
+
+def run_tests(args):  # pylint: disable=R0912,R0914
     """Run U-Boot sandbox tests
 
     Args:
@@ -249,11 +417,38 @@ def run_tests(args):
         tout.notice(' '.join(sandbox_args))
         return 0
 
-    progress = TestProgress()
+    # Predict test count based on suite and flattree setting
+    predicted = 0
+    if args.tests and len(args.tests) == 1:
+        # Single suite specified - predict for that suite
+        predicted = predict_test_count(sandbox, args.tests[0], args.flattree)
+    elif not args.tests or args.tests == ['all']:
+        # All suites - predict total
+        for suite in get_suites_from_nm(sandbox):
+            predicted += predict_test_count(sandbox, suite, args.flattree)
+
+    progress = TestProgress(predicted)
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    # Ensure dm init data files exist if needed
+    if needs_dm_init(args) and not ensure_dm_init_files(uboot_dir):
+        return 1
+
+    # Set up environment with persistent data directory
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
+    env = os.environ.copy()
+    env['U_BOOT_PERSISTENT_DATA_DIR'] = persistent_dir
+
     proc = cros_subprocess.Popen(sandbox_args,
                                  stdin=None,
                                  stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+                                 stderr=subprocess.PIPE,
+                                 cwd=uboot_dir,
+                                 env=env)
     proc.communicate_filter(progress.handle_output)
 
     progress.clear_progress()
@@ -267,7 +462,7 @@ def run_tests(args):
                 if line.strip():
                     print(line)
         elif progress.failed_tests:
-            print(f'{len(progress.failed_tests)} test(s) failed')
+            print(f'{len(progress.failed_tests)}/{progress.run} test(s) failed')
         return 1
 
     return 0
