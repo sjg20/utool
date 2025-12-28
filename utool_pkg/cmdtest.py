@@ -269,6 +269,7 @@ class TestProgress:
         self.failed_tests = []
         self.cur_test = None  # (name, output_lines) tuple when test is active
         self.silent = False  # Set True to disable progress display
+        self.shared = None  # SharedProgress for parallel mode
 
     def handle_output(self, _stream, data):
         """Process output from sandbox, updating progress
@@ -299,7 +300,10 @@ class TestProgress:
                 self._check_test_failure()
                 self.cur_test = (match.group(1), [])
                 self.run += 1
-                self._show_progress()
+                if self.shared:
+                    self.shared.increment()
+                else:
+                    self._show_progress()
                 continue
 
             # Parse final result
@@ -521,7 +525,30 @@ class WorkerResult:
         self.output_lines = []
 
 
-def run_worker(sandbox_args, uboot_dir, env, result):
+class SharedProgress:
+    """Shared progress counter for parallel workers"""
+
+    def __init__(self, total):
+        self.total = total
+        self.run = 0
+        self.lock = threading.Lock()
+
+    def increment(self):
+        """Increment counter and show progress"""
+        with self.lock:
+            self.run += 1
+            width = len(str(self.total))
+            status = f'{self.run:>{width}}/{self.total}'
+            sys.stdout.write(f'\r{status}')
+            sys.stdout.flush()
+
+    def clear(self):
+        """Clear progress line"""
+        sys.stdout.write('\r\033[K')
+        sys.stdout.flush()
+
+
+def run_worker(sandbox_args, uboot_dir, env, result, shared):
     """Run a single worker process
 
     Args:
@@ -529,9 +556,11 @@ def run_worker(sandbox_args, uboot_dir, env, result):
         uboot_dir (str): U-Boot source directory
         env (dict): Environment variables
         result (WorkerResult): Object to store results
+        shared (SharedProgress): Shared progress counter
     """
     prog = TestProgress()
-    prog.silent = True  # Don't show progress in parallel mode
+    prog.silent = True  # Don't show individual progress
+    prog.shared = shared  # Use shared counter instead
     proc = cros_subprocess.Popen(sandbox_args,
                                  stdin=None,
                                  stdout=subprocess.PIPE,
@@ -562,6 +591,7 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
     workers = args.jobs
     results = [WorkerResult() for _ in range(workers)]
     threads = []
+    shared = SharedProgress(predicted)
 
     tout.notice(f'Running {predicted} tests with {workers} workers')
     start = time.time()
@@ -571,7 +601,7 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
                                           workers, i)
         thread = threading.Thread(target=run_worker,
                                   args=(sandbox_args, uboot_dir, env,
-                                        results[i]))
+                                        results[i], shared))
         threads.append(thread)
         thread.start()
 
@@ -579,6 +609,7 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
     for thread in threads:
         thread.join()
     elapsed = time.time() - start
+    shared.clear()
 
     # Aggregate results
     total_run = sum(r.run for r in results)
