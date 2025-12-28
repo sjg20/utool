@@ -5,7 +5,23 @@
 uman - U-Boot Manager
 =====================
 
-This is a a simple tool to handle common tasks when developing U-Boot.
+This is a simple tool to handle common tasks when developing U-Boot,
+including pushing to CI, running tests, and setting up firmware dependencies.
+
+Subcommands
+-----------
+
+``ci``
+    Push current branch to GitLab CI with configurable test stages
+
+``pytest`` (alias: ``py``)
+    Run U-Boot's test.py framework with automatic environment setup
+
+``selftest`` (alias: ``st``)
+    Run uman's own test suite
+
+``setup``
+    Download and build firmware blobs needed for testing (OpenSBI, TF-A, etc.)
 
 Installation
 ------------
@@ -14,34 +30,54 @@ Install dependencies::
 
     pip install -r requirements.txt
 
-Usage
------
+Settings
+--------
 
-::
+Uman stores settings in ``~/.uman``, created on first run. Key settings
+include build directories, firmware paths, and test hook locations. See the
+Configuration_ section below for details.
 
-    # Push with specific tests
-    uman ci -s -p -l rpi4
+CI Subcommand
+-------------
+
+The ``ci`` subcommand pushes the current branch to GitLab CI for testing. It
+configures which test stages to run and can optionally create a GitLab
+merge request (MR).
+
+The basic idea is that you create a branch with your changes, add a patman
+cover letter to the HEAD commit (ideally) and then type::
+
+    uman ci -m
+
+This pushes your branch to CI and creates an MR for the changes. It will also
+kick off various builds and tests, as defined by ``.gitlab-ci.yml``.
+
+This is all very well, but you could almost as easily push the branch with git
+and then create an MR manually. But uman provides a few more features. It
+allows you to select which CI stages run, for cases where you are iterating on
+a particular problem, or know that your change only affects a certain part of
+the CI process. For lab and pytests, it also allows you to run on just a single
+board or test. You can even set the test-spec to use.
+
+Some simple examples::
+
+    # Push and run only on the SJG lab with the 'rpi4' board
+    uman ci -l rpi4
 
     # Dry-run to see what would be executed
     uman --dry-run ci -w
 
-    # Run self-tests
-    uman selftest
-
-    # Run pytest (U-Boot test.py)
-    uman pytest
-    uman py test_dm -b qemu-riscv64
-
-CI Options
-----------
+**Options**
 
 - ``-s, --suites``: Enable SUITES
 - ``-p, --pytest [BOARD]``: Enable PYTEST (optionally specify board name)
-- ``-t, --test-spec SPEC``: Override test specification (e.g. "not sleep", "test_ofplatdata")
+- ``-t, --test-spec SPEC``: Override test specification (e.g. "not sleep",
+  "test_ofplatdata")
 - ``-w, --world``: Enable WORLD
 - ``-l, --sjg [BOARD]``: Set SJG_LAB (optionally specify board)
-- ``-f, --force``: Force push
-- ``-0, --null``: Set all CI vars to 0
+- ``-f, --force``: Force push (required when rewriting branch history)
+- ``-0, --null``: Skip all CI stages (no builds/tests run, MR can merge
+  immediately)
 - ``-m, --merge``: Create merge request using cover letter from patch series
 - ``-d, --dest BRANCH``: Destination branch name (default: current branch name)
 
@@ -74,8 +110,7 @@ Pytest Targeting Examples
 
     # Push to different branch names (always to 'ci' remote)
     uman ci                     # Push to same branch name on 'ci' remote
-    uman ci -d my-feature       # Push current branch to 'my-feature' on 'ci' remote
-    uman ci -d cherry-abc123    # Push current branch to 'cherry-abc123' on 'ci' remote
+    uman ci -d my-feature       # Push to 'my-feature' on 'ci' remote
 
 **Note**: Use board names (like ``coreboot``, ``sandbox``) to target all jobs
 for that board, or exact job names (like ``"sandbox with clang test.py"``) to
@@ -83,108 +118,58 @@ target specific job variants. Use ``-p help`` or ``-l help`` to see all
 available choices.
 
 Merge Request Creation
-----------------------
+~~~~~~~~~~~~~~~~~~~~~~
 
 The tool can create GitLab merge requests with automated pipeline creation::
 
     # Create merge request
     uman ci --merge
 
-    # Create merge request with specific CI stages (tags automatically added)
-    uman ci --merge -0              # Adds [skip-suites] [skip-pytest] [skip-world] [skip-sjg]
-    uman ci --merge --suites        # Adds [skip-pytest] [skip-world] [skip-sjg]
-    uman ci --merge --world         # Adds [skip-suites] [skip-pytest] [skip-sjg]
+    # Create merge request with specific CI stages (tags added automatically)
+    uman ci --merge -0        # Adds [skip-suites] [skip-pytest] etc.
+    uman ci --merge --suites  # Adds [skip-pytest] [skip-world] [skip-sjg]
+    uman ci --merge --world   # Adds [skip-suites] [skip-pytest] [skip-sjg]
 
 **Important**: Merge requests only support stage-level control (which stages
 run), not fine-grained selection of specific boards or test specifications.
 For precise targeting like ``-p coreboot`` or ``-t "test_ofplatdata"``, use
 regular CI pushes instead of merge requests.
 
-GitLab API Behavior and Variable Limitations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Key findings about GitLab merge request and pipeline creation:
-
-1. **Variable Scope Limitation**: GitLab CI variables passed via
-   ``git push -o ci.variable="FOO=bar"`` only apply to **push pipelines**.
-   Merge request pipelines created automatically when opening an MR do **not**
-   inherit these variables - they always use the default values from
-   ``.gitlab-ci.yml``.
-
-2. **Pipeline Types**:
-
-   - **Push Pipeline**: Created by ``git push``, inherits CI variables from
-     push options
-   - **Merge Request Pipeline**: Created automatically when MR is opened, uses
-     default YAML variables only
-
-3. **Workflow Solution - Commit Message Tags**: To control MR pipelines, use
-   commit message tags:
-
-   - ``[skip-suites]`` - Skip test_suites stage
-   - ``[skip-pytest]`` - Skip pytest/test.py stages
-   - ``[skip-world]`` - Skip world_build stage
-   - ``[skip-sjg]`` - Skip sjg-lab stage
-
-4. **Recommended Workflow**:
-
-   - For **parameterized variables** (``-l rpi4``, ``-p sandbox``): Use regular
-     ``uman ci`` first, create MR manually later
-   - For **simple skip flags** (``-0``, ``-w``): Use commit message tags with
-     ``uman ci --merge``
-
-5. **Single Commit Support**: For branches with only one commit, the tool uses
-   the commit subject as MR title and commit body as description, eliminating
-   the need for a cover letter.
-
-6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
-   python-gitlab for pipeline management.
-
-Pytest (U-Boot test.py)
------------------------
+Pytest Subcommand
+-----------------
 
 The ``pytest`` command (alias ``py``) runs U-Boot's test.py test framework. It
-automatically sets up environment variables and build directories.
+automatically sets up environment variables and build directories. Set
+``export b=sandbox`` (or another board) to avoid needing ``-b`` each time.
+
+It builds U-Boot automatically before testing, uses ``--buildman`` for
+cross-compiler setup, sets ``OPENSBI`` for RISC-V boards, and adds U-Boot test
+hooks to PATH.
 
 ::
 
     # List available QEMU boards
-    uman py -l
+    $ uman py -l
+    Available QEMU boards:
+      qemu-riscv64
+      qemu-x86_64
+      qemu_arm64
+      ...
 
-    # Run tests for a board (board is required)
+    # Run tests for a board (board is required, or use $b env var)
     uman py -b sandbox
-    uman py -b qemu-riscv64
-
-    # Use $b environment variable as default board
-    export b=sandbox
-    uman py -q                    # Uses $b
 
     # Run specific test pattern (no quotes needed for multi-word specs)
-    uman py -b sandbox test_dm
     uman py -b sandbox test_dm or test_env
-    uman py -b qemu-riscv64 not sleep
 
-    # Quiet mode: only show build errors, progress, and result
-    uman py -qb sandbox
+    # Quiet mode with timing info
+    uman py -qb sandbox -t
 
-    # Run with custom timeout (default: 300s)
-    uman py -b sandbox -T 600
-
-    # Show test timing (tests taking > 0.1s by default)
-    uman py -b sandbox -t
-    uman py -b sandbox -t 0.5     # Only show tests > 0.5s
-
-    # Show all test output (pytest -s)
-    uman py -b sandbox test_dm -s
-
-    # Skip building U-Boot (assume already built)
-    uman py -b sandbox --no-build
-
-    # Use custom build directory
-    uman py -b sandbox --build-dir /tmp/my-build
+    # Skip building, use custom timeout
+    uman py -b sandbox --no-build -T 600
 
     # Dry run to see command and environment
-    uman --dry-run py -b qemu-riscv64 test_dm
+    uman --dry-run py -b qemu-riscv64
 
 **Options**:
 
@@ -198,14 +183,6 @@ automatically sets up environment variables and build directories.
 - ``--no-build``: Skip building U-Boot (assume already built)
 - ``--build-dir DIR``: Override build directory
 - ``-c, --show-cmd``: Show QEMU command line without running tests
-
-**Automatic Setup**:
-
-- Uses ``--buildman`` flag for cross-compiler setup
-- Sets ``OPENSBI`` firmware path for RISC-V boards
-- Adds U-Boot test hooks to PATH (see below)
-- Uses organized build directories from config file
-- Builds U-Boot automatically before testing
 
 **Test Hooks Search Order**:
 
@@ -238,8 +215,8 @@ source::
     export USRC=~/u
     uman py -b sandbox    # Works from any directory
 
-Setup
------
+Setup Subcommand
+----------------
 
 The ``setup`` command downloads and installs dependencies needed for testing
 various architectures::
@@ -277,6 +254,8 @@ various architectures::
 - TF-A: ``~/dev/blobs/tfa/bl1.bin``, ``fip.bin``
 - Xtensa: ``~/dev/blobs/xtensa/2020.07/xtensa-dc233c-elf/``
 
+.. _Configuration:
+
 Configuration
 -------------
 
@@ -307,11 +286,54 @@ The tool includes comprehensive self-tests using the U-Boot test framework::
     # Run all self-tests
     uman selftest
 
-    # Run specific test
+    # Run a specific test
     uman selftest test_ci_subcommand_parsing
 
+Technical Notes
+---------------
+
+GitLab API Behaviour
+~~~~~~~~~~~~~~~~~~~~
+
+Key findings about GitLab merge request and pipeline creation:
+
+1. **Variable Scope Limitation**: GitLab CI variables passed via
+   ``git push -o ci.variable="FOO=bar"`` only apply to **push pipelines**.
+   Merge request pipelines created automatically when opening an MR do **not**
+   inherit these variables - they always use the default values from
+   ``.gitlab-ci.yml``.
+
+2. **Pipeline Types**:
+
+   - **Push Pipeline**: Created by ``git push``, inherits CI variables from
+     push options
+   - **Merge Request Pipeline**: Created automatically when MR is opened, uses
+     default YAML variables only
+
+3. **Workflow Solution - MR Description Tags**: To control MR pipelines, use
+   tags in the MR description:
+
+   - ``[skip-suites]`` - Skip test_suites stage
+   - ``[skip-pytest]`` - Skip pytest/test.py stages
+   - ``[skip-world]`` - Skip world_build stage
+   - ``[skip-sjg]`` - Skip sjg-lab stage
+
+4. **Recommended Workflow**:
+
+   - For **parameterised variables** (``-l rpi4``, ``-p sandbox``): Use regular
+     ``uman ci`` first, create MR manually later
+   - For **simple skip flags** (``-0``, ``-w``): Use MR description tags with
+     ``uman ci --merge``
+
+5. **Single Commit Support**: For branches with only one commit, the tool uses
+   the commit subject as MR title and commit body as description, eliminating
+   the need for a cover letter.
+
+6. **API Integration**: Uses pickman's GitLab API wrapper for MR creation and
+   python-gitlab for pipeline management.
+
 Terminology
------------
+~~~~~~~~~~~
 
 'Merge request' (two words, no hyphen) is standard prose, being a request to
 merge.
