@@ -689,6 +689,7 @@ def run_tests(args):
     sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
     prog = TestProgress(predicted)
 
+    start = time.time()
     proc = cros_subprocess.Popen(sandbox_args,
                                  stdin=None,
                                  stdout=subprocess.PIPE,
@@ -696,12 +697,15 @@ def run_tests(args):
                                  cwd=uboot_dir,
                                  env=env)
     proc.communicate_filter(prog.handle_output)
+    elapsed = time.time() - start
 
     prog.clear_progress()
     if prog.failed_tests:
-        print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed')
+        print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed in {elapsed:.1f}s')
     elif not prog.run and proc.returncode:
         show_error_output(prog)
+    else:
+        print(f'{prog.run} tests in {elapsed:.1f}s')
 
     return 1 if prog.failed_tests else proc.returncode
 
