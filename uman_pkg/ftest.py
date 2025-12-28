@@ -544,7 +544,10 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
     def setUp(self):
         """Set up test environment with fake U-Boot tree"""
         self.test_dir = tempfile.mkdtemp()
+        self.empty_dir = tempfile.mkdtemp()  # Empty dir (not a U-Boot tree)
         self.orig_cwd = os.getcwd()
+        if 'USRC' in os.environ:
+            del os.environ['USRC']
         os.chdir(self.test_dir)
         os.makedirs('test/py')
         tools.write_file('test/py/test.py', b'# test')
@@ -552,7 +555,10 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
     def tearDown(self):
         """Clean up test environment"""
         os.chdir(self.orig_cwd)
+        if 'USRC' in os.environ:
+            del os.environ['USRC']
         shutil.rmtree(self.test_dir)
+        shutil.rmtree(self.empty_dir)
         command.TEST_RESULT = None
 
     def test_run_command_ci(self):
@@ -742,69 +748,53 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
     def test_get_uboot_dir_current(self):
         """Test get_uboot_dir finds U-Boot in current directory"""
         # setUp already created fake U-Boot tree in self.test_dir
-        result = util.get_uboot_dir()
-        self.assertEqual(self.test_dir, result)
+        self.assertEqual(self.test_dir, util.get_uboot_dir())
 
     def test_get_uboot_dir_usrc_env(self):
         """Test get_uboot_dir uses $USRC when not in U-Boot tree"""
-        # Create a non-U-Boot directory
-        non_uboot_dir = tempfile.mkdtemp()
-        orig_usrc = os.environ.get('USRC')
-
-        try:
-            # Change to non-U-Boot directory
-            os.chdir(non_uboot_dir)
-            # Point USRC to the setUp-created U-Boot tree
-            os.environ['USRC'] = self.test_dir
-
-            result = util.get_uboot_dir()
-            self.assertEqual(self.test_dir, result)
-        finally:
-            os.chdir(self.test_dir)  # Restore for tearDown
-            if orig_usrc is not None:
-                os.environ['USRC'] = orig_usrc
-            elif 'USRC' in os.environ:
-                del os.environ['USRC']
-            shutil.rmtree(non_uboot_dir)
+        os.chdir(self.empty_dir)
+        os.environ['USRC'] = self.test_dir
+        self.assertEqual(self.test_dir, util.get_uboot_dir())
 
     def test_get_uboot_dir_not_found(self):
         """Test get_uboot_dir returns None when no U-Boot tree found"""
-        non_uboot_dir = tempfile.mkdtemp()
-        orig_usrc = os.environ.get('USRC')
+        os.chdir(self.empty_dir)
+        self.assertIsNone(util.get_uboot_dir())
 
-        try:
-            os.chdir(non_uboot_dir)
-            if 'USRC' in os.environ:
-                del os.environ['USRC']
+    def test_setup_uboot_dir_current(self):
+        """Test setup_uboot_dir when already in U-Boot tree"""
+        # setUp already created fake U-Boot tree in self.test_dir
+        result = util.setup_uboot_dir()
+        self.assertEqual(self.test_dir, result)
+        self.assertEqual(self.test_dir, os.getcwd())
 
-            result = util.get_uboot_dir()
-            self.assertIsNone(result)
-        finally:
-            os.chdir(self.test_dir)  # Restore for tearDown
-            if orig_usrc is not None:
-                os.environ['USRC'] = orig_usrc
-            shutil.rmtree(non_uboot_dir)
+    def test_setup_uboot_dir_changes_dir(self):
+        """Test setup_uboot_dir changes to $USRC directory"""
+        os.chdir(self.empty_dir)
+        os.environ['USRC'] = self.test_dir
+
+        with terminal.capture():
+            result = util.setup_uboot_dir()
+
+        self.assertEqual(self.test_dir, result)
+        self.assertEqual(self.test_dir, os.getcwd())
+
+    def test_setup_uboot_dir_not_found(self):
+        """Test setup_uboot_dir returns None when no U-Boot tree"""
+        os.chdir(self.empty_dir)
+        with terminal.capture():
+            result = util.setup_uboot_dir()
+
+        self.assertIsNone(result)
 
     def test_pytest_not_in_uboot_tree(self):
         """Test pytest fails when not in U-Boot tree and no $USRC"""
-        non_uboot_dir = tempfile.mkdtemp()
-        orig_usrc = os.environ.get('USRC')
-
-        try:
-            os.chdir(non_uboot_dir)
-            if 'USRC' in os.environ:
-                del os.environ['USRC']
-
-            args = make_args(cmd='pytest', board='sandbox')
-            with terminal.capture() as (_, err):
-                res = control.run_command(args)
-            self.assertEqual(1, res)
-            self.assertIn('Not in a U-Boot tree', err.getvalue())
-        finally:
-            os.chdir(self.test_dir)  # Restore for tearDown
-            if orig_usrc is not None:
-                os.environ['USRC'] = orig_usrc
-            shutil.rmtree(non_uboot_dir)
+        os.chdir(self.empty_dir)
+        args = make_args(cmd='pytest', board='sandbox')
+        with terminal.capture() as (_, err):
+            res = control.run_command(args)
+        self.assertEqual(1, res)
+        self.assertIn('Not in a U-Boot tree', err.getvalue())
 
     def test_parse_hook_config(self):
         """Test parsing hook config files"""
