@@ -215,7 +215,7 @@ class TestUmanCmdline(TestBase):
         self.assertEqual('sandbox', args.board)
 
 
-class TestBuildSubcommand(TestBase):
+class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
     """Test build subcommand functionality"""
 
     def test_get_dir(self):
@@ -339,6 +339,66 @@ class TestBuildSubcommand(TestBase):
         args = cmdline.parse_args(['build', 'sandbox', '--size'])
         self.assertTrue(args.size)
 
+    def test_build_force_reconfig_flag(self):
+        """Test -f/--force-reconfig flag passes -C to buildman"""
+        args = cmdline.parse_args(['build', 'sandbox', '-f'])
+        self.assertTrue(args.force_reconfig)
+        cmd = build.get_cmd(args, 'sandbox', '/tmp/b/sandbox')
+        self.assertIn('-C', cmd)
+
+    def test_build_in_tree_flag(self):
+        """Test -I/--in-tree flag uses -i for buildman"""
+        args = cmdline.parse_args(['build', 'sandbox', '-I'])
+        self.assertTrue(args.in_tree)
+        cmd = build.get_cmd(args, 'sandbox', '/tmp/b/sandbox')
+        self.assertIn('-i', cmd)
+        self.assertNotIn('-I', cmd)
+        self.assertNotIn('-o', cmd)  # No output directory for in-tree
+
+    def test_build_trace_flag(self):
+        """Test -T/--trace flag sets FTRACE environment variable"""
+        args = cmdline.parse_args(['build', 'sandbox', '-T'])
+        self.assertTrue(args.trace)
+
+        # Test that FTRACE is set in environment when trace flag is used
+        captured_env = {}
+
+        def mock_exec_cmd(_cmd, _args, env=None, capture=True):
+            del capture  # unused
+            if env:
+                captured_env.update(env)
+
+        with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(build, 'setup_uboot_dir',
+                                   return_value='/tmp'):
+                with terminal.capture():
+                    build.run(args)
+
+        self.assertIn('FTRACE', captured_env)
+        self.assertEqual('1', captured_env.get('FTRACE'))
+
+    def test_build_output_dir_flag(self):
+        """Test -o/--output-dir flag overrides build directory"""
+        args = cmdline.parse_args(['build', 'sandbox', '-o', '/custom/out'])
+        self.assertEqual('/custom/out', args.output_dir)
+
+        # Test that the output directory is used in the build command
+        captured_cmd = []
+
+        def mock_exec_cmd(cmd, _args, env=None, capture=True):
+            del env, capture  # unused
+            captured_cmd.extend(cmd)
+
+        with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(build, 'setup_uboot_dir',
+                                   return_value='/tmp'):
+                with terminal.capture():
+                    build.run(args)
+
+        # Check that buildman was called with the custom output directory
+        self.assertIn('-o', captured_cmd)
+        idx = captured_cmd.index('-o')
+        self.assertEqual('/custom/out', captured_cmd[idx + 1])
 
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""

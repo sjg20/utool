@@ -123,13 +123,18 @@ def get_cmd(args, board, build_dir):
     Returns:
         list: Command and arguments for buildman
     """
-    cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
+    if args.in_tree:
+        cmd = ['buildman', '-i', '--boards', board]
+    else:
+        cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
     if not args.lto:
         cmd.insert(1, '-L')
     if args.target:
         cmd.extend(['--target', args.target])
     if args.jobs:
         cmd.extend(['-j', str(args.jobs)])
+    if args.force_reconfig:
+        cmd.append('-C')
     return cmd
 
 
@@ -150,7 +155,7 @@ def run(args):
     if not setup_uboot_dir():
         return 1
 
-    build_dir = get_dir(board)
+    build_dir = args.output_dir or get_dir(board)
 
     if args.fresh and os.path.exists(build_dir):
         tout.info(f'Removing output directory: {build_dir}')
@@ -162,7 +167,12 @@ def run(args):
 
     cmd = get_cmd(args, board, build_dir)
 
-    result = exec_cmd(cmd, args, capture=False)
+    env = None
+    if args.trace:
+        env = os.environ.copy()
+        env['FTRACE'] = '1'
+
+    result = exec_cmd(cmd, args, env=env, capture=False)
 
     if result is None:  # dry-run
         if args.objdump:

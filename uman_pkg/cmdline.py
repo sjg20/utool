@@ -132,17 +132,25 @@ def add_build_subparser(subparsers):
     bld.add_argument(
         'board', nargs='?', metavar='BOARD',
         help='Board name to build')
-    bld.add_argument('-l', '--lto', action='store_true', help='Enable LTO')
+    bld.add_argument('-f', '--force-reconfig', action='store_true',
+                        help='Force reconfiguration')
     bld.add_argument('-F', '--fresh', action='store_true',
                         help='Delete build dir first')
-    bld.add_argument('-t', '--target', metavar='TARGET',
-                        help='Build specific target (e.g. u-boot.bin)')
+    bld.add_argument('-I', '--in-tree', action='store_true',
+                        help='Build in source tree, not separate directory')
     bld.add_argument('-j', '--jobs', type=int, metavar='JOBS',
                         help='Number of parallel jobs (passed to make)')
+    bld.add_argument('-l', '--lto', action='store_true', help='Enable LTO')
+    bld.add_argument('-o', '--output-dir', metavar='DIR',
+                        help='Override output directory')
     bld.add_argument('-O', '--objdump', action='store_true',
                         help='Write disassembly of u-boot and SPL ELFs')
     bld.add_argument('-s', '--size', action='store_true',
                         help='Show size of u-boot and SPL ELFs')
+    bld.add_argument('-t', '--target', metavar='TARGET',
+                        help='Build specific target (e.g. u-boot.bin)')
+    bld.add_argument('-T', '--trace', action='store_true',
+                        help='Enable function tracing (FTRACE=1)')
     return bld
 
 
