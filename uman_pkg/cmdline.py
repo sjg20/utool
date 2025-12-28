@@ -137,6 +137,8 @@ def add_build_subparser(subparsers):
                         help='Delete build dir first')
     bld.add_argument('-t', '--target', metavar='TARGET',
                         help='Build specific target (e.g. u-boot.bin)')
+    bld.add_argument('-j', '--jobs', type=int, metavar='JOBS',
+                        help='Number of parallel jobs (passed to make)')
     return bld
 
 

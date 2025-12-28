@@ -47,6 +47,8 @@ def get_cmd(args, board, build_dir):
         cmd.insert(1, '-L')
     if args.target:
         cmd.extend(['--target', args.target])
+    if args.jobs:
+        cmd.extend(['-j', str(args.jobs)])
     return cmd
 
 

@@ -292,6 +292,18 @@ class TestBuildSubcommand(TestBase):
         self.assertIn('--target', cmd)
         self.assertIn('u-boot.bin', cmd)
 
+    def test_build_jobs_option(self):
+        """Test -j/--jobs option"""
+        args = cmdline.parse_args(['build', 'sandbox', '-j', '8'])
+        self.assertEqual(8, args.jobs)
+
+    def test_get_cmd_jobs(self):
+        """Test that -j is passed to buildman"""
+        args = cmdline.parse_args(['build', 'sandbox', '-j', '4'])
+        cmd = build.get_cmd(args, 'sandbox', '/tmp/b/sandbox')
+        self.assertIn('-j', cmd)
+        self.assertIn('4', cmd)
+
 
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
