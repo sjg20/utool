@@ -210,6 +210,45 @@ Tests run: 3, Skips: 0, failures: 0
         self.assertIn('PASS bloblist_test_checksum', output)
         self.assertFalse(err.getvalue())
 
+    def test_result_line_parsing(self):
+        """Test parsing of Result: PASS/FAIL/SKIP lines"""
+        args = cmdline.parse_args(['test', '-r', 'fs'])
+
+        # Simulate sandbox output with explicit Result: lines
+        sandbox_output = b'''Test: ext4l_read: ext4l.c
+Result: PASS: ext4l_read: ext4l.c
+Test: ext4l_unlink_norun: ext4l.c
+skipped as it is manual (use -f to run it)
+Result: SKIP: ext4l_unlink_norun: ext4l.c
+Test: ext4l_write: ext4l.c
+Expected 0, got 1
+Result: FAIL: ext4l_write: ext4l.c
+Tests run: 3, failures: 1
+'''
+
+        class MockProc:
+            returncode = 0
+
+            def communicate_filter(self, handler):
+                handler(None, sandbox_output)
+
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value='/tmp/b/sandbox/u-boot'):
+            with mock.patch.object(cmdtest, 'get_uboot_dir',
+                                   return_value='/home/user/u-boot'):
+                with mock.patch.object(cmdtest, 'cros_subprocess') as mock_cros:
+                    mock_cros.Popen.return_value = MockProc()
+                    with terminal.capture() as (out, err):
+                        ret = cmdtest.do_test(args)
+
+        self.assertEqual(1, ret)  # Has failures
+        output = out.getvalue()
+        # PASS and SKIP shown as passed
+        self.assertIn('PASS fs_test_ext4l_read', output)
+        self.assertIn('PASS fs_test_ext4l_unlink_norun', output)
+        # FAIL shown as failed
+        self.assertIn('FAIL fs_test_ext4l_write', output)
+
     def test_parse_test_specs_full_name(self):
         """Test parsing full C test function names"""
         # Full test name: suite_test_name
