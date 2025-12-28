@@ -280,6 +280,18 @@ class TestBuildSubcommand(TestBase):
         args = cmdline.parse_args(['build', 'sandbox', '-F'])
         self.assertTrue(args.fresh)
 
+    def test_build_target_option(self):
+        """Test -t/--target option"""
+        args = cmdline.parse_args(['build', 'sandbox', '-t', 'u-boot.bin'])
+        self.assertEqual('u-boot.bin', args.target)
+
+    def test_get_cmd_target(self):
+        """Test that --target is passed to buildman"""
+        args = cmdline.parse_args(['build', 'sandbox', '-t', 'u-boot.bin'])
+        cmd = build.get_cmd(args, 'sandbox', '/tmp/b/sandbox')
+        self.assertIn('--target', cmd)
+        self.assertIn('u-boot.bin', cmd)
+
 
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""

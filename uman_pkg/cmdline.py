@@ -135,6 +135,8 @@ def add_build_subparser(subparsers):
     bld.add_argument('-l', '--lto', action='store_true', help='Enable LTO')
     bld.add_argument('-F', '--fresh', action='store_true',
                         help='Delete build dir first')
+    bld.add_argument('-t', '--target', metavar='TARGET',
+                        help='Build specific target (e.g. u-boot.bin)')
     return bld
 
 

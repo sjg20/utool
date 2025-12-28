@@ -45,6 +45,8 @@ def get_cmd(args, board, build_dir):
     cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
     if not args.lto:
         cmd.insert(1, '-L')
+    if args.target:
+        cmd.extend(['--target', args.target])
     return cmd
 
 
