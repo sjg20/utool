@@ -76,6 +76,55 @@ def get_tests_from_nm(sandbox, suite=None):
     return sorted(set(matches))
 
 
+def build_ut_cmd(sandbox, tests):
+    """Build the sandbox command line for running tests
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        tests (list): List of test specifications (suite or suite.test)
+
+    Returns:
+        list: Command and arguments
+    """
+    cmd = [sandbox]
+
+    # Build the ut command string
+    if tests:
+        # Parse test specs - can be 'suite' or 'suite.test'
+        ut_args = []
+        for spec in tests:
+            if '.' in spec:
+                suite, test = spec.split('.', 1)
+                ut_args.append(f'{suite} {test}')
+            else:
+                ut_args.append(spec)
+        ut_cmd = f"ut {' '.join(ut_args)}"
+    else:
+        # Run all tests
+        ut_cmd = 'ut all'
+
+    cmd.extend(['-c', ut_cmd])
+    return cmd
+
+
+def run_tests(sandbox, tests, args):  # pylint: disable=W0613
+    """Run sandbox tests
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        tests (list): List of test specifications
+        args (argparse.Namespace): Arguments from cmdline (used later)
+
+    Returns:
+        int: Exit code from tests
+    """
+    cmd = build_ut_cmd(sandbox, tests)
+    tout.info(f"Running: {' '.join(cmd)}")
+
+    result = command.run_one(*cmd, capture=False)
+    return result.return_code
+
+
 def do_test(args):
     """Handle test command - run U-Boot sandbox tests
 
@@ -110,6 +159,5 @@ def do_test(args):
             print(f'  {suite_name}.{test_name}')
         return 0
 
-    # Running tests - to be implemented
-    tout.notice('Test execution not yet implemented')
-    return 0
+    # Run tests
+    return run_tests(sandbox, args.tests, args)

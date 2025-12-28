@@ -1668,3 +1668,55 @@ int main(void) { return 0; }
         self.assertIn('dm.test_acpi', stdout)
         self.assertIn('dm.test_gpio', stdout)
         self.assertNotIn('env.test_env_basic', stdout)
+
+    def test_build_ut_cmd_no_tests(self):
+        """Test build_ut_cmd with no test specifications"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [])
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut all'], cmd)
+
+    def test_build_ut_cmd_suite(self):
+        """Test build_ut_cmd with suite name"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'])
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm'], cmd)
+
+    def test_build_ut_cmd_specific_test(self):
+        """Test build_ut_cmd with specific test (suite.test)"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm.test_one'])
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm test_one'], cmd)
+
+    def test_build_ut_cmd_multiple_tests(self):
+        """Test build_ut_cmd with multiple test specifications"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm', 'env'])
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm env'], cmd)
+
+    def test_run_tests_basic(self):
+        """Test run_tests executes sandbox correctly"""
+        cap = []
+
+        def mock_run(*cmd_args, **_kwargs):
+            cap.append(cmd_args)
+            return command.CommandResult(return_code=0)
+
+        args = cmdline.parse_args(['test', 'dm'])
+        with mock.patch.object(command, 'run_one', mock_run):
+            with terminal.capture():
+                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+        self.assertEqual(0, result)
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut dm'), cap[0])
+
+    def test_do_test_runs_tests(self):
+        """Test do_test runs tests when no list flags"""
+        cap = []
+
+        def mock_run(*cmd_args, **_kwargs):
+            cap.append(cmd_args)
+            return command.CommandResult(return_code=0)
+
+        args = cmdline.parse_args(['test', 'dm'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value='/path/to/sandbox'):
+            with mock.patch.object(command, 'run_one', mock_run):
+                with terminal.capture():
+                    result = cmdtest.do_test(args)
+        self.assertEqual(0, result)
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut dm'), cap[0])
