@@ -211,6 +211,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-r', '--results', action='store_true',
         help='Show per-test pass/fail results at the end')
+    test.add_argument(
+        '-v', '--verbose', action='store_true',
+        help='Show full sandbox output')
     return test
 
 

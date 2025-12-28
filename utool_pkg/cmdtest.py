@@ -303,6 +303,7 @@ class TestProgress:
         self.test_results = []  # List of (suite, name, passed) tuples
         self.cur_test = None  # (name, output_lines) tuple when test is active
         self.silent = False  # Set True to disable progress display
+        self.verbose = False  # Set True to show all output
         self.shared = None  # SharedProgress for parallel mode
         self._line_buf = ''  # Buffer for partial lines
         # Set initial suite from first spec
@@ -320,6 +321,10 @@ class TestProgress:
         """
         text = data.decode('utf-8', errors='replace')
         self.output_lines.append(text)
+
+        if self.verbose:
+            sys.stdout.write(text)
+            sys.stdout.flush()
 
         # Handle partial lines by buffering
         text = self._line_buf + text
@@ -347,7 +352,7 @@ class TestProgress:
                 self.run += 1
                 if self.shared:
                     self.shared.increment()
-                else:
+                elif not self.verbose:
                     self._show_progress()
                 continue
 
@@ -401,7 +406,7 @@ class TestProgress:
 
     def clear_progress(self):
         """Clear the progress line"""
-        if self.silent:
+        if self.silent or self.verbose:
             return
         sys.stdout.write('\r\033[K')
         sys.stdout.flush()
@@ -857,10 +862,11 @@ def run_tests(args):
                                   predicted)
 
     # Single-threaded execution
-    if predicted:
+    if predicted and not args.verbose:
         tout.notice(f'Running {predicted} tests')
     sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
     prog = TestProgress(predicted, specs)
+    prog.verbose = args.verbose
 
     start = time.time()
     proc = cros_subprocess.Popen(sandbox_args,
