@@ -1532,7 +1532,7 @@ class TestSetupSubcommand(TestBase):
         self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)
 
 
-class TestTestSubcommand(TestBase):
+class TestTestSubcommand(TestBase):  # pylint: disable=R0904
     """Tests for the test subcommand"""
 
     # C source with linker-list symbols matching U-Boot's unit test format
@@ -1565,6 +1565,8 @@ int main(void) { return 0; }
         self.assertEqual([], args.tests)
         self.assertFalse(args.list_tests)
         self.assertFalse(args.list_suites)
+        self.assertFalse(args.flattree)
+        self.assertFalse(args.test_verbose)
 
         # Test with test names
         args = parser.parse_args(['test', 'dm', 'env'])
@@ -1577,6 +1579,14 @@ int main(void) { return 0; }
         # Test with -s flag
         args = parser.parse_args(['test', '-s'])
         self.assertTrue(args.list_suites)
+
+        # Test with -f flag
+        args = parser.parse_args(['test', '-f'])
+        self.assertTrue(args.flattree)
+
+        # Test with -V flag
+        args = parser.parse_args(['test', '-V'])
+        self.assertTrue(args.test_verbose)
 
     def test_test_alias(self):
         """Test that 't' alias works for test"""
@@ -1674,6 +1684,22 @@ int main(void) { return 0; }
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [])
         self.assertEqual(['/path/to/sandbox', '-c', 'ut all'], cmd)
 
+    def test_build_ut_cmd_flattree(self):
+        """Test build_ut_cmd with flattree flag"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], flattree=True)
+        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut dm'], cmd)
+
+    def test_build_ut_cmd_verbose(self):
+        """Test build_ut_cmd with verbose flag"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], verbose=True)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm -v'], cmd)
+
+    def test_build_ut_cmd_all_flags(self):
+        """Test build_ut_cmd with all flags"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'],
+                                   flattree=True, verbose=True)
+        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut dm -v'], cmd)
+
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'])
@@ -1703,6 +1729,36 @@ int main(void) { return 0; }
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut dm'), cap[0])
+
+    def test_run_tests_flattree(self):
+        """Test run_tests with flattree flag"""
+        cap = []
+
+        def mock_run(*cmd_args, **_kwargs):
+            cap.append(cmd_args)
+            return command.CommandResult(return_code=0)
+
+        args = cmdline.parse_args(['test', '-f', 'dm'])
+        with mock.patch.object(command, 'run_one', mock_run):
+            with terminal.capture():
+                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+        self.assertEqual(0, result)
+        self.assertEqual(('/path/to/sandbox', '-D', '-c', 'ut dm'), cap[0])
+
+    def test_run_tests_verbose(self):
+        """Test run_tests with verbose flag"""
+        cap = []
+
+        def mock_run(*cmd_args, **_kwargs):
+            cap.append(cmd_args)
+            return command.CommandResult(return_code=0)
+
+        args = cmdline.parse_args(['test', '-V', 'dm'])
+        with mock.patch.object(command, 'run_one', mock_run):
+            with terminal.capture():
+                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+        self.assertEqual(0, result)
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut dm -v'), cap[0])
 
     def test_do_test_runs_tests(self):
         """Test do_test runs tests when no list flags"""

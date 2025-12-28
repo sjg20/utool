@@ -185,6 +185,12 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-s', '--suites', action='store_true', dest='list_suites',
         help='List available test suites')
+    test.add_argument(
+        '-f', '--flattree', action='store_true',
+        help='Use flat device tree for tests')
+    test.add_argument(
+        '-V', '--test-verbose', action='store_true', dest='test_verbose',
+        help='Enable verbose test output')
     return test
 
 

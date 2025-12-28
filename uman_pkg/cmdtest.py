@@ -76,17 +76,23 @@ def get_tests_from_nm(sandbox, suite=None):
     return sorted(set(matches))
 
 
-def build_ut_cmd(sandbox, tests):
+def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
     """Build the sandbox command line for running tests
 
     Args:
         sandbox (str): Path to sandbox executable
         tests (list): List of test specifications (suite or suite.test)
+        flattree (bool): Use flat device tree instead of live tree
+        verbose (bool): Enable verbose test output
 
     Returns:
         list: Command and arguments
     """
     cmd = [sandbox]
+
+    # Add flat device tree flag if requested
+    if flattree:
+        cmd.append('-D')
 
     # Build the ut command string
     if tests:
@@ -103,22 +109,28 @@ def build_ut_cmd(sandbox, tests):
         # Run all tests
         ut_cmd = 'ut all'
 
+    # Add verbose flag to ut command
+    if verbose:
+        ut_cmd += ' -v'
+
     cmd.extend(['-c', ut_cmd])
     return cmd
 
 
-def run_tests(sandbox, tests, args):  # pylint: disable=W0613
+def run_tests(sandbox, tests, args):
     """Run sandbox tests
 
     Args:
         sandbox (str): Path to sandbox executable
         tests (list): List of test specifications
-        args (argparse.Namespace): Arguments from cmdline (used later)
+        args (argparse.Namespace): Arguments from cmdline
 
     Returns:
         int: Exit code from tests
     """
-    cmd = build_ut_cmd(sandbox, tests)
+    flattree = args.flattree
+    verbose = args.test_verbose
+    cmd = build_ut_cmd(sandbox, tests, flattree=flattree, verbose=verbose)
     tout.info(f"Running: {' '.join(cmd)}")
 
     result = command.run_one(*cmd, capture=False)
