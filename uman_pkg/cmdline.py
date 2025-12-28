@@ -16,6 +16,7 @@ ALIASES = {
     'selftest': ['st'],
     'pytest': ['py'],
     'build': ['b'],
+    'test': ['t'],
 }
 
 
@@ -170,6 +171,23 @@ def add_setup_subparser(subparsers):
     return setup
 
 
+def add_test_subparser(subparsers):
+    """Add the 'test' subparser for running U-Boot sandbox tests"""
+    test = subparsers.add_parser(
+        'test', aliases=ALIASES['test'],
+        help='Run U-Boot sandbox tests')
+    test.add_argument(
+        'tests', nargs='*', metavar='TEST',
+        help='Test name(s) to run (e.g. "dm" or "env")')
+    test.add_argument(
+        '-l', '--list', action='store_true', dest='list_tests',
+        help='List available tests')
+    test.add_argument(
+        '-s', '--suites', action='store_true', dest='list_suites',
+        help='List available test suites')
+    return test
+
+
 def setup_parser():
     """Set up command-line parser
 
@@ -195,6 +213,7 @@ def setup_parser():
     add_selftest_subparser(subparsers)
     add_pytest_subparser(subparsers)
     add_setup_subparser(subparsers)
+    add_test_subparser(subparsers)
 
     return parser
 

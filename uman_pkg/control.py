@@ -22,6 +22,7 @@ from u_boot_pylib import tout
 from uman_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
 from uman_pkg import build
 from uman_pkg.cmdpy import do_pytest
+from uman_pkg.cmdtest import do_test
 from uman_pkg import settings
 from uman_pkg.setup import do_setup
 from uman_pkg.util import exec_cmd
@@ -301,6 +302,9 @@ def run_command(args):  # pylint: disable=R0911
 
     if args.cmd == 'setup':
         return do_setup(args)
+
+    if args.cmd == 'test':
+        return do_test(args)
 
     tout.error(f'Unknown command: {args.cmd}')
     return 1

@@ -19,8 +19,8 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from uman_pkg import (build, cmdline, cmdpy, control, gitlab_parser, settings,
-                      setup, util)
+from uman_pkg import (build, cmdline, cmdpy, cmdtest, control, gitlab_parser,
+                      settings, setup, util)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -1530,3 +1530,141 @@ class TestSetupSubcommand(TestBase):
         self.assertIn('qemu-system-misc', setup.QEMU_PACKAGES)
         self.assertIn('qemu-system-ppc', setup.QEMU_PACKAGES)
         self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)
+
+
+class TestTestSubcommand(TestBase):
+    """Tests for the test subcommand"""
+
+    # C source with linker-list symbols matching U-Boot's unit test format
+    TEST_ELF_SOURCE = """
+/* Linker-list symbols: _u_boot_list_2_ut_<suite>_2_<test> */
+char _u_boot_list_2_ut_dm_2_test_acpi __attribute__((used));
+char _u_boot_list_2_ut_dm_2_test_gpio __attribute__((used));
+char _u_boot_list_2_ut_env_2_test_env_basic __attribute__((used));
+/* Suite end markers */
+char suite_end_dm __attribute__((used));
+char suite_end_env __attribute__((used));
+int main(void) { return 0; }
+"""
+
+    def setUp(self):
+        super().setUp()
+        # Compile a test ELF with linker-list symbols
+        self.test_elf = os.path.join(self.test_dir, 'test_elf')
+        src_file = os.path.join(self.test_dir, 'test.c')
+        tools.write_file(src_file, self.TEST_ELF_SOURCE.encode())
+        command.run('gcc', '-o', self.test_elf, src_file)
+
+    def test_test_subcommand_parsing(self):
+        """Test that test subcommand is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test basic test command
+        args = parser.parse_args(['test'])
+        self.assertEqual('test', args.cmd)
+        self.assertEqual([], args.tests)
+        self.assertFalse(args.list_tests)
+        self.assertFalse(args.list_suites)
+
+        # Test with test names
+        args = parser.parse_args(['test', 'dm', 'env'])
+        self.assertEqual(['dm', 'env'], args.tests)
+
+        # Test with -l flag
+        args = parser.parse_args(['test', '-l'])
+        self.assertTrue(args.list_tests)
+
+        # Test with -s flag
+        args = parser.parse_args(['test', '-s'])
+        self.assertTrue(args.list_suites)
+
+    def test_test_alias(self):
+        """Test that 't' alias works for test"""
+        args = cmdline.parse_args(['t'])
+        self.assertEqual('test', args.cmd)
+
+        args = cmdline.parse_args(['t', 'dm'])
+        self.assertEqual('test', args.cmd)
+        self.assertEqual(['dm'], args.tests)
+
+    def test_get_sandbox_path_exists(self):
+        """Test get_sandbox_path when sandbox exists"""
+        sandbox_path = os.path.join(self.test_dir, 'sandbox', 'u-boot')
+        os.makedirs(os.path.dirname(sandbox_path))
+        tools.write_file(sandbox_path, b'fake executable')
+        with mock.patch.object(settings, 'get', return_value=self.test_dir):
+            self.assertEqual(sandbox_path, cmdtest.get_sandbox_path())
+
+    def test_get_sandbox_path_not_exists(self):
+        """Test get_sandbox_path when sandbox does not exist"""
+        with mock.patch.object(settings, 'get', return_value=self.test_dir):
+            self.assertIsNone(cmdtest.get_sandbox_path())
+
+    def test_get_suites_from_nm(self):
+        """Test that suites are extracted from nm output"""
+        suites = cmdtest.get_suites_from_nm(self.test_elf)
+        self.assertEqual(['dm', 'env'], suites)
+
+    def test_get_tests_from_nm_all(self):
+        """Test that all tests are extracted from nm output"""
+        tests = cmdtest.get_tests_from_nm(self.test_elf)
+        self.assertEqual([
+            ('dm', 'test_acpi'),
+            ('dm', 'test_gpio'),
+            ('env', 'test_env_basic'),
+        ], tests)
+
+    def test_get_tests_from_nm_filtered(self):
+        """Test that tests can be filtered by suite"""
+        tests = cmdtest.get_tests_from_nm(self.test_elf, suite='dm')
+        self.assertEqual([('dm', 'test_acpi'), ('dm', 'test_gpio')], tests)
+
+        tests = cmdtest.get_tests_from_nm(self.test_elf, suite='env')
+        self.assertEqual([('env', 'test_env_basic')], tests)
+
+    def test_do_test_no_sandbox(self):
+        """Test do_test fails gracefully when sandbox not found"""
+        args = cmdline.parse_args(['test'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path', return_value=None):
+            with terminal.capture() as out:
+                result = cmdtest.do_test(args)
+        self.assertEqual(1, result)
+        self.assertIn('Sandbox not found', out[1].getvalue())
+
+    def test_do_test_list_suites(self):
+        """Test -s flag lists all test suites"""
+        args = cmdline.parse_args(['test', '-s'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value=self.test_elf):
+            with terminal.capture() as out:
+                result = cmdtest.do_test(args)
+        self.assertEqual(0, result)
+        stdout = out[0].getvalue()
+        self.assertIn('dm', stdout)
+        self.assertIn('env', stdout)
+
+    def test_do_test_list_tests(self):
+        """Test -l flag lists all tests"""
+        args = cmdline.parse_args(['test', '-l'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value=self.test_elf):
+            with terminal.capture() as out:
+                result = cmdtest.do_test(args)
+        self.assertEqual(0, result)
+        stdout = out[0].getvalue()
+        self.assertIn('dm.test_acpi', stdout)
+        self.assertIn('dm.test_gpio', stdout)
+        self.assertIn('env.test_env_basic', stdout)
+
+    def test_do_test_list_tests_by_suite(self):
+        """Test -l with suite name filters tests"""
+        args = cmdline.parse_args(['test', '-l', 'dm'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value=self.test_elf):
+            with terminal.capture() as out:
+                result = cmdtest.do_test(args)
+        self.assertEqual(0, result)
+        stdout = out[0].getvalue()
+        self.assertIn('dm.test_acpi', stdout)
+        self.assertIn('dm.test_gpio', stdout)
+        self.assertNotIn('env.test_env_basic', stdout)
