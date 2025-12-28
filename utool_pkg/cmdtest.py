@@ -615,9 +615,10 @@ def resolve_specs(sandbox, specs):
         specs (list): List of (suite, pattern) tuples
 
     Returns:
-        list: Resolved specs with all suites filled in
+        tuple: (resolved_specs, unmatched_specs)
     """
     resolved = []
+    unmatched = []
     all_tests = None  # Lazy load
 
     for suite, pattern in specs:
@@ -627,12 +628,49 @@ def resolve_specs(sandbox, specs):
             # Need to find suite(s) for this pattern
             if all_tests is None:
                 all_tests = get_tests_from_nm(sandbox)
+            found = False
             for s, t in all_tests:
                 if t.endswith(pattern):
                     resolved.append((s, pattern))
+                    found = True
                     break  # Only add first match
+            if not found:
+                unmatched.append((None, pattern))
 
-    return resolved
+    return resolved, unmatched
+
+
+def validate_specs(sandbox, specs):
+    """Check that each spec matches at least one test
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        specs (list): List of (suite, pattern) tuples
+
+    Returns:
+        list: List of unmatched specs (empty if all match)
+    """
+    if specs == [('all', None)]:
+        return []
+
+    all_tests = get_tests_from_nm(sandbox)
+    unmatched = []
+
+    for suite, pattern in specs:
+        found = False
+        for s, t in all_tests:
+            if s != suite:
+                continue
+            if pattern is None:
+                found = True
+                break
+            if t.endswith(pattern):
+                found = True
+                break
+        if not found:
+            unmatched.append((suite, pattern))
+
+    return unmatched
 
 
 def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0,
@@ -892,7 +930,19 @@ def run_tests(args):
 
     specs = parse_test_specs(args.tests)
     # Resolve any specs with suite=None
-    specs = resolve_specs(sandbox, specs)
+    specs, unresolved = resolve_specs(sandbox, specs)
+
+    # Check all specs match at least one test
+    unmatched = validate_specs(sandbox, specs) + unresolved
+    if unmatched:
+        for suite, pattern in unmatched:
+            if suite and pattern:
+                tout.error(f"No tests match '{suite} {pattern}'")
+            elif pattern:
+                tout.error(f"No tests match '{pattern}'")
+            else:
+                tout.error(f"No tests in suite '{suite}'")
+        return 1
 
     emit_result = not args.guess_result
     if args.dry_run:
