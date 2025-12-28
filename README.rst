@@ -26,6 +26,9 @@ Subcommands
 ``setup``
     Download and build firmware blobs needed for testing (OpenSBI, TF-A, etc.)
 
+``test`` (alias: ``t``)
+    Run U-Boot sandbox unit tests with progress display
+
 Installation
 ------------
 
@@ -306,6 +309,54 @@ command automates fetching and installing these dependencies.
   ``fw_dynamic_rv32.bin`` (32-bit)
 - TF-A: ``~/dev/blobs/tfa/bl1.bin``, ``fip.bin``
 - Xtensa: ``~/dev/blobs/xtensa/2020.07/xtensa-dc233c-elf/``
+
+Test Subcommand
+---------------
+
+The ``test`` command (alias ``t``) runs U-Boot's C unit tests in the sandbox
+environment. It provides a progress display and can run tests in parallel.
+
+Some simple examples::
+
+    # Run all tests in the bloblist suite
+    utool t bloblist
+
+    # Run tests matching a pattern
+    utool t dm video*
+
+    # Run multiple suites
+    utool t log lib
+
+    # Run tests in parallel with 4 workers
+    utool t -j4 dm
+
+    # Show per-test pass/fail results at the end
+    utool t -r bloblist
+
+    # List available test suites
+    utool t -s
+
+**Options**:
+
+- ``tests``: Test suite name(s) or pattern (positional)
+- ``-f, --flattree``: Also run flat-tree tests (doubles DM test count)
+- ``-j, --jobs N``: Run tests in parallel using N workers
+- ``-l, --list``: List available tests
+- ``-s, --suites``: List available test suites with test counts
+- ``-r, --results``: Show per-test pass/fail results at the end
+
+**Results Display**:
+
+With ``-r``, shows each test result with the full C function name::
+
+    PASS bloblist_test_align
+    PASS bloblist_test_blob
+    FAIL bloblist_test_checksum
+    ...
+    15 tests in 0.3s
+
+Pass results are shown in green, failures in red (on terminals that support
+color).
 
 Configuration
 -------------

@@ -20,6 +20,7 @@ import time
 # pylint: disable=import-error
 from u_boot_pylib import command
 from u_boot_pylib import cros_subprocess
+from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
 from utool_pkg import settings
@@ -267,6 +268,7 @@ class TestProgress:
         self.failures = 0
         self.output_lines = []
         self.failed_tests = []
+        self.test_results = []  # List of (suite, name, passed) tuples
         self.cur_test = None  # (name, output_lines) tuple when test is active
         self.silent = False  # Set True to disable progress display
         self.shared = None  # SharedProgress for parallel mode
@@ -321,15 +323,15 @@ class TestProgress:
 
     def _check_test_failure(self):
         """Check if current test failed and show it immediately"""
-        if not self.cur_test or not self.cur_test[1]:
-            self.cur_test = None
+        if not self.cur_test:
             return
 
         name, output = self.cur_test
         # Check for actual failure indicators in output
         fail_patterns = ('Expected', 'failed', 'ASSERT', 'Error', 'Failure')
-        is_failure = any(any(pat in line for pat in fail_patterns)
-                         for line in output)
+        is_failure = output and any(any(pat in line for pat in fail_patterns)
+                                    for line in output)
+        self.test_results.append((self.suite, name, not is_failure))
         if is_failure:
             self.clear_progress()
             print(f'{self.suite} {name}')
@@ -356,6 +358,17 @@ class TestProgress:
             return
         sys.stdout.write('\r\033[K')
         sys.stdout.flush()
+
+    def show_results(self):
+        """Show per-test pass/fail results"""
+        col = terminal.Color()
+        for suite, name, passed in self.test_results:
+            if passed:
+                status = col.build(col.GREEN, 'PASS')
+            else:
+                status = col.build(col.RED, 'FAIL')
+            # Show full C function name: {suite}_test_{name}
+            print(f'{status} {suite}_test_{name}')
 
 
 # Tests that require test_ut_dm_init to create data files
@@ -557,6 +570,7 @@ class WorkerResult:
         self.returncode = 0
         self.run = 0
         self.failed_tests = []
+        self.test_results = []
         self.output_lines = []
 
 
@@ -606,6 +620,7 @@ def run_worker(sandbox_args, uboot_dir, env, result, shared):
     result.returncode = proc.returncode
     result.run = prog.run
     result.failed_tests = prog.failed_tests
+    result.test_results = prog.test_results
     result.output_lines = prog.output_lines
 
 
@@ -649,9 +664,20 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
     # Aggregate results
     total_run = sum(r.run for r in results)
     all_failed = []
+    all_results = []
     for r in results:
         all_failed.extend(r.failed_tests)
+        all_results.extend(r.test_results)
     any_error = any(r.returncode for r in results)
+
+    if args.results:
+        col = terminal.Color()
+        for suite, name, passed in sorted(all_results):
+            if passed:
+                status = col.build(col.GREEN, 'PASS')
+            else:
+                status = col.build(col.RED, 'FAIL')
+            print(f'{status} {suite}_test_{name}')
 
     if all_failed:
         for suite, name in all_failed:
@@ -737,6 +763,8 @@ def run_tests(args):
     elapsed = time.time() - start
 
     prog.clear_progress()
+    if args.results:
+        prog.show_results()
     if prog.failed_tests:
         print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed in {elapsed:.1f}s')
     elif not prog.run and proc.returncode:

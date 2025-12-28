@@ -208,6 +208,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-s', '--suites', action='store_true', dest='list_suites',
         help='List available test suites')
+    test.add_argument(
+        '-r', '--results', action='store_true',
+        help='Show per-test pass/fail results at the end')
     return test
 
 

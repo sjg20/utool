@@ -19,8 +19,8 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from utool_pkg import (build, cmdline, cmdpy, control, gitlab_parser, settings,
-                       setup)
+from utool_pkg import (build, cmdline, cmdpy, cmdtest, control, gitlab_parser,
+                       settings, setup)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -174,6 +174,41 @@ class TestUtoolCmdline(TestBase):
         args = cmdline.parse_args(['py', '-b', 'sandbox'])
         self.assertEqual(args.cmd, 'pytest')
         self.assertEqual(args.board, 'sandbox')
+
+    def test_test_results_flag(self):
+        """Test that -r flag shows per-test results"""
+        args = cmdline.parse_args(['test', '-r', 'bloblist'])
+
+        # Simulate sandbox output
+        sandbox_output = b'''Running 3 bloblist tests
+Test: align: test/bloblist/bloblist.c
+Test: blob: test/bloblist/bloblist.c
+Test: checksum: test/bloblist/bloblist.c
+Tests run: 3, Skips: 0, failures: 0
+'''
+
+        class MockProc:
+            """Mock process that feeds output to handler"""
+            returncode = 0
+
+            def communicate_filter(self, handler):
+                handler(None, sandbox_output)
+
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value='/tmp/b/sandbox/u-boot'):
+            with mock.patch.object(cmdtest, 'get_uboot_dir',
+                                   return_value='/home/user/u-boot'):
+                with mock.patch.object(cmdtest, 'cros_subprocess') as mock_cros:
+                    mock_cros.Popen.return_value = MockProc()
+                    with terminal.capture() as (out, err):
+                        ret = cmdtest.do_test(args)
+
+        self.assertEqual(0, ret)
+        output = out.getvalue()
+        self.assertIn('PASS bloblist_test_align', output)
+        self.assertIn('PASS bloblist_test_blob', output)
+        self.assertIn('PASS bloblist_test_checksum', output)
+        self.assertFalse(err.getvalue())
 
 
 class TestUtoolCIVars(TestBase):
