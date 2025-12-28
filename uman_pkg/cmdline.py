@@ -141,6 +141,8 @@ def add_build_subparser(subparsers):
                         help='Number of parallel jobs (passed to make)')
     bld.add_argument('-O', '--objdump', action='store_true',
                         help='Write disassembly of u-boot and SPL ELFs')
+    bld.add_argument('-s', '--size', action='store_true',
+                        help='Show size of u-boot and SPL ELFs')
     return bld
 
 

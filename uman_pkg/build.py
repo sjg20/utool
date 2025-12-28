@@ -82,6 +82,23 @@ def run_objdump(build_dir, board, args):
     return count
 
 
+def show_size(build_dir, args):
+    """Show size information for built ELF files
+
+    Args:
+        build_dir (str): Path to build directory
+        args (argparse.Namespace): Arguments from cmdline
+    """
+    elf_files = list(get_execs(build_dir))
+    if not elf_files:
+        tout.warning('No ELF files found')
+        return
+
+    result = exec_cmd(['size'] + elf_files, args)
+    if result:
+        print(result.stdout)
+
+
 def get_dir(board):
     """Get the build directory for a board
 
@@ -150,6 +167,8 @@ def run(args):
     if result is None:  # dry-run
         if args.objdump:
             run_objdump(build_dir, board, args)
+        if args.size:
+            show_size(build_dir, args)
         return 0
 
     if result.return_code != 0:
@@ -159,6 +178,9 @@ def run(args):
     if args.objdump:
         count = run_objdump(build_dir, board, args)
         tout.notice(f'Disassembled {count} file(s)')
+
+    if args.size:
+        show_size(build_dir, args)
 
     tout.info('Build complete')
     return 0

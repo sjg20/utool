@@ -328,6 +328,17 @@ class TestBuildSubcommand(TestBase):
         """Test get_execs with no ELF files"""
         self.assertEqual([], list(build.get_execs(self.test_dir)))
 
+    def test_build_size_flag(self):
+        """Test -s/--size flag"""
+        args = cmdline.parse_args(['build', 'sandbox'])
+        self.assertFalse(args.size)
+
+        args = cmdline.parse_args(['build', 'sandbox', '-s'])
+        self.assertTrue(args.size)
+
+        args = cmdline.parse_args(['build', 'sandbox', '--size'])
+        self.assertTrue(args.size)
+
 
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
