@@ -194,6 +194,9 @@ def add_test_subparser(subparsers):
         '-f', '--flattree', action='store_true',
         help='Also run flat-tree tests (doubles test count for DM tests)')
     test.add_argument(
+        '-j', '--jobs', type=int, default=1, metavar='N',
+        help='Run tests in parallel using N workers')
+    test.add_argument(
         '-l', '--list', action='store_true', dest='list_tests',
         help='List available tests')
     test.add_argument(

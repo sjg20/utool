@@ -14,6 +14,8 @@ import re
 import struct
 import subprocess
 import sys
+import threading
+import time
 
 # pylint: disable=import-error
 from u_boot_pylib import command
@@ -266,6 +268,7 @@ class TestProgress:
         self.output_lines = []
         self.failed_tests = []
         self.cur_test = None  # (name, output_lines) tuple when test is active
+        self.silent = False  # Set True to disable progress display
 
     def handle_output(self, _stream, data):
         """Process output from sandbox, updating progress
@@ -333,6 +336,8 @@ class TestProgress:
 
     def _show_progress(self):
         """Display current progress on a single line"""
+        if self.silent:
+            return
         if self.total:
             width = len(str(self.total))
             status = f'{self.run:>{width}}/{self.total} {self.suite}'
@@ -343,6 +348,8 @@ class TestProgress:
 
     def clear_progress(self):
         """Clear the progress line"""
+        if self.silent:
+            return
         sys.stdout.write('\r\033[K')
         sys.stdout.flush()
 
@@ -426,13 +433,15 @@ def parse_test_specs(tests):
     return [(suite, None) for suite in tests]
 
 
-def build_sandbox_args(sandbox, specs, flattree):
+def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0):
     """Build sandbox command line arguments
 
     Args:
         sandbox (str): Path to sandbox executable
         specs (list): List of (suite, pattern) tuples
         flattree (bool): Whether to run flattree tests
+        workers (int): Total number of parallel workers (0 = disabled)
+        worker_id (int): This worker's ID (0 to workers-1)
 
     Returns:
         list: Command and arguments to run
@@ -445,10 +454,14 @@ def build_sandbox_args(sandbox, specs, flattree):
     # Build ut commands separated by semicolons
     cmds = []
     for suite, pattern in specs:
-        if pattern:
-            cmds.append(f'ut {suite} {pattern}')
+        if workers:
+            cmd = f'ut -P{workers}:{worker_id}'
         else:
-            cmds.append(f'ut {suite}')
+            cmd = 'ut'
+        if pattern:
+            cmds.append(f'{cmd} {suite} {pattern}')
+        else:
+            cmds.append(f'{cmd} {suite}')
     sandbox_args.extend(['-c', '; '.join(cmds)])
 
     return sandbox_args
@@ -498,6 +511,103 @@ def show_error_output(prog):
             print(line)
 
 
+class WorkerResult:
+    """Result from a parallel worker"""
+
+    def __init__(self):
+        self.returncode = 0
+        self.run = 0
+        self.failed_tests = []
+        self.output_lines = []
+
+
+def run_worker(sandbox_args, uboot_dir, env, result):
+    """Run a single worker process
+
+    Args:
+        sandbox_args (list): Command and arguments
+        uboot_dir (str): U-Boot source directory
+        env (dict): Environment variables
+        result (WorkerResult): Object to store results
+    """
+    prog = TestProgress()
+    prog.silent = True  # Don't show progress in parallel mode
+    proc = cros_subprocess.Popen(sandbox_args,
+                                 stdin=None,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,
+                                 cwd=uboot_dir,
+                                 env=env)
+    proc.communicate_filter(prog.handle_output)
+    result.returncode = proc.returncode
+    result.run = prog.run
+    result.failed_tests = prog.failed_tests
+    result.output_lines = prog.output_lines
+
+
+def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
+    """Run tests in parallel using multiple workers
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        specs (list): List of (suite, pattern) tuples
+        args (argparse.Namespace): Arguments from cmdline
+        uboot_dir (str): U-Boot source directory
+        env (dict): Environment variables
+        predicted (int): Predicted total test count
+
+    Returns:
+        int: Exit code
+    """
+    workers = args.jobs
+    results = [WorkerResult() for _ in range(workers)]
+    threads = []
+
+    tout.notice(f'Running {predicted} tests with {workers} workers')
+    start = time.time()
+
+    for i in range(workers):
+        sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
+                                          workers, i)
+        thread = threading.Thread(target=run_worker,
+                                  args=(sandbox_args, uboot_dir, env,
+                                        results[i]))
+        threads.append(thread)
+        thread.start()
+
+    # Wait for all workers to complete
+    for thread in threads:
+        thread.join()
+    elapsed = time.time() - start
+
+    # Aggregate results
+    total_run = sum(r.run for r in results)
+    all_failed = []
+    for r in results:
+        all_failed.extend(r.failed_tests)
+    any_error = any(r.returncode for r in results)
+
+    if all_failed:
+        for suite, name in all_failed:
+            print(f'{suite} {name}')
+        print(f'{len(all_failed)}/{total_run} test(s) failed in {elapsed:.1f}s')
+        return 1
+
+    if not total_run and any_error:
+        # Show output from first worker with error
+        for r in results:
+            if r.returncode:
+                all_output = ''.join(r.output_lines)
+                for line in all_output.splitlines()[-5:]:
+                    if line.strip():
+                        print(line)
+                break
+        return 1
+
+    print(f'{total_run} tests in {elapsed:.1f}s')
+    return 1 if any_error else 0
+
+
 def run_tests(args):
     """Run U-Boot sandbox tests
 
@@ -518,10 +628,16 @@ def run_tests(args):
         return 1
 
     specs = parse_test_specs(args.tests)
-    sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
 
     if args.dry_run:
-        tout.notice(' '.join(sandbox_args))
+        if args.jobs > 1:
+            for i in range(args.jobs):
+                sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
+                                                  args.jobs, i)
+                tout.notice(' '.join(sandbox_args))
+        else:
+            sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
+            tout.notice(' '.join(sandbox_args))
         return 0
 
     # Ensure dm init data files exist if needed
@@ -529,10 +645,18 @@ def run_tests(args):
         return 1
 
     predicted = calc_predicted_count(sandbox, specs, args.flattree)
+    env = setup_test_env()
+
+    # Use parallel execution if requested
+    if args.jobs > 1:
+        return run_tests_parallel(sandbox, specs, args, uboot_dir, env,
+                                  predicted)
+
+    # Single-threaded execution
     if predicted:
         tout.notice(f'Running {predicted} tests')
+    sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
     prog = TestProgress(predicted)
-    env = setup_test_env()
 
     proc = cros_subprocess.Popen(sandbox_args,
                                  stdin=None,
