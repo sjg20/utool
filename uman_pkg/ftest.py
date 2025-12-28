@@ -1588,6 +1588,10 @@ int main(void) { return 0; }
         args = parser.parse_args(['test', '-V'])
         self.assertTrue(args.test_verbose)
 
+        # Test with -r flag
+        args = parser.parse_args(['test', '-r'])
+        self.assertTrue(args.results)
+
     def test_test_alias(self):
         """Test that 't' alias works for test"""
         args = cmdline.parse_args(['t'])
@@ -1791,6 +1795,24 @@ Test: dm_test_fourth ... ok
         self.assertEqual(0, passed)
         self.assertEqual(0, failed)
         self.assertEqual(0, skipped)
+
+    def test_parse_results_show_results(self):
+        """Test parse_results with show_results flag"""
+        output = '''
+Test: dm_test_first ... ok
+Test: dm_test_second ... FAILED
+Test: dm_test_third ... SKIPPED
+'''
+        with terminal.capture() as (out, _):
+            passed, failed, skipped = cmdtest.parse_results(output,
+                                                            show_results=True)
+        self.assertEqual(1, passed)
+        self.assertEqual(1, failed)
+        self.assertEqual(1, skipped)
+        stdout = out.getvalue()
+        self.assertIn('PASS: dm_test_first', stdout)
+        self.assertIn('FAIL: dm_test_second', stdout)
+        self.assertIn('SKIP: dm_test_third', stdout)
 
     def test_format_duration_seconds(self):
         """Test format_duration with seconds only"""

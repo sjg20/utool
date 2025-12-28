@@ -191,6 +191,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-V', '--test-verbose', action='store_true', dest='test_verbose',
         help='Enable verbose test output')
+    test.add_argument(
+        '-r', '--results', action='store_true',
+        help='Show per-test pass/fail status')
     return test
 
 

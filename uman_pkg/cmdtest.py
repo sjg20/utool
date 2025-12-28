@@ -118,11 +118,12 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
     return cmd
 
 
-def parse_results(output):
+def parse_results(output, show_results=False):
     """Parse test output to extract results
 
     Args:
         output (str): Test output from sandbox
+        show_results (bool): Print per-test results
 
     Returns:
         tuple: (passed, failed, skipped) counts
@@ -135,10 +136,23 @@ def parse_results(output):
         # Match test result lines like "Test: test_name ... ok"
         if '... ok' in line or '... OK' in line:
             passed += 1
+            if show_results:
+                # Extract test name from line
+                match = re.search(r'Test:\s*(\S+)', line)
+                if match:
+                    print(f'  PASS: {match.group(1)}')
         elif '... FAILED' in line or '... failed' in line:
             failed += 1
+            if show_results:
+                match = re.search(r'Test:\s*(\S+)', line)
+                if match:
+                    print(f'  FAIL: {match.group(1)}')
         elif '... SKIPPED' in line or '... skipped' in line:
             skipped += 1
+            if show_results:
+                match = re.search(r'Test:\s*(\S+)', line)
+                if match:
+                    print(f'  SKIP: {match.group(1)}')
 
     return passed, failed, skipped
 
@@ -179,12 +193,15 @@ def run_tests(sandbox, tests, args):
     result = command.run_one(*cmd, capture=True)
     elapsed = time.time() - start_time
 
-    # Print output to console
-    if result.stdout:
+    show_results = args.results
+
+    # Print output to console (unless showing results, which replaces it)
+    if result.stdout and not show_results:
         print(result.stdout, end='')
 
     # Parse and show results summary
-    passed, failed, skipped = parse_results(result.stdout)
+    passed, failed, skipped = parse_results(result.stdout,
+                                            show_results=show_results)
     total = passed + failed + skipped
     if total:
         duration = format_duration(elapsed)
