@@ -223,9 +223,9 @@ class TestBuildSubcommand(TestBase):
             self.assertEqual('/tmp/b/qemu-arm', build.get_dir('qemu-arm'))
 
     def test_get_cmd_basic(self):
-        """Test basic build command generation"""
+        """Test basic build command generation (LTO disabled by default)"""
         args = cmdline.parse_args(['build', 'sandbox'])
-        self.assertEqual(['buildman', '-I', '-w', '--boards', 'sandbox',
+        self.assertEqual(['buildman', '-L', '-I', '-w', '--boards', 'sandbox',
                           '-o', '/tmp/b/sandbox'],
                          build.get_cmd(args, 'sandbox', '/tmp/b/sandbox'))
 
@@ -256,6 +256,29 @@ class TestBuildSubcommand(TestBase):
                     result = build.run(args)
         self.assertEqual(0, result)
         self.assertIn('buildman', got_cmd)
+
+    def test_build_lto_flag(self):
+        """Test -l/--lto flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-l'])
+        self.assertTrue(args.lto)
+
+        args = cmdline.parse_args(['build', 'sandbox', '--lto'])
+        self.assertTrue(args.lto)
+
+    def test_get_cmd_lto_default(self):
+        """Test that -L is passed to buildman by default (LTO disabled)"""
+        args = cmdline.parse_args(['build', 'sandbox'])
+        self.assertIn('-L', build.get_cmd(args, 'sandbox', '/tmp/b/sandbox'))
+
+    def test_get_cmd_lto_enabled(self):
+        """Test that -L is not passed when --lto is specified"""
+        args = cmdline.parse_args(['build', 'sandbox', '-l'])
+        self.assertNotIn('-L', build.get_cmd(args, 'sandbox', '/tmp/b/sandbox'))
+
+    def test_build_fresh_flag(self):
+        """Test -F/--fresh flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-F'])
+        self.assertTrue(args.fresh)
 
 
 class TestUmanCIVars(TestBase):

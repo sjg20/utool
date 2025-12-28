@@ -126,13 +126,16 @@ def add_pytest_subparser(subparsers):
 
 def add_build_subparser(subparsers):
     """Add the 'build' subparser"""
-    build = subparsers.add_parser(
+    bld = subparsers.add_parser(
         'build', aliases=ALIASES['build'],
         help='Build U-Boot for a board')
-    build.add_argument(
+    bld.add_argument(
         'board', nargs='?', metavar='BOARD',
         help='Board name to build')
-    return build
+    bld.add_argument('-l', '--lto', action='store_true', help='Enable LTO')
+    bld.add_argument('-F', '--fresh', action='store_true',
+                        help='Delete build dir first')
+    return bld
 
 
 def add_setup_subparser(subparsers):

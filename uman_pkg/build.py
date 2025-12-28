@@ -9,6 +9,7 @@ specified board using buildman.
 """
 
 import os
+import shutil
 
 # pylint: disable=import-error
 from u_boot_pylib import tout
@@ -30,12 +31,11 @@ def get_dir(board):
     return os.path.join(base_dir, board)
 
 
-def get_cmd(args, board, build_dir):  # pylint: disable=W0613
+def get_cmd(args, board, build_dir):
     """Build the buildman command line
 
     Args:
-        args (argparse.Namespace): Arguments from cmdline (used by later
-            commits)
+        args (argparse.Namespace): Arguments from cmdline
         board (str): Board name to build
         build_dir (str): Path to build directory
 
@@ -43,6 +43,8 @@ def get_cmd(args, board, build_dir):  # pylint: disable=W0613
         list: Command and arguments for buildman
     """
     cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
+    if not args.lto:
+        cmd.insert(1, '-L')
     return cmd
 
 
@@ -64,6 +66,11 @@ def run(args):
         return 1
 
     build_dir = get_dir(board)
+
+    if args.fresh and os.path.exists(build_dir):
+        tout.info(f'Removing output directory: {build_dir}')
+        if not args.dry_run:
+            shutil.rmtree(build_dir)
 
     tout.info(f'Building U-Boot for board: {board}')
     tout.info(f'Output directory: {build_dir}')
