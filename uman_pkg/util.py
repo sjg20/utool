@@ -7,9 +7,31 @@
 This module provides common utility functions used across uman modules.
 """
 
+import os
+
 # pylint: disable=import-error
 from u_boot_pylib import command
 from u_boot_pylib import tout
+
+
+def get_uboot_dir():
+    """Get the U-Boot source directory
+
+    Checks if current directory is a U-Boot tree, otherwise uses $USRC.
+
+    Returns:
+        str: Path to U-Boot source directory, or None if not found
+    """
+    # Check if current directory is a U-Boot tree
+    if os.path.exists('./test/py/test.py'):
+        return os.getcwd()
+
+    # Try USRC environment variable
+    usrc = os.environ.get('USRC')
+    if usrc and os.path.exists(os.path.join(usrc, 'test/py/test.py')):
+        return usrc
+
+    return None
 
 
 def exec_cmd(cmd, args, env=None, capture=True):

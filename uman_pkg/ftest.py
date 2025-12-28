@@ -20,7 +20,7 @@ from u_boot_pylib import tout
 import gitlab
 
 from uman_pkg import (cmdline, cmdpy, control, gitlab_parser, settings,
-                      setup)
+                      setup, util)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -742,7 +742,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
     def test_get_uboot_dir_current(self):
         """Test get_uboot_dir finds U-Boot in current directory"""
         # setUp already created fake U-Boot tree in self.test_dir
-        result = cmdpy.get_uboot_dir()
+        result = util.get_uboot_dir()
         self.assertEqual(self.test_dir, result)
 
     def test_get_uboot_dir_usrc_env(self):
@@ -757,7 +757,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
             # Point USRC to the setUp-created U-Boot tree
             os.environ['USRC'] = self.test_dir
 
-            result = cmdpy.get_uboot_dir()
+            result = util.get_uboot_dir()
             self.assertEqual(self.test_dir, result)
         finally:
             os.chdir(self.test_dir)  # Restore for tearDown
@@ -777,7 +777,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
             if 'USRC' in os.environ:
                 del os.environ['USRC']
 
-            result = cmdpy.get_uboot_dir()
+            result = util.get_uboot_dir()
             self.assertIsNone(result)
         finally:
             os.chdir(self.test_dir)  # Restore for tearDown
