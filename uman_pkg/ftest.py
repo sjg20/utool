@@ -114,6 +114,29 @@ class TestUmanCmdline(TestBase):
         self.assertEqual('1', args.pytest)
         self.assertTrue(args.world)
 
+    def test_selftest_subcommand_parsing(self):
+        """Test that selftest subcommand is parsed correctly"""
+        parser = cmdline.setup_parser()
+
+        # Test basic selftest command
+        args = parser.parse_args(['selftest'])
+        self.assertEqual('selftest', args.cmd)
+        self.assertIsNone(args.testname)
+
+        # Test selftest with test name
+        args = parser.parse_args(['selftest', 'test_ci'])
+        self.assertEqual('selftest', args.cmd)
+        self.assertEqual('test_ci', args.testname)
+
+        # Test selftest with flags
+        args = parser.parse_args(['selftest', '-N', '-X'])
+        self.assertTrue(args.no_capture)
+        self.assertTrue(args.test_preserve_dirs)
+
+        # Test selftest alias (use cmdline.parse_args for alias resolution)
+        args = cmdline.parse_args(['st'])
+        self.assertEqual(args.cmd, 'selftest')
+
     def test_dry_run_flag(self):
         """Test that dry-run flag is parsed correctly"""
         parser = cmdline.setup_parser()

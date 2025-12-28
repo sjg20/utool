@@ -25,8 +25,8 @@ Usage
     # Dry-run to see what would be executed
     uman --dry-run ci -w
 
-    # Run tests
-    uman test
+    # Run self-tests
+    uman selftest
 
     # Run pytest (U-Boot test.py)
     uman pytest
@@ -299,16 +299,16 @@ Settings are stored in ``~/.uman`` (created on first run)::
     # U-Boot test hooks directory
     test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
 
-Testing
--------
+Self-testing
+------------
 
-The tool includes comprehensive tests using the U-Boot test framework::
+The tool includes comprehensive self-tests using the U-Boot test framework::
 
-    # Run all tests
-    uman test
+    # Run all self-tests
+    uman selftest
 
     # Run specific test
-    uman test test_ci_subcommand_parsing
+    uman selftest test_ci_subcommand_parsing
 
 Terminology
 -----------

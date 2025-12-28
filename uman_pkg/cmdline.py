@@ -13,7 +13,7 @@ import sys
 
 # Aliases for subcommands
 ALIASES = {
-    'test': ['t'],
+    'selftest': ['st'],
     'pytest': ['py'],
 }
 
@@ -67,21 +67,21 @@ def add_ci_subparser(subparsers):
     return ci
 
 
-def add_test_subparser(subparsers):
-    """Add the 'test' subparser"""
-    test = subparsers.add_parser(
-        'test', aliases=ALIASES['test'],
+def add_selftest_subparser(subparsers):
+    """Add the 'selftest' subparser"""
+    stest = subparsers.add_parser(
+        'selftest', aliases=ALIASES['selftest'],
         help='Run uman functional tests')
-    test.add_argument(
+    stest.add_argument(
         'testname', type=str, default=None, nargs='?',
         help='Specify the test to run')
-    test.add_argument(
+    stest.add_argument(
         '-N', '--no-capture', action='store_true',
         help='Disable capturing of console output in tests')
-    test.add_argument(
+    stest.add_argument(
         '-X', '--test-preserve-dirs', action='store_true',
         help='Preserve and display test-created directories')
-    return test
+    return stest
 
 
 def add_pytest_subparser(subparsers):
@@ -160,7 +160,7 @@ def setup_parser():
 
     subparsers = parser.add_subparsers(dest='cmd', required=True)
     add_ci_subparser(subparsers)
-    add_test_subparser(subparsers)
+    add_selftest_subparser(subparsers)
     add_pytest_subparser(subparsers)
     add_setup_subparser(subparsers)
 

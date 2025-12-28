@@ -32,10 +32,10 @@ def run_uman():
     if not args.debug:
         sys.tracebacklimit = 0
 
-    # Run tests if requested
-    if args.cmd == 'test':
+    # Run self-tests if requested
+    if args.cmd == 'selftest':
         to_run = (args.testname if hasattr(args, 'testname') and
-                  args.testname not in [None, 'test'] else None)
+                  args.testname not in [None, 'selftest'] else None)
         result = test_util.run_test_suites(
             'uman', args.debug, args.verbose, args.no_capture,
             args.test_preserve_dirs, None, to_run, None,
