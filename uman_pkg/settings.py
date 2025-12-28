@@ -2,9 +2,9 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-"""Settings handling for utool
+"""Settings handling for uman
 
-This module provides access to the utool configuration file (~/.utool).
+This module provides access to the uman configuration file (~/.uman).
 """
 
 import configparser
@@ -14,7 +14,7 @@ import os
 from u_boot_pylib import tout
 
 # Default config file content
-DEFAULT_CONFIG = '''# utool config file
+DEFAULT_CONFIG = '''# uman config file
 
 [DEFAULT]
 # Build directory for U-Boot out-of-tree builds
@@ -23,11 +23,11 @@ build_dir = /tmp/b
 # Directory for firmware blobs (OpenSBI, etc.)
 blobs_dir = ~/dev/blobs
 
-# OPENSBI firmware paths for RISC-V testing (built by 'utool setup')
+# OPENSBI firmware paths for RISC-V testing (built by 'uman setup')
 opensbi = ~/dev/blobs/opensbi/fw_dynamic.bin
 opensbi_rv32 = ~/dev/blobs/opensbi/fw_dynamic_rv32.bin
 
-# TF-A firmware directory for ARM SBSA testing (built by 'utool setup')
+# TF-A firmware directory for ARM SBSA testing (built by 'uman setup')
 tfa_dir = ~/dev/blobs/tfa
 
 # U-Boot test hooks directory
@@ -46,7 +46,7 @@ def get_all():
     """
     if SETTINGS['config'] is None:
         SETTINGS['config'] = configparser.ConfigParser()
-        fname = os.path.expanduser('~/.utool')
+        fname = os.path.expanduser('~/.uman')
         if not os.path.exists(fname):
             tout.notice(f'Creating config file: {fname}')
             with open(fname, 'w', encoding='utf-8') as fil:

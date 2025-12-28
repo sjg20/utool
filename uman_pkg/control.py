@@ -2,10 +2,10 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-"""Handles the main control logic of utool
+"""Handles the main control logic of uman
 
 This module provides various functions called by the main program to implement
-the features of utool.
+the features of uman.
 """
 
 import sys
@@ -19,11 +19,11 @@ from u_boot_pylib import command
 from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
-from utool_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
-from utool_pkg.cmdpy import do_pytest
-from utool_pkg import settings
-from utool_pkg.setup import do_setup
-from utool_pkg.util import exec_cmd
+from uman_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
+from uman_pkg.cmdpy import do_pytest
+from uman_pkg import settings
+from uman_pkg.setup import do_setup
+from uman_pkg.util import exec_cmd
 
 
 def build_ci_vars(args):

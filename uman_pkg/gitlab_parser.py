@@ -2,7 +2,7 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-"""GitLab CI file parser for utool
+"""GitLab CI file parser for uman
 
 This module parses the GitLab CI YAML file to extract valid values
 for SJG_LAB roles and TEST_PY_BD boards.

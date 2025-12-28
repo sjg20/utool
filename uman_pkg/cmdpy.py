@@ -16,8 +16,8 @@ import socket
 from u_boot_pylib import command
 from u_boot_pylib import tout
 
-from utool_pkg import settings
-from utool_pkg.util import exec_cmd
+from uman_pkg import settings
+from uman_pkg.util import exec_cmd
 
 
 def setup_riscv_env(board, env):

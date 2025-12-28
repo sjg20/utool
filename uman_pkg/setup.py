@@ -16,7 +16,7 @@ import tempfile
 from u_boot_pylib import command
 from u_boot_pylib import tout
 
-from utool_pkg import settings
+from uman_pkg import settings
 
 
 # Available components for setup command

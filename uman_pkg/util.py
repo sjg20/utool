@@ -2,9 +2,9 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-"""Utility functions for utool
+"""Utility functions for uman
 
-This module provides common utility functions used across utool modules.
+This module provides common utility functions used across uman modules.
 """
 
 # pylint: disable=import-error

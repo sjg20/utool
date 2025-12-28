@@ -2,8 +2,8 @@
 .. Copyright 2025 Canonical Ltd
 .. Written by Simon Glass <simon.glass@canonical.com>
 
-utool - U-Boot Automation Tool
-==============================
+uman - U-Boot Manager
+=====================
 
 This is a a simple tool to handle common tasks when developing U-Boot.
 
@@ -20,17 +20,17 @@ Usage
 ::
 
     # Push with specific tests
-    utool ci -s -p -l rpi4
+    uman ci -s -p -l rpi4
 
     # Dry-run to see what would be executed
-    utool --dry-run ci -w
+    uman --dry-run ci -w
 
     # Run tests
-    utool test
+    uman test
 
     # Run pytest (U-Boot test.py)
-    utool pytest
-    utool py test_dm -b qemu-riscv64
+    uman pytest
+    uman py test_dm -b qemu-riscv64
 
 CI Options
 ----------
@@ -51,31 +51,31 @@ Pytest Targeting Examples
 ::
 
     # Show all available pytest targets and lab names
-    utool ci -p help
-    utool ci -l help
+    uman ci -p help
+    uman ci -l help
 
     # Run all pytest jobs
-    utool ci -p
+    uman ci -p
 
     # Target by board name (runs any job with that TEST_PY_BD)
-    utool ci -p coreboot
-    utool ci -p sandbox
+    uman ci -p coreboot
+    uman ci -p sandbox
 
     # Target by exact job name (runs only that specific job)
-    utool ci -p "sandbox with clang test.py"
-    utool ci -p "sandbox64 test.py"
+    uman ci -p "sandbox with clang test.py"
+    uman ci -p "sandbox64 test.py"
 
     # Override test specification for targeted job
-    utool ci -p coreboot -t "test_ofplatdata"
-    utool ci -p "sandbox with clang test.py" -t "not sleep"
+    uman ci -p coreboot -t "test_ofplatdata"
+    uman ci -p "sandbox with clang test.py" -t "not sleep"
 
     # Run all pytest jobs with custom test specification
-    utool ci -p -t "not sleep"
+    uman ci -p -t "not sleep"
 
     # Push to different branch names (always to 'ci' remote)
-    utool ci                     # Push to same branch name on 'ci' remote
-    utool ci -d my-feature       # Push current branch to 'my-feature' on 'ci' remote
-    utool ci -d cherry-abc123    # Push current branch to 'cherry-abc123' on 'ci' remote
+    uman ci                     # Push to same branch name on 'ci' remote
+    uman ci -d my-feature       # Push current branch to 'my-feature' on 'ci' remote
+    uman ci -d cherry-abc123    # Push current branch to 'cherry-abc123' on 'ci' remote
 
 **Note**: Use board names (like ``coreboot``, ``sandbox``) to target all jobs
 for that board, or exact job names (like ``"sandbox with clang test.py"``) to
@@ -88,12 +88,12 @@ Merge Request Creation
 The tool can create GitLab merge requests with automated pipeline creation::
 
     # Create merge request
-    utool ci --merge
+    uman ci --merge
 
     # Create merge request with specific CI stages (tags automatically added)
-    utool ci --merge -0              # Adds [skip-suites] [skip-pytest] [skip-world] [skip-sjg]
-    utool ci --merge --suites        # Adds [skip-pytest] [skip-world] [skip-sjg]
-    utool ci --merge --world         # Adds [skip-suites] [skip-pytest] [skip-sjg]
+    uman ci --merge -0              # Adds [skip-suites] [skip-pytest] [skip-world] [skip-sjg]
+    uman ci --merge --suites        # Adds [skip-pytest] [skip-world] [skip-sjg]
+    uman ci --merge --world         # Adds [skip-suites] [skip-pytest] [skip-sjg]
 
 **Important**: Merge requests only support stage-level control (which stages
 run), not fine-grained selection of specific boards or test specifications.
@@ -129,9 +129,9 @@ Key findings about GitLab merge request and pipeline creation:
 4. **Recommended Workflow**:
 
    - For **parameterized variables** (``-l rpi4``, ``-p sandbox``): Use regular
-     ``utool ci`` first, create MR manually later
+     ``uman ci`` first, create MR manually later
    - For **simple skip flags** (``-0``, ``-w``): Use commit message tags with
-     ``utool ci --merge``
+     ``uman ci --merge``
 
 5. **Single Commit Support**: For branches with only one commit, the tool uses
    the commit subject as MR title and commit body as description, eliminating
@@ -149,42 +149,42 @@ automatically sets up environment variables and build directories.
 ::
 
     # List available QEMU boards
-    utool py -l
+    uman py -l
 
     # Run tests for a board (board is required)
-    utool py -b sandbox
-    utool py -b qemu-riscv64
+    uman py -b sandbox
+    uman py -b qemu-riscv64
 
     # Use $b environment variable as default board
     export b=sandbox
-    utool py -q                    # Uses $b
+    uman py -q                    # Uses $b
 
     # Run specific test pattern (no quotes needed for multi-word specs)
-    utool py -b sandbox test_dm
-    utool py -b sandbox test_dm or test_env
-    utool py -b qemu-riscv64 not sleep
+    uman py -b sandbox test_dm
+    uman py -b sandbox test_dm or test_env
+    uman py -b qemu-riscv64 not sleep
 
     # Quiet mode: only show build errors, progress, and result
-    utool py -qb sandbox
+    uman py -qb sandbox
 
     # Run with custom timeout (default: 300s)
-    utool py -b sandbox -T 600
+    uman py -b sandbox -T 600
 
     # Show test timing (tests taking > 0.1s by default)
-    utool py -b sandbox -t
-    utool py -b sandbox -t 0.5     # Only show tests > 0.5s
+    uman py -b sandbox -t
+    uman py -b sandbox -t 0.5     # Only show tests > 0.5s
 
     # Show all test output (pytest -s)
-    utool py -b sandbox test_dm -s
+    uman py -b sandbox test_dm -s
 
     # Skip building U-Boot (assume already built)
-    utool py -b sandbox --no-build
+    uman py -b sandbox --no-build
 
     # Use custom build directory
-    utool py -b sandbox --build-dir /tmp/my-build
+    uman py -b sandbox --build-dir /tmp/my-build
 
     # Dry run to see command and environment
-    utool --dry-run py -b qemu-riscv64 test_dm
+    uman --dry-run py -b qemu-riscv64 test_dm
 
 **Options**:
 
@@ -212,7 +212,7 @@ automatically sets up environment variables and build directories.
 The pytest command searches for test hooks in the following order:
 
 1. **Local hooks** from the U-Boot source tree: ``$USRC/test/hooks/bin``
-2. **Configured hooks** from settings: ``test_hooks`` in ``~/.utool``
+2. **Configured hooks** from settings: ``test_hooks`` in ``~/.uman``
 
 Local hooks take precedence, so you can test with hooks from the U-Boot tree
 being tested without modifying your global configuration. The ``bin``
@@ -222,7 +222,7 @@ subdirectory is automatically appended if present.
 
 Use ``-c/--show-cmd`` to display the QEMU command line without running tests::
 
-    utool py -b qemu-riscv64 -c
+    uman py -b qemu-riscv64 -c
 
 This parses the hook configuration files and expands variables like
 ``${U_BOOT_BUILD_DIR}`` and ``${OPENSBI}``, showing exactly what QEMU command
@@ -236,7 +236,7 @@ U-Boot directory, set the ``USRC`` environment variable to point to your U-Boot
 source::
 
     export USRC=~/u
-    utool py -b sandbox    # Works from any directory
+    uman py -b sandbox    # Works from any directory
 
 Setup
 -----
@@ -245,19 +245,19 @@ The ``setup`` command downloads and installs dependencies needed for testing
 various architectures::
 
     # Install all components
-    utool setup
+    uman setup
 
     # List available components
-    utool setup -l
+    uman setup -l
 
     # Install specific component
-    utool setup qemu
-    utool setup opensbi
-    utool setup tfa
-    utool setup xtensa
+    uman setup qemu
+    uman setup opensbi
+    uman setup tfa
+    uman setup xtensa
 
     # Force reinstall
-    utool setup opensbi -f
+    uman setup opensbi -f
 
 **Components**:
 
@@ -270,7 +270,7 @@ various architectures::
 - ``xtensa``: Download Xtensa dc233c toolchain from foss-xtensa releases and
   configure ``~/.buildman``.
 
-**Installed locations** (configurable in ``~/.utool``):
+**Installed locations** (configurable in ``~/.uman``):
 
 - OpenSBI: ``~/dev/blobs/opensbi/fw_dynamic.bin`` (64-bit),
   ``fw_dynamic_rv32.bin`` (32-bit)
@@ -280,7 +280,7 @@ various architectures::
 Configuration
 -------------
 
-Settings are stored in ``~/.utool`` (created on first run)::
+Settings are stored in ``~/.uman`` (created on first run)::
 
     [DEFAULT]
     # Build directory for U-Boot out-of-tree builds
@@ -289,7 +289,7 @@ Settings are stored in ``~/.utool`` (created on first run)::
     # Directory for firmware blobs (OpenSBI, TF-A, etc.)
     blobs_dir = ~/dev/blobs
 
-    # OPENSBI firmware paths for RISC-V testing (built by 'utool setup')
+    # OPENSBI firmware paths for RISC-V testing (built by 'uman setup')
     opensbi = ~/dev/blobs/opensbi/fw_dynamic.bin
     opensbi_rv32 = ~/dev/blobs/opensbi/fw_dynamic_rv32.bin
 
@@ -305,10 +305,10 @@ Testing
 The tool includes comprehensive tests using the U-Boot test framework::
 
     # Run all tests
-    utool test
+    uman test
 
     # Run specific test
-    utool test test_ci_subcommand_parsing
+    uman test test_ci_subcommand_parsing
 
 Terminology
 -----------

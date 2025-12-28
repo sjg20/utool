@@ -2,7 +2,7 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-"""Functional tests for utool CI automation tool"""
+"""Functional tests for uman CI automation tool"""
 
 # pylint: disable=import-error,too-many-lines
 
@@ -19,15 +19,15 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from utool_pkg import (cmdline, cmdpy, control, gitlab_parser, settings,
-                       setup)
+from uman_pkg import (cmdline, cmdpy, control, gitlab_parser, settings,
+                      setup)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
 
 
 class TestBase(unittest.TestCase):
-    """Base class for all utool tests"""
+    """Base class for all uman tests"""
     preserve_indir = False
     preserve_outdirs = False
     toolpath = None
@@ -89,7 +89,7 @@ def make_args(**kwargs):
     return argparse.Namespace(**defaults)
 
 
-class TestUtoolCmdline(TestBase):
+class TestUmanCmdline(TestBase):
     """Test the command line parsing"""
 
     def test_ci_subcommand_parsing(self):
@@ -173,7 +173,7 @@ class TestUtoolCmdline(TestBase):
         self.assertEqual(args.board, 'sandbox')
 
 
-class TestUtoolCIVars(TestBase):
+class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
 
     def test_build_ci_vars_no_ci(self):
@@ -365,7 +365,7 @@ class TestUtoolCIVars(TestBase):
         # Empty description with no tags
         self.assertEqual('', control.build_desc('', ''))
 
-class TestUtoolCI(TestBase):
+class TestUmanCI(TestBase):
     """Test the CI command functionality"""
 
     def setUp(self):
@@ -514,7 +514,7 @@ class TestUtoolCI(TestBase):
                           'test-branch:upstream-test'], list(cap[-1]))
 
 
-class TestUtoolControl(TestBase):  # pylint: disable=too-many-public-methods
+class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
     """Test the control module functionality"""
 
     def setUp(self):
@@ -827,8 +827,8 @@ qemu_kernel_args="-bios ${OPENSBI} -kernel ${U_BOOT_BUILD_DIR}/u-boot.bin"
         result = cmdpy.expand_vars('${UNKNOWN}', env)
         self.assertEqual('${UNKNOWN}', result)
 
-    @mock.patch('utool_pkg.cmdpy.settings')
-    @mock.patch('utool_pkg.cmdpy.socket')
+    @mock.patch('uman_pkg.cmdpy.settings')
+    @mock.patch('uman_pkg.cmdpy.socket')
     def test_get_qemu_command(self, mock_socket, mock_settings):
         """Test building QEMU command from config"""
         # Set up mock hostname
@@ -864,7 +864,7 @@ qemu_kernel_args="-kernel ${U_BOOT_BUILD_DIR}/u-boot.bin"
         self.assertIn('-m 1G', result)
         self.assertIn('/tmp/b/testboard/u-boot.bin', result)
 
-    @mock.patch('utool_pkg.cmdpy.settings')
+    @mock.patch('uman_pkg.cmdpy.settings')
     def test_get_qemu_command_no_hooks(self, mock_settings):
         """Test get_qemu_command fails when test_hooks not configured"""
         mock_settings.get.return_value = None
@@ -946,7 +946,7 @@ class TestGitLabParser(TestBase):
         self.assertEqual(parser1.job_names, parser2.job_names)
 
 
-class TestUtoolMergeRequest(unittest.TestCase):
+class TestUmanMergeRequest(unittest.TestCase):
     """Tests for merge request functionality"""
 
     def setUp(self):
@@ -999,10 +999,10 @@ class TestUtoolMergeRequest(unittest.TestCase):
         args = parser.parse_args(['ci', '-d', 'develop'])
         self.assertEqual(args.dest, 'develop')
 
-    @mock.patch('utool_pkg.control.gitlab_api')
-    @mock.patch('utool_pkg.control.gitlab')
-    @mock.patch('utool_pkg.control.extract_mr_info')
-    @mock.patch('utool_pkg.control.gitutil')
+    @mock.patch('uman_pkg.control.gitlab_api')
+    @mock.patch('uman_pkg.control.gitlab')
+    @mock.patch('uman_pkg.control.extract_mr_info')
+    @mock.patch('uman_pkg.control.gitutil')
     def test_merge_request_gitlab_error(self, mock_gitutil, mock_extract,
                                         mock_gitlab, mock_api):
         """Test that GitLab errors cause failure"""
@@ -1025,11 +1025,11 @@ class TestUtoolMergeRequest(unittest.TestCase):
 
         self.assertEqual(result, 1)
 
-    @mock.patch('utool_pkg.control.gitlab_api')
-    @mock.patch('utool_pkg.control.gitlab')
-    @mock.patch('utool_pkg.control.extract_mr_info')
-    @mock.patch('utool_pkg.control.gitutil')
-    @mock.patch('utool_pkg.control.git_push_branch')
+    @mock.patch('uman_pkg.control.gitlab_api')
+    @mock.patch('uman_pkg.control.gitlab')
+    @mock.patch('uman_pkg.control.extract_mr_info')
+    @mock.patch('uman_pkg.control.gitutil')
+    @mock.patch('uman_pkg.control.git_push_branch')
     def test_merge_request_update_existing(self, _mock_push, mock_gitutil,
                                            mock_extract, mock_gitlab, mock_api):
         """Test updating an existing merge request"""
@@ -1064,7 +1064,7 @@ class TestSettings(unittest.TestCase):
 
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
-        self.config_file = os.path.join(self.test_dir, '.utool')
+        self.config_file = os.path.join(self.test_dir, '.uman')
         # Reset global settings state
         settings.SETTINGS['config'] = None
 
@@ -1214,7 +1214,7 @@ class TestSetupSubcommand(TestBase):
     def test_setup_qemu_all_installed(self):
         """Test setup_qemu when all packages are installed"""
         args = argparse.Namespace(dry_run=False, force=False)
-        with mock.patch('utool_pkg.setup.command.output'):
+        with mock.patch('uman_pkg.setup.command.output'):
             with terminal.capture() as (out, _):
                 res = setup.setup_qemu(args)
         self.assertEqual(0, res)
@@ -1230,7 +1230,7 @@ class TestSetupSubcommand(TestBase):
                 raise command.CommandExc('Package not found', result)
 
         args = argparse.Namespace(dry_run=True, force=False)
-        with mock.patch('utool_pkg.setup.command.output', mock_output):
+        with mock.patch('uman_pkg.setup.command.output', mock_output):
             with terminal.capture() as (out, _):
                 res = setup.setup_qemu(args)
         self.assertEqual(0, res)

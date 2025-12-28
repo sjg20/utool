@@ -2,7 +2,7 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-"""Handles parsing of utool arguments
+"""Handles parsing of uman arguments
 
 Creates the argument parser and uses it to parse the arguments passed in
 """
@@ -71,7 +71,7 @@ def add_test_subparser(subparsers):
     """Add the 'test' subparser"""
     test = subparsers.add_parser(
         'test', aliases=ALIASES['test'],
-        help='Run utool functional tests')
+        help='Run uman functional tests')
     test.add_argument(
         'testname', type=str, default=None, nargs='?',
         help='Specify the test to run')

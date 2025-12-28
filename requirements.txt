@@ -2,7 +2,7 @@
 # Copyright 2025 Canonical Ltd
 # Written by Simon Glass <simon.glass@canonical.com>
 
-# Dependencies for utool - U-Boot CI automation tool
+# Dependencies for uman - U-Boot Manager
 
 # YAML parsing for GitLab CI file
 PyYAML>=5.1
