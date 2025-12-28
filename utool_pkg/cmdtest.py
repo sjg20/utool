@@ -385,6 +385,24 @@ def needs_dm_init(args):
     return False
 
 
+def needs_bootstd_init(args):
+    """Check if tests require bootstd init data files
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        bool: True if bootstd init is needed
+    """
+    if not args.tests:
+        return True  # Running all tests
+
+    for test in args.tests:
+        if test in ('bootstd', 'all'):
+            return True
+    return False
+
+
 def ensure_dm_init_files():
     """Ensure dm init data files exist, creating them if needed
 
@@ -400,6 +418,23 @@ def ensure_dm_init_files():
 
     tout.notice('Creating dm test data files...')
     return run_pytest('test_ut.py::test_ut_dm_init')
+
+
+def ensure_bootstd_init_files():
+    """Ensure bootstd init data files exist, creating them if needed
+
+    Returns:
+        bool: True if files exist or were created successfully
+    """
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
+    test_file = os.path.join(persistent_dir, 'mmc1.img')
+
+    if os.path.exists(test_file):
+        return True
+
+    tout.notice('Creating bootstd test data files...')
+    return run_pytest('test_ut.py::test_ut_dm_init_bootstd')
 
 
 def parse_test_specs(tests):
@@ -671,8 +706,10 @@ def run_tests(args):
             tout.notice(' '.join(sandbox_args))
         return 0
 
-    # Ensure dm init data files exist if needed
+    # Ensure init data files exist if needed
     if needs_dm_init(args) and not ensure_dm_init_files():
+        return 1
+    if needs_bootstd_init(args) and not ensure_bootstd_init_files():
         return 1
 
     predicted = calc_predicted_count(sandbox, specs, args.flattree)
