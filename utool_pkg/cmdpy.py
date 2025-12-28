@@ -167,7 +167,13 @@ def build_pytest_cmd(args):
     cmd.extend(['--id', 'na'])
 
     if args.test_spec:
-        cmd.extend(['-k', ' '.join(args.test_spec)])
+        # Convert Class.method or Class:method to "Class and method" for -k matching
+        specs = []
+        for s in args.test_spec:
+            # Match: CapitalWord followed by : or . then test_word
+            s = re.sub(r'([A-Z]\w+)[.:](\w+)', r'\1 and \2', s)
+            specs.append(s)
+        cmd.extend(['-k', ' '.join(specs)])
 
     if args.timeout != 300:
         cmd.extend(['-o', f'faulthandler_timeout={args.timeout}'])

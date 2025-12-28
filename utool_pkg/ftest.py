@@ -77,7 +77,7 @@ def make_args(**kwargs):
         'board': None,
         'test_spec': [],
         'timeout': 300,
-        'no_build': False,
+        'build': False,
         'build_dir': None,
         'show_output': False,
         'timing': None,
@@ -600,9 +600,9 @@ class TestUtoolControl(TestBase):  # pylint: disable=too-many-public-methods
         # Default timeout (300) shouldn't add -o flag
         self.assertNotIn('-o', cmd)
 
-        # Test pytest with test specification and custom timeout
+        # Test pytest with test specification, custom timeout, and build flag
         args = make_args(cmd='pytest', board='malta', test_spec=['test_dm'],
-                        timeout=600)
+                        timeout=600, build=True)
         with terminal.capture():
             res = control.run_command(args)
         self.assertEqual(res, 0)
@@ -789,6 +789,34 @@ class TestUtoolControl(TestBase):  # pylint: disable=too-many-public-methods
             if orig_usrc is not None:
                 os.environ['USRC'] = orig_usrc
             shutil.rmtree(non_uboot_dir)
+
+    def test_pytest_uboot_not_built(self):
+        """Test pytest fails when u-boot executable doesn't exist"""
+        args = make_args(cmd='pytest', board='nonexistent_board')
+        with terminal.capture() as (_, err):
+            res = control.run_command(args)
+        self.assertEqual(1, res)
+        self.assertIn('U-Boot not built', err.getvalue())
+        self.assertIn('Use -B to build first', err.getvalue())
+
+    def test_pytest_test_spec_colon(self):
+        """Test that Class:method is converted to 'Class and method'"""
+        cap = []
+
+        def mock_test_py(pipe_list, **_kwargs):
+            cap.append(pipe_list[0])
+            return command.CommandResult(stdout='', return_code=0)
+
+        command.TEST_RESULT = mock_test_py
+
+        args = make_args(cmd='pytest', board='sandbox',
+                         test_spec=['TestExt4l:test_unlink'])
+        with terminal.capture():
+            control.run_command(args)
+
+        cmd = cap[-1]
+        self.assertIn('TestExt4l and test_unlink', cmd)
+        self.assertNotIn('TestExt4l:test_unlink', cmd)
 
     def test_parse_hook_config(self):
         """Test parsing hook config files"""
