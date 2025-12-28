@@ -1721,7 +1721,7 @@ int main(void) { return 0; }
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0)
+            return command.CommandResult(return_code=0, stdout='')
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
@@ -1736,7 +1736,7 @@ int main(void) { return 0; }
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0)
+            return command.CommandResult(return_code=0, stdout='')
 
         args = cmdline.parse_args(['test', '-f', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
@@ -1751,7 +1751,7 @@ int main(void) { return 0; }
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0)
+            return command.CommandResult(return_code=0, stdout='')
 
         args = cmdline.parse_args(['test', '-V', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
@@ -1760,13 +1760,64 @@ int main(void) { return 0; }
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut dm -v'), cap[0])
 
+    def test_parse_results_all_pass(self):
+        """Test parse_results with all passing tests"""
+        output = '''
+Test: dm_test_first ... ok
+Test: dm_test_second ... ok
+Test: dm_test_third ... ok
+'''
+        passed, failed, skipped = cmdtest.parse_results(output)
+        self.assertEqual(3, passed)
+        self.assertEqual(0, failed)
+        self.assertEqual(0, skipped)
+
+    def test_parse_results_mixed(self):
+        """Test parse_results with mixed results"""
+        output = '''
+Test: dm_test_first ... ok
+Test: dm_test_second ... FAILED
+Test: dm_test_third ... SKIPPED
+Test: dm_test_fourth ... ok
+'''
+        passed, failed, skipped = cmdtest.parse_results(output)
+        self.assertEqual(2, passed)
+        self.assertEqual(1, failed)
+        self.assertEqual(1, skipped)
+
+    def test_parse_results_empty(self):
+        """Test parse_results with empty output"""
+        passed, failed, skipped = cmdtest.parse_results('')
+        self.assertEqual(0, passed)
+        self.assertEqual(0, failed)
+        self.assertEqual(0, skipped)
+
+    def test_run_tests_shows_summary(self):
+        """Test run_tests shows results summary"""
+        output = '''
+Test: dm_test_first ... ok
+Test: dm_test_second ... ok
+'''
+
+        def mock_run(*_args, **_kwargs):
+            return command.CommandResult(return_code=0, stdout=output)
+
+        args = cmdline.parse_args(['test', 'dm'])
+        with mock.patch.object(command, 'run_one', mock_run):
+            with terminal.capture() as out:
+                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+        self.assertEqual(0, result)
+        stdout = out[0].getvalue()
+        self.assertIn('dm_test_first', stdout)
+        self.assertIn('dm_test_second', stdout)
+
     def test_do_test_runs_tests(self):
         """Test do_test runs tests when no list flags"""
         cap = []
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0)
+            return command.CommandResult(return_code=0, stdout='')
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(cmdtest, 'get_sandbox_path',

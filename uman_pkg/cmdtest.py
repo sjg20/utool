@@ -117,6 +117,31 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
     return cmd
 
 
+def parse_results(output):
+    """Parse test output to extract results
+
+    Args:
+        output (str): Test output from sandbox
+
+    Returns:
+        tuple: (passed, failed, skipped) counts
+    """
+    passed = 0
+    failed = 0
+    skipped = 0
+
+    for line in output.splitlines():
+        # Match test result lines like "Test: test_name ... ok"
+        if '... ok' in line or '... OK' in line:
+            passed += 1
+        elif '... FAILED' in line or '... failed' in line:
+            failed += 1
+        elif '... SKIPPED' in line or '... skipped' in line:
+            skipped += 1
+
+    return passed, failed, skipped
+
+
 def run_tests(sandbox, tests, args):
     """Run sandbox tests
 
@@ -133,7 +158,19 @@ def run_tests(sandbox, tests, args):
     cmd = build_ut_cmd(sandbox, tests, flattree=flattree, verbose=verbose)
     tout.info(f"Running: {' '.join(cmd)}")
 
-    result = command.run_one(*cmd, capture=False)
+    result = command.run_one(*cmd, capture=True)
+
+    # Print output to console
+    if result.stdout:
+        print(result.stdout, end='')
+
+    # Parse and show results summary
+    passed, failed, skipped = parse_results(result.stdout)
+    total = passed + failed + skipped
+    if total:
+        tout.notice(f'Results: {passed} passed, {failed} failed, '
+                    f'{skipped} skipped')
+
     return result.return_code
 
 
