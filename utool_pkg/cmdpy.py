@@ -159,7 +159,7 @@ def build_pytest_cmd(args):
         build_dir = f'{base_dir}/{args.board}'
     cmd.extend(['--build-dir', build_dir])
 
-    if not args.no_build:
+    if args.build:
         cmd.append('--build')
 
     cmd.append('--buildman')
@@ -362,6 +362,19 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
 
     if not setup_uboot_dir():
         return 1
+
+    # Check for u-boot executable unless building
+    if not args.build:
+        if args.build_dir:
+            build_dir = args.build_dir
+        else:
+            base_dir = settings.get('build_dir', '/tmp/b')
+            build_dir = f'{base_dir}/{board}'
+        uboot_exe = os.path.join(build_dir, 'u-boot')
+        if not os.path.exists(uboot_exe):
+            tout.error(f'U-Boot not built: {uboot_exe}')
+            tout.error('Use -B to build first, or run: utool b ' + board)
+            return 1
 
     tout.info(f'Running pytest for board: {args.board}')
 

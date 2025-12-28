@@ -104,8 +104,8 @@ def add_pytest_subparser(subparsers):
         '-T', '--timeout', type=int, metavar='SECS', default=300,
         help='Test timeout in seconds (default: 300)')
     pyt.add_argument(
-        '--no-build', action='store_true',
-        help='Skip building U-Boot (assume already built)')
+        '-B', '--build', action='store_true',
+        help='Build U-Boot before running tests')
     pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
