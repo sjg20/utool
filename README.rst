@@ -327,6 +327,15 @@ Some simple examples::
     # Run multiple suites
     utool t log lib
 
+    # Run a specific test by full C function name
+    utool t bloblist_test_blob_maxsize
+
+    # Run multiple specific tests
+    utool t bloblist_test_blob lib_test_str_hextoul
+
+    # Run a test by name (searches all suites)
+    utool t test_blob_maxsize
+
     # Run tests in parallel with 4 workers
     utool t -j4 dm
 
@@ -336,14 +345,31 @@ Some simple examples::
     # List available test suites
     utool t -s
 
+    # List tests that would be run
+    utool t -l bloblist_test_blob_maxsize lib_test_str_hextoul
+    utool t -l test_blob_maxsize
+
 **Options**:
 
-- ``tests``: Test suite name(s) or pattern (positional)
+- ``tests``: Test suite, pattern, or full test name (positional)
 - ``-f, --flattree``: Also run flat-tree tests (doubles DM test count)
 - ``-j, --jobs N``: Run tests in parallel using N workers
-- ``-l, --list``: List available tests
+- ``-l, --list``: List tests that would be run (supports filtering)
 - ``-s, --suites``: List available test suites with test counts
 - ``-r, --results``: Show per-test pass/fail results at the end
+
+**Test Name Formats**:
+
+Tests can be specified in several formats:
+
+- ``bloblist`` - run all tests in the bloblist suite
+- ``dm video*`` - run tests matching pattern in dm suite
+- ``bloblist_test_blob_maxsize`` - run specific test by full C function name
+- ``test_blob_maxsize`` - search all suites for matching test
+
+The full C function name format (``suite_test_name``) is parsed by splitting
+on ``_test_`` to extract suite and test name. The short format (``test_name``)
+searches all suites for a matching test.
 
 **Results Display**:
 

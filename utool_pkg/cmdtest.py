@@ -237,6 +237,8 @@ def list_suites(args):
 def list_tests(args):
     """List available tests
 
+    If test specs are provided, shows only matching tests.
+
     Args:
         args (argparse.Namespace): Arguments from cmdline
 
@@ -252,19 +254,49 @@ def list_tests(args):
         tout.notice(f'nm {sandbox}')
         return 0
 
-    tests = get_tests_from_nm(sandbox)
+    specs = parse_test_specs(args.tests) if args.tests else None
+    all_tests = get_tests_from_nm(sandbox)
+
+    if specs and specs != [('all', None)]:
+        # Filter tests by specs
+        tests = []
+        for suite, pattern in specs:
+            for s, t in all_tests:
+                # suite=None means search all suites
+                if suite is not None and s != suite:
+                    continue
+                if pattern is None:
+                    tests.append((s, t))
+                elif any(c in pattern for c in '*?['):
+                    # Glob pattern - match against test name
+                    if fnmatch.fnmatch(t, f'*{pattern}*'):
+                        tests.append((s, t))
+                else:
+                    # Exact match - test name must end with pattern
+                    if t.endswith(pattern):
+                        tests.append((s, t))
+    else:
+        tests = all_tests
+
     for suite, test in tests:
-        print(f'{suite} {test}')
+        # Output consistent name format: suite_test_name
+        # Handle cases where test already includes suite prefix
+        if test.startswith(f'{suite}_test_'):
+            print(test)
+        else:
+            print(f'{suite}_test_{test}')
     return 0
 
 
 class TestProgress:
     """Track and display test progress"""
 
-    def __init__(self, predicted_total=0):
+    def __init__(self, predicted_total=0, specs=None):
         self.total = predicted_total
         self.run = 0
         self.suite = ''
+        self.specs = specs or []  # List of (suite, pattern) tuples
+        self._spec_idx = 0  # Current spec index
         self.failures = 0
         self.output_lines = []
         self.failed_tests = []
@@ -272,6 +304,10 @@ class TestProgress:
         self.cur_test = None  # (name, output_lines) tuple when test is active
         self.silent = False  # Set True to disable progress display
         self.shared = None  # SharedProgress for parallel mode
+        self._line_buf = ''  # Buffer for partial lines
+        # Set initial suite from first spec
+        if self.specs:
+            self.suite = self.specs[0][0]
 
     def handle_output(self, _stream, data):
         """Process output from sandbox, updating progress
@@ -285,7 +321,14 @@ class TestProgress:
         text = data.decode('utf-8', errors='replace')
         self.output_lines.append(text)
 
-        for line in text.splitlines():
+        # Handle partial lines by buffering
+        text = self._line_buf + text
+        lines = text.split('\n')
+        # Keep last partial line in buffer
+        self._line_buf = lines[-1]
+        lines = lines[:-1]
+
+        for line in lines:
             # Parse "Running N suite tests"
             match = re.match(r'Running (\d+) (\w+) tests', line)
             if match:
@@ -313,6 +356,10 @@ class TestProgress:
             if match:
                 self._check_test_failure()
                 self.failures = int(match.group(2))
+                # Move to next spec (suite) if available
+                self._spec_idx += 1
+                if self._spec_idx < len(self.specs):
+                    self.suite = self.specs[self._spec_idx][0]
                 continue
 
             # Collect output for current test (skip boot messages before tests)
@@ -367,8 +414,12 @@ class TestProgress:
                 status = col.build(col.GREEN, 'PASS')
             else:
                 status = col.build(col.RED, 'FAIL')
-            # Show full C function name: {suite}_test_{name}
-            print(f'{status} {suite}_test_{name}')
+            # Show full C function name
+            # Some tests already include prefix (e.g. fs_test_ext4l_*)
+            if '_test_' in name:
+                print(f'{status} {name}')
+            else:
+                print(f'{status} {suite}_test_{name}')
 
 
 # Tests that require test_ut_dm_init to create data files
@@ -450,6 +501,36 @@ def ensure_bootstd_init_files():
     return run_pytest('test_ut.py::test_ut_dm_init_bootstd')
 
 
+def parse_one_test(arg):
+    """Parse a single test argument into (suite, pattern) tuple
+
+    Args:
+        arg (str): Test argument (suite, suite_test_name, "suite pattern",
+                   test_name, or partial_name for searching all suites)
+
+    Returns:
+        tuple: (suite, pattern) where pattern may be None, or suite may be
+               None to search all suites
+    """
+    parts = arg.split(None, 1)
+    suite = parts[0]
+    pattern = parts[1] if len(parts) > 1 else None
+
+    # Check for full test name: suite_test_name
+    if '_test_' in suite:
+        suite, pattern = suite.split('_test_', 1)
+    # Check for test name only: test_something -> search all suites
+    elif suite.startswith('test_'):
+        pattern = suite[5:]  # Strip 'test_' prefix
+        suite = None
+    # Check for partial test name containing underscore (e.g. ext4l_unlink)
+    elif '_' in suite and pattern is None:
+        pattern = suite
+        suite = None
+
+    return (suite, pattern)
+
+
 def parse_test_specs(tests):
     """Parse test arguments into list of (suite, pattern) tuples
 
@@ -459,6 +540,8 @@ def parse_test_specs(tests):
         - ['dm', 'video*'] -> [('dm', 'video*')]
         - ['dm video*'] -> [('dm', 'video*')]
         - ['log', 'lib'] -> [('log', None), ('lib', None)]
+        - ['bloblist_test_blob'] -> [('bloblist', 'blob')]
+        - ['bloblist_test_a', 'lib_test_b'] -> [('bloblist', 'a'), ('lib', 'b')]
 
     Args:
         tests (list): Test arguments from command line
@@ -469,20 +552,45 @@ def parse_test_specs(tests):
     if not tests or tests == ['all']:
         return [('all', None)]
 
-    # Single arg with space -> suite + pattern
+    # Single arg
     if len(tests) == 1:
-        parts = tests[0].split(None, 1)
-        suite = parts[0]
-        pattern = parts[1] if len(parts) > 1 else None
-        return [(suite, pattern)]
+        return [parse_one_test(tests[0])]
 
-    # Two args: could be suite+pattern or two suites
+    # Two args: could be suite+pattern or two suites/tests
     # If second arg contains glob chars, treat as pattern
     if len(tests) == 2 and any(c in tests[1] for c in '*?['):
         return [(tests[0], tests[1])]
 
-    # Multiple suites
-    return [(suite, None) for suite in tests]
+    # Multiple suites or full test names
+    return [parse_one_test(t) for t in tests]
+
+
+def resolve_specs(sandbox, specs):
+    """Resolve specs with suite=None by looking up from nm
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        specs (list): List of (suite, pattern) tuples
+
+    Returns:
+        list: Resolved specs with all suites filled in
+    """
+    resolved = []
+    all_tests = None  # Lazy load
+
+    for suite, pattern in specs:
+        if suite is not None:
+            resolved.append((suite, pattern))
+        else:
+            # Need to find suite(s) for this pattern
+            if all_tests is None:
+                all_tests = get_tests_from_nm(sandbox)
+            for s, t in all_tests:
+                if t.endswith(pattern):
+                    resolved.append((s, pattern))
+                    break  # Only add first match
+
+    return resolved
 
 
 def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0):
@@ -720,6 +828,8 @@ def run_tests(args):
         return 1
 
     specs = parse_test_specs(args.tests)
+    # Resolve any specs with suite=None
+    specs = resolve_specs(sandbox, specs)
 
     if args.dry_run:
         if args.jobs > 1:
@@ -750,7 +860,7 @@ def run_tests(args):
     if predicted:
         tout.notice(f'Running {predicted} tests')
     sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
-    prog = TestProgress(predicted)
+    prog = TestProgress(predicted, specs)
 
     start = time.time()
     proc = cros_subprocess.Popen(sandbox_args,

@@ -210,6 +210,103 @@ Tests run: 3, Skips: 0, failures: 0
         self.assertIn('PASS bloblist_test_checksum', output)
         self.assertFalse(err.getvalue())
 
+    def test_parse_test_specs_full_name(self):
+        """Test parsing full C test function names"""
+        # Full test name: suite_test_name
+        specs = cmdtest.parse_test_specs(['bloblist_test_blob_maxsize'])
+        self.assertEqual([('bloblist', 'blob_maxsize')], specs)
+
+        # Multiple full test names
+        specs = cmdtest.parse_test_specs(['bloblist_test_blob', 'lib_test_str'])
+        self.assertEqual([('bloblist', 'blob'), ('lib', 'str')], specs)
+
+        # Suite only
+        specs = cmdtest.parse_test_specs(['bloblist'])
+        self.assertEqual([('bloblist', None)], specs)
+
+        # Suite with pattern
+        specs = cmdtest.parse_test_specs(['dm', 'video*'])
+        self.assertEqual([('dm', 'video*')], specs)
+
+    def test_list_tests_filtered(self):
+        """Test -l flag filters tests by spec"""
+        # Mock nm output with test symbols
+        nm_output = '''0000000000651220 D _u_boot_list_2_ut_bloblist_2_bloblist_test_align
+0000000000651270 D _u_boot_list_2_ut_bloblist_2_bloblist_test_blob
+00000000006512c0 D _u_boot_list_2_ut_bloblist_2_bloblist_test_blob_maxsize
+00000000006598c0 D _u_boot_list_2_ut_lib_2_lib_test_str_hextoul
+0000000000659938 D _u_boot_list_2_ut_lib_2_lib_test_str_hextoull
+'''
+        mock_result = mock.MagicMock()
+        mock_result.stdout = nm_output
+
+        # Test with full test names
+        args = cmdline.parse_args(['test', '-l', 'bloblist_test_blob_maxsize',
+                                   'lib_test_str_hextoul'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value='/tmp/b/sandbox/u-boot'):
+            with mock.patch.object(command, 'run_one', return_value=mock_result):
+                with terminal.capture() as (out, err):
+                    ret = cmdtest.list_tests(args)
+
+        self.assertEqual(0, ret)
+        output = out.getvalue()
+        self.assertIn('bloblist_test_blob_maxsize', output)
+        self.assertIn('lib_test_str_hextoul', output)
+        self.assertNotIn('bloblist_test_align', output)
+        self.assertNotIn('lib_test_str_hextoull', output)
+        self.assertFalse(err.getvalue())
+
+        # Test with test_name format (searches all suites)
+        args = cmdline.parse_args(['test', '-l', 'test_blob_maxsize'])
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value='/tmp/b/sandbox/u-boot'):
+            with mock.patch.object(command, 'run_one', return_value=mock_result):
+                with terminal.capture() as (out, err):
+                    ret = cmdtest.list_tests(args)
+
+        self.assertEqual(0, ret)
+        self.assertEqual('bloblist_test_blob_maxsize\n', out.getvalue())
+        self.assertFalse(err.getvalue())
+
+    def test_run_tests_with_test_name(self):
+        """Test running tests with test_name format resolves suite"""
+        nm_output = '''00000000006512c0 D _u_boot_list_2_ut_bloblist_2_bloblist_test_blob_maxsize
+00000000006598c0 D _u_boot_list_2_ut_lib_2_lib_test_str_hextoul
+'''
+        sandbox_output = b'''Running 2 tests
+Test: blob_maxsize: bloblist.c
+Tests run: 1, Skips: 0, failures: 0
+Test: str_hextoul: str.c
+Tests run: 1, Skips: 0, failures: 0
+'''
+
+        class MockProc:
+            returncode = 0
+            def communicate_filter(self, handler):
+                handler(None, sandbox_output)
+
+        mock_nm = mock.MagicMock()
+        mock_nm.stdout = nm_output
+        args = cmdline.parse_args(['test', '-r', 'test_blob_maxsize',
+                                   'lib_test_str_hextoul'])
+
+        with mock.patch.object(cmdtest, 'get_sandbox_path',
+                               return_value='/tmp/b/sandbox/u-boot'):
+            with mock.patch.object(cmdtest, 'get_uboot_dir',
+                                   return_value='/home/user/u-boot'):
+                with mock.patch.object(command, 'run_one', return_value=mock_nm):
+                    with mock.patch.object(cmdtest, 'cros_subprocess') as mock_cros:
+                        mock_cros.Popen.return_value = MockProc()
+                        with terminal.capture() as (out, err):
+                            ret = cmdtest.do_test(args)
+
+        self.assertEqual(0, ret)
+        output = out.getvalue()
+        self.assertIn('PASS bloblist_test_blob_maxsize', output)
+        self.assertIn('PASS lib_test_str_hextoul', output)
+        self.assertFalse(err.getvalue())
+
 
 class TestUtoolCIVars(TestBase):
     """Test CI variable building logic"""
