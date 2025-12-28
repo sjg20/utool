@@ -1789,6 +1789,31 @@ Test: dm_test_fourth ... ok
         self.assertEqual(1, failed)
         self.assertEqual(1, skipped)
 
+    def test_parse_results_result_lines(self):
+        """Test parse_results with explicit Result: lines"""
+        output = '''
+Result: PASS dm_test_first
+Result: FAIL dm_test_second
+Result: SKIP dm_test_third
+'''
+        passed, failed, skipped = cmdtest.parse_results(output)
+        self.assertEqual(1, passed)
+        self.assertEqual(1, failed)
+        self.assertEqual(1, skipped)
+
+    def test_parse_results_mixed_formats(self):
+        """Test parse_results with both Test: and Result: lines"""
+        output = '''
+Test: dm_test_first ... ok
+Result: PASS dm_test_second
+Test: dm_test_third ... FAILED
+Result: SKIP dm_test_fourth
+'''
+        passed, failed, skipped = cmdtest.parse_results(output)
+        self.assertEqual(2, passed)
+        self.assertEqual(1, failed)
+        self.assertEqual(1, skipped)
+
     def test_parse_results_empty(self):
         """Test parse_results with empty output"""
         passed, failed, skipped = cmdtest.parse_results('')

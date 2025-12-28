@@ -118,8 +118,22 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
     return cmd
 
 
-def parse_results(output, show_results=False):
+def show_result(status, name):
+    """Print a test result if showing results
+
+    Args:
+        status (str): Result status (PASS, FAIL, SKIP)
+        name (str): Test name
+    """
+    print(f'  {status}: {name}')
+
+
+def parse_results(output, show_results=False):  # pylint: disable=R0912
     """Parse test output to extract results
+
+    Handles two formats:
+    1. Test lines: "Test: test_name ... ok/FAILED/SKIPPED"
+    2. Result lines: "Result: PASS/FAIL/SKIP test_name"
 
     Args:
         output (str): Test output from sandbox
@@ -133,26 +147,36 @@ def parse_results(output, show_results=False):
     skipped = 0
 
     for line in output.splitlines():
+        # First check for explicit Result: lines
+        result_match = re.match(r'Result:\s*(PASS|FAIL|SKIP)\s+(\S+)', line)
+        if result_match:
+            status, name = result_match.groups()
+            if status == 'PASS':
+                passed += 1
+            elif status == 'FAIL':
+                failed += 1
+            else:  # SKIP
+                skipped += 1
+            if show_results:
+                show_result(status, name)
+            continue
+
         # Match test result lines like "Test: test_name ... ok"
+        name_match = re.search(r'Test:\s*(\S+)', line)
+        name = name_match.group(1) if name_match else None
+
         if '... ok' in line or '... OK' in line:
             passed += 1
-            if show_results:
-                # Extract test name from line
-                match = re.search(r'Test:\s*(\S+)', line)
-                if match:
-                    print(f'  PASS: {match.group(1)}')
+            if show_results and name:
+                show_result('PASS', name)
         elif '... FAILED' in line or '... failed' in line:
             failed += 1
-            if show_results:
-                match = re.search(r'Test:\s*(\S+)', line)
-                if match:
-                    print(f'  FAIL: {match.group(1)}')
+            if show_results and name:
+                show_result('FAIL', name)
         elif '... SKIPPED' in line or '... skipped' in line:
             skipped += 1
-            if show_results:
-                match = re.search(r'Test:\s*(\S+)', line)
-                if match:
-                    print(f'  SKIP: {match.group(1)}')
+            if show_results and name:
+                show_result('SKIP', name)
 
     return passed, failed, skipped
 
