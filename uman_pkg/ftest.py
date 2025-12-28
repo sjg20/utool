@@ -1792,6 +1792,18 @@ Test: dm_test_fourth ... ok
         self.assertEqual(0, failed)
         self.assertEqual(0, skipped)
 
+    def test_format_duration_seconds(self):
+        """Test format_duration with seconds only"""
+        self.assertEqual('0.00s', cmdtest.format_duration(0))
+        self.assertEqual('1.50s', cmdtest.format_duration(1.5))
+        self.assertEqual('59.99s', cmdtest.format_duration(59.99))
+
+    def test_format_duration_minutes(self):
+        """Test format_duration with minutes"""
+        self.assertEqual('1m 0.0s', cmdtest.format_duration(60))
+        self.assertEqual('1m 30.0s', cmdtest.format_duration(90))
+        self.assertEqual('5m 30.5s', cmdtest.format_duration(330.5))
+
     def test_run_tests_shows_summary(self):
         """Test run_tests shows results summary"""
         output = '''

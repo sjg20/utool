@@ -10,6 +10,7 @@ in sandbox.
 
 import os
 import re
+import time
 
 # pylint: disable=import-error
 from u_boot_pylib import command
@@ -142,6 +143,22 @@ def parse_results(output):
     return passed, failed, skipped
 
 
+def format_duration(seconds):
+    """Format a duration in seconds as a human-readable string
+
+    Args:
+        seconds (float): Duration in seconds
+
+    Returns:
+        str: Formatted duration (e.g., "1.23s", "1m 23s")
+    """
+    if seconds < 60:
+        return f'{seconds:.2f}s'
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    return f'{minutes}m {secs:.1f}s'
+
+
 def run_tests(sandbox, tests, args):
     """Run sandbox tests
 
@@ -158,7 +175,9 @@ def run_tests(sandbox, tests, args):
     cmd = build_ut_cmd(sandbox, tests, flattree=flattree, verbose=verbose)
     tout.info(f"Running: {' '.join(cmd)}")
 
+    start_time = time.time()
     result = command.run_one(*cmd, capture=True)
+    elapsed = time.time() - start_time
 
     # Print output to console
     if result.stdout:
@@ -168,8 +187,9 @@ def run_tests(sandbox, tests, args):
     passed, failed, skipped = parse_results(result.stdout)
     total = passed + failed + skipped
     if total:
+        duration = format_duration(elapsed)
         tout.notice(f'Results: {passed} passed, {failed} failed, '
-                    f'{skipped} skipped')
+                    f'{skipped} skipped in {duration}')
 
     return result.return_code
 
