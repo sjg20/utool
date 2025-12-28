@@ -362,8 +362,7 @@ class TestProgress:
             if match and self.cur_test:
                 result = match.group(1)
                 name = self.cur_test[0]
-                passed = result != 'FAIL'
-                self.test_results.append((self.suite, name, passed))
+                self.test_results.append((self.suite, name, result))
                 if result == 'FAIL':
                     self.clear_progress()
                     print(f'{self.suite} {name}')
@@ -407,7 +406,7 @@ class TestProgress:
 
         if not self.guess_result:
             # Not in guess mode and no Result: line - assume pass
-            self.test_results.append((self.suite, name, True))
+            self.test_results.append((self.suite, name, 'PASS'))
             self.cur_test = None
             return
 
@@ -415,7 +414,7 @@ class TestProgress:
         fail_patterns = ('Expected', 'failed', 'ASSERT', 'Error', 'Failure')
         is_failure = output and any(any(pat in line for pat in fail_patterns)
                                     for line in output)
-        self.test_results.append((self.suite, name, not is_failure))
+        self.test_results.append((self.suite, name, 'FAIL' if is_failure else 'PASS'))
         if is_failure:
             self.clear_progress()
             print(f'{self.suite} {name}')
@@ -443,12 +442,18 @@ class TestProgress:
         sys.stdout.write('\r\033[K')
         sys.stdout.flush()
 
+    def count_skips(self):
+        """Count skipped tests"""
+        return sum(1 for _, _, r in self.test_results if r == 'SKIP')
+
     def show_results(self):
-        """Show per-test pass/fail results"""
+        """Show per-test pass/fail/skip results"""
         col = terminal.Color()
-        for suite, name, passed in self.test_results:
-            if passed:
+        for suite, name, result in self.test_results:
+            if result == 'PASS':
                 status = col.build(col.GREEN, 'PASS')
+            elif result == 'SKIP':
+                status = col.build(col.YELLOW, 'SKIP')
             else:
                 status = col.build(col.RED, 'FAIL')
             # Show full C function name
@@ -822,17 +827,33 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
 
     if args.results:
         col = terminal.Color()
-        for suite, name, passed in sorted(all_results):
-            if passed:
+        for suite, name, result in sorted(all_results):
+            if result == 'PASS':
                 status = col.build(col.GREEN, 'PASS')
+            elif result == 'SKIP':
+                status = col.build(col.YELLOW, 'SKIP')
             else:
                 status = col.build(col.RED, 'FAIL')
             print(f'{status} {suite}_test_{name}')
 
+    skips = sum(1 for _, _, r in all_results if r == 'SKIP')
+    fails = len(all_failed)
+    passed = total_run - fails - skips
+    col = terminal.Color()
+
+    # Build summary: "N tests[, M passed][, X failed][, Y skipped] in T.Ts"
+    parts = [f'{total_run} tests']
+    if fails or skips:
+        parts.append(col.build(col.GREEN, f'{passed} passed'))
+    if fails:
+        parts.append(col.build(col.RED, f'{fails} failed'))
+    if skips:
+        parts.append(col.build(col.YELLOW, f'{skips} skipped'))
+
     if all_failed:
         for suite, name in all_failed:
             print(f'{suite} {name}')
-        print(f'{len(all_failed)}/{total_run} test(s) failed in {elapsed:.1f}s')
+        print(f'{", ".join(parts)} in {elapsed:.1f}s')
         return 1
 
     if not total_run and any_error:
@@ -846,7 +867,7 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
                 break
         return 1
 
-    print(f'{total_run} tests in {elapsed:.1f}s')
+    print(f'{", ".join(parts)} in {elapsed:.1f}s')
     return 1 if any_error else 0
 
 
@@ -922,12 +943,27 @@ def run_tests(args):
     prog.clear_progress()
     if args.results:
         prog.show_results()
+
+    skips = prog.count_skips()
+    fails = len(prog.failed_tests)
+    passed = prog.run - fails - skips
+    col = terminal.Color()
+
+    # Build summary: "N tests[, M passed][, X failed][, Y skipped] in T.Ts"
+    parts = [f'{prog.run} tests']
+    if fails or skips:
+        parts.append(col.build(col.GREEN, f'{passed} passed'))
+    if fails:
+        parts.append(col.build(col.RED, f'{fails} failed'))
+    if skips:
+        parts.append(col.build(col.YELLOW, f'{skips} skipped'))
+
     if prog.failed_tests:
-        print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed in {elapsed:.1f}s')
+        print(f'{", ".join(parts)} in {elapsed:.1f}s')
     elif not prog.run and proc.returncode:
         show_error_output(prog)
     else:
-        print(f'{prog.run} tests in {elapsed:.1f}s')
+        print(f'{", ".join(parts)} in {elapsed:.1f}s')
 
     return 1 if prog.failed_tests else proc.returncode
 

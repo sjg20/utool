@@ -243,10 +243,9 @@ Tests run: 3, failures: 1
 
         self.assertEqual(1, ret)  # Has failures
         output = out.getvalue()
-        # PASS and SKIP shown as passed
+        # PASS shown in green, SKIP in yellow, FAIL in red
         self.assertIn('PASS fs_test_ext4l_read', output)
-        self.assertIn('PASS fs_test_ext4l_unlink_norun', output)
-        # FAIL shown as failed
+        self.assertIn('SKIP fs_test_ext4l_unlink_norun', output)
         self.assertIn('FAIL fs_test_ext4l_write', output)
 
     def test_parse_test_specs_full_name(self):
