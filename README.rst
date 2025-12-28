@@ -164,12 +164,19 @@ Some simple examples::
     # List available QEMU boards
     utool py -l
 
-    # Run tests for a board
+    # Run tests for a board (requires u-boot already built)
     utool py -b sandbox
+
+    # Build and run tests
+    utool py -B -b sandbox
 
     # Run specific test pattern
     utool py -b sandbox test_dm
     utool py -b qemu-riscv64 not sleep
+
+    # Run a specific test method in a class
+    utool py -b sandbox TestExt4l.test_unlink
+    utool py -b sandbox TestExt4l:test_unlink
 
     # Quiet mode with $b environment variable as default board
     export b=sandbox
@@ -182,12 +189,14 @@ Some simple examples::
 
 - ``test_spec``: Test specification using pytest -k syntax (positional)
 - ``-b, --board BOARD``: Board name to test (required, or set ``$b``)
+- ``-B, --build``: Build U-Boot before running tests
 - ``-l, --list``: List available QEMU boards
 - ``-q, --quiet``: Quiet mode - only show build errors, progress, and result
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
 - ``-t, --timing [SECS]``: Show test timing (default minimum: 0.1s)
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
-- ``--no-build``: Skip building U-Boot (assume already built)
+- ``-S, --setup-only``: Run only fixture setup without running tests
+- ``-P, --persist``: Persist test artifacts (do not clean up after tests)
 - ``--build-dir DIR``: Override build directory
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 
@@ -197,7 +206,30 @@ Some simple examples::
 - Sets ``OPENSBI`` firmware path for RISC-V boards
 - Adds U-Boot test hooks to PATH (see below)
 - Uses organized build directories from config file
-- Builds U-Boot automatically before testing
+
+**Iterative C Test Development**:
+
+Many pytest tests have a Python fixture that creates test data (like disk images)
+and then runs a C unit test. Use ``-S`` and ``-P`` together to set up fixtures
+once and iterate on the C code::
+
+    # Set up fixture and persist the test image
+    utool py -SP TestExt4l.test_unlink
+
+This shows the fixture hierarchy and keeps artifacts::
+
+    SETUP    S u_boot_config          # Session-scoped
+          SETUP    C ext4_image        # Creates disk image
+            SETUP    F ubman           # U-Boot console
+            tests/.../test_unlink      # Test that would run
+            TEARDOWN F ubman
+          TEARDOWN C ext4_image        # Skipped with -P
+    TEARDOWN S u_boot_config
+
+Now iterate on the C test directly without re-running Python::
+
+    /tmp/b/sandbox/u-boot -T -c "ut -f fs fs_test_ext4l_unlink_norun \
+        fs_image=/tmp/b/sandbox/persistent-data/ext4l_test.img"
 
 **Test Hooks Search Order**:
 
