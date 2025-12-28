@@ -139,6 +139,8 @@ def add_build_subparser(subparsers):
                         help='Build specific target (e.g. u-boot.bin)')
     bld.add_argument('-j', '--jobs', type=int, metavar='JOBS',
                         help='Number of parallel jobs (passed to make)')
+    bld.add_argument('-O', '--objdump', action='store_true',
+                        help='Write disassembly of u-boot and SPL ELFs')
     return bld
 
 

@@ -55,9 +55,15 @@ class TestBase(unittest.TestCase):
         if no_capture is not None:
             terminal.USE_CAPTURE = not no_capture
 
+    def setUp(self):
+        """Set up test fixtures"""
+        self.test_dir = tempfile.mkdtemp()
+
     def tearDown(self):
         """Clean up and restore command.TEST_RESULT after each test"""
         command.TEST_RESULT = None
+        if self.test_dir and os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
 
 
 def make_args(**kwargs):
@@ -304,6 +310,24 @@ class TestBuildSubcommand(TestBase):
         self.assertIn('-j', cmd)
         self.assertIn('4', cmd)
 
+    def test_build_objdump_flag(self):
+        """Test -O/--objdump flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-O'])
+        self.assertTrue(args.objdump)
+
+        args = cmdline.parse_args(['build', 'sandbox', '--objdump'])
+        self.assertTrue(args.objdump)
+
+    def test_get_execs(self):
+        """Test get_execs yields existing ELF files"""
+        uboot_path = os.path.join(self.test_dir, 'u-boot')
+        tools.write_file(uboot_path, b'ELF')
+        self.assertEqual([uboot_path], list(build.get_execs(self.test_dir)))
+
+    def test_get_execs_empty(self):
+        """Test get_execs with no ELF files"""
+        self.assertEqual([], list(build.get_execs(self.test_dir)))
+
 
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
@@ -502,18 +526,17 @@ class TestUmanCI(TestBase):
 
     def setUp(self):
         """Set up test environment"""
-        self.test_dir = None
+        super().setUp()
         self.orig_cwd = os.getcwd()
         tout.init(tout.NOTICE)
 
     def tearDown(self):
         """Clean up test environment"""
         os.chdir(self.orig_cwd)
-        command.TEST_RESULT = None
+        super().tearDown()
 
     def _create_git_repo(self):
         """Create a temporary git repository for testing"""
-        self.test_dir = tempfile.mkdtemp()
         os.chdir(self.test_dir)
 
         # Initialise git repo
@@ -651,7 +674,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
 
     def setUp(self):
         """Set up test environment with fake U-Boot tree"""
-        self.test_dir = tempfile.mkdtemp()
+        super().setUp()
         self.empty_dir = tempfile.mkdtemp()  # Empty dir (not a U-Boot tree)
         self.orig_cwd = os.getcwd()
         if 'USRC' in os.environ:
@@ -665,9 +688,8 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         os.chdir(self.orig_cwd)
         if 'USRC' in os.environ:
             del os.environ['USRC']
-        shutil.rmtree(self.test_dir)
         shutil.rmtree(self.empty_dir)
-        command.TEST_RESULT = None
+        super().tearDown()
 
     def test_run_command_ci(self):
         """Test run_command dispatches to CI correctly"""
@@ -1068,11 +1090,11 @@ class TestGitLabParser(TestBase):
         self.assertEqual(parser1.job_names, parser2.job_names)
 
 
-class TestUmanMergeRequest(unittest.TestCase):
+class TestUmanMergeRequest(TestBase):
     """Tests for merge request functionality"""
 
     def setUp(self):
-        self.test_dir = tempfile.mkdtemp()
+        super().setUp()
         self.old_cwd = os.getcwd()
         os.chdir(self.test_dir)
         # Initialize git repo
@@ -1082,7 +1104,6 @@ class TestUmanMergeRequest(unittest.TestCase):
 
     def tearDown(self):
         os.chdir(self.old_cwd)
-        shutil.rmtree(self.test_dir)
         super().tearDown()
 
     def test_merge_request_parsing(self):
@@ -1181,18 +1202,18 @@ class TestUmanMergeRequest(unittest.TestCase):
         mock_mr.save.assert_called_once()
 
 
-class TestSettings(unittest.TestCase):
+class TestSettings(TestBase):
     """Tests for settings module"""
 
     def setUp(self):
-        self.test_dir = tempfile.mkdtemp()
+        super().setUp()
         self.config_file = os.path.join(self.test_dir, '.uman')
         # Reset global settings state
         settings.SETTINGS['config'] = None
 
     def tearDown(self):
-        shutil.rmtree(self.test_dir)
         settings.SETTINGS['config'] = None
+        super().tearDown()
 
     def test_get_all_creates_config(self):
         """Test that get_all creates config file if missing"""
@@ -1263,15 +1284,14 @@ class TestSetupSubcommand(TestBase):
 
     def setUp(self):
         """Set up test environment"""
-        self.test_dir = tempfile.mkdtemp()
+        super().setUp()
         self.orig_cwd = os.getcwd()
         tout.init(tout.NOTICE)
 
     def tearDown(self):
         """Clean up test environment"""
         os.chdir(self.orig_cwd)
-        shutil.rmtree(self.test_dir)
-        command.TEST_RESULT = None
+        super().tearDown()
 
     def test_setup_subcommand_parsing(self):
         """Test that setup subcommand is parsed correctly"""

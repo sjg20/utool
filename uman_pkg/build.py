@@ -12,10 +12,74 @@ import os
 import shutil
 
 # pylint: disable=import-error
+from u_boot_pylib import command
 from u_boot_pylib import tout
 
 from uman_pkg import settings
 from uman_pkg.util import exec_cmd, setup_uboot_dir
+
+
+# ELF files to process (relative to build directory)
+ELF_TARGETS = [
+    'u-boot',
+    'spl/u-boot-spl',
+    'tpl/u-boot-tpl',
+    'vpl/u-boot-vpl',
+]
+
+
+def get_execs(build_dir):
+    """Iterate over ELF targets that exist in the build directory
+
+    Args:
+        build_dir (str): Path to build directory
+
+    Yields:
+        str: Full path to each existing ELF file
+    """
+    for target in ELF_TARGETS:
+        elf_path = os.path.join(build_dir, target)
+        if os.path.exists(elf_path):
+            yield elf_path
+
+
+def get_cross_tool(board, tool):
+    """Get a cross-compiled tool for a board
+
+    Args:
+        board (str): Board name
+        tool (str): Tool name (e.g. 'objdump', 'nm', 'size')
+
+    Returns:
+        str: Cross-compiled tool name (e.g. 'arm-linux-gnueabi-objdump')
+    """
+    prefix = command.output_one_line('buildman', '-A', '--boards', board)
+    return f'{prefix}{tool}'
+
+
+def run_objdump(build_dir, board, args):
+    """Run objdump on built ELF files to create disassembly
+
+    Args:
+        build_dir (str): Path to build directory
+        board (str): Board name (for cross toolchain)
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Number of files disassembled
+    """
+    objdump = get_cross_tool(board, 'objdump')
+
+    count = 0
+    for elf_path in get_execs(build_dir):
+        dis_path = f'{elf_path}.dis'
+        tout.info(f'Disassembling {elf_path}')
+        if not args.dry_run:
+            result = command.run_one(objdump, '-d', '-S', elf_path)
+            with open(dis_path, 'w', encoding='utf-8') as outf:
+                outf.write(result.stdout)
+        count += 1
+    return count
 
 
 def get_dir(board):
@@ -84,11 +148,17 @@ def run(args):
     result = exec_cmd(cmd, args, capture=False)
 
     if result is None:  # dry-run
+        if args.objdump:
+            run_objdump(build_dir, board, args)
         return 0
 
     if result.return_code != 0:
         tout.info('Build failed')
         return result.return_code
+
+    if args.objdump:
+        count = run_objdump(build_dir, board, args)
+        tout.notice(f'Disassembled {count} file(s)')
 
     tout.info('Build complete')
     return 0
