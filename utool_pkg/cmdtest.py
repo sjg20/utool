@@ -301,9 +301,10 @@ class TestProgress:
         self.output_lines = []
         self.failed_tests = []
         self.test_results = []  # List of (suite, name, passed) tuples
-        self.cur_test = None  # (name, output_lines) tuple when test is active
+        self.cur_test = None  # (name, output_lines, got_result) tuple
         self.silent = False  # Set True to disable progress display
         self.verbose = False  # Set True to show all output
+        self.guess_result = False  # Set True to guess pass/fail from output
         self.shared = None  # SharedProgress for parallel mode
         self._line_buf = ''  # Buffer for partial lines
         # Set initial suite from first spec
@@ -346,14 +347,30 @@ class TestProgress:
             # Parse "Test: name: file.c"
             match = re.match(r'Test: (\w+): (\S+)', line)
             if match:
-                # Check if previous test failed
+                # Check if previous test failed (fallback for old U-Boot)
                 self._check_test_failure()
-                self.cur_test = (match.group(1), [])
+                self.cur_test = (match.group(1), [], False)  # (name, output, got_result)
                 self.run += 1
                 if self.shared:
                     self.shared.increment()
                 elif not self.verbose:
                     self._show_progress()
+                continue
+
+            # Parse "Result: PASS/FAIL/SKIP: name: file.c" (U-Boot with -E flag)
+            match = re.match(r'Result: (PASS|FAIL|SKIP): (\w+):', line)
+            if match and self.cur_test:
+                result = match.group(1)
+                name = self.cur_test[0]
+                passed = result != 'FAIL'
+                self.test_results.append((self.suite, name, passed))
+                if result == 'FAIL':
+                    self.clear_progress()
+                    print(f'{self.suite} {name}')
+                    for out_line in self.cur_test[1]:
+                        print(f'  {out_line}')
+                    self.failed_tests.append((self.suite, name))
+                self.cur_test = (name, [], True)  # Mark as got result
                 continue
 
             # Parse final result
@@ -374,12 +391,27 @@ class TestProgress:
         return False
 
     def _check_test_failure(self):
-        """Check if current test failed and show it immediately"""
+        """Check if current test failed by guessing from output (for old U-Boot)
+
+        This is only used when -g/--guess-result is enabled for older U-Boot
+        that doesn't emit explicit Result: lines.
+        """
         if not self.cur_test:
             return
 
-        name, output = self.cur_test
-        # Check for actual failure indicators in output
+        name, output, got_result = self.cur_test
+        if got_result:
+            # Already processed via Result: line
+            self.cur_test = None
+            return
+
+        if not self.guess_result:
+            # Not in guess mode and no Result: line - assume pass
+            self.test_results.append((self.suite, name, True))
+            self.cur_test = None
+            return
+
+        # Guess mode: check for failure indicators in output
         fail_patterns = ('Expected', 'failed', 'ASSERT', 'Error', 'Failure')
         is_failure = output and any(any(pat in line for pat in fail_patterns)
                                     for line in output)
@@ -598,7 +630,8 @@ def resolve_specs(sandbox, specs):
     return resolved
 
 
-def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0):
+def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0,
+                       emit_result=True):
     """Build sandbox command line arguments
 
     Args:
@@ -607,6 +640,7 @@ def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0):
         flattree (bool): Whether to run flattree tests
         workers (int): Total number of parallel workers (0 = disabled)
         worker_id (int): This worker's ID (0 to workers-1)
+        emit_result (bool): Whether to add -E flag for per-test results
 
     Returns:
         list: Command and arguments to run
@@ -623,6 +657,8 @@ def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0):
             cmd = f'ut -P{workers}:{worker_id}'
         else:
             cmd = 'ut'
+        if emit_result:
+            cmd += ' -E'
         if pattern:
             cmds.append(f'{cmd} {suite} {pattern}')
         else:
@@ -755,13 +791,14 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
     results = [WorkerResult() for _ in range(workers)]
     threads = []
     shared = SharedProgress(predicted)
+    emit_result = not args.guess_result
 
     tout.notice(f'Running {predicted} tests with {workers} workers')
     start = time.time()
 
     for i in range(workers):
         sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
-                                          workers, i)
+                                          workers, i, emit_result)
         thread = threading.Thread(target=run_worker,
                                   args=(sandbox_args, uboot_dir, env,
                                         results[i], shared))
@@ -836,14 +873,16 @@ def run_tests(args):
     # Resolve any specs with suite=None
     specs = resolve_specs(sandbox, specs)
 
+    emit_result = not args.guess_result
     if args.dry_run:
         if args.jobs > 1:
             for i in range(args.jobs):
                 sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
-                                                  args.jobs, i)
+                                                  args.jobs, i, emit_result)
                 tout.notice(' '.join(sandbox_args))
         else:
-            sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
+            sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
+                                              emit_result=emit_result)
             tout.notice(' '.join(sandbox_args))
         return 0
 
@@ -864,9 +903,11 @@ def run_tests(args):
     # Single-threaded execution
     if predicted and not args.verbose:
         tout.notice(f'Running {predicted} tests')
-    sandbox_args = build_sandbox_args(sandbox, specs, args.flattree)
+    sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
+                                      emit_result=emit_result)
     prog = TestProgress(predicted, specs)
     prog.verbose = args.verbose
+    prog.guess_result = args.guess_result
 
     start = time.time()
     proc = cros_subprocess.Popen(sandbox_args,

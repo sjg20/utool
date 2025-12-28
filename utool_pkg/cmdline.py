@@ -214,6 +214,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-v', '--verbose', action='store_true',
         help='Show full sandbox output')
+    test.add_argument(
+        '-g', '--guess-result', action='store_true',
+        help='Guess pass/fail from output (for older U-Boot without -E)')
     return test
 
 
