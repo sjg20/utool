@@ -8,6 +8,7 @@ This module handles the 'pytest' subcommand which runs U-Boot's pytest
 test framework.
 """
 
+import ast
 import os
 import re
 import socket
@@ -337,6 +338,207 @@ def get_qemu_command(board, args):
     return ' '.join(cmd_parts)
 
 
+def find_test_file(uboot_dir, test_spec):
+    """Find the Python test file for a test spec
+
+    Args:
+        uboot_dir (str): U-Boot source directory
+        test_spec (str): Test spec like 'TestExt4l:test_unlink' or 'test_ext4l'
+
+    Returns:
+        tuple: (file_path, class_name, method_name) or (None, None, None)
+    """
+    # Parse spec: TestClass:method or TestClass.method or just test_file
+    match = re.match(r'(?:Test)?(\w+?)(?:[:.](\w+))?$', test_spec, re.IGNORECASE)
+    if not match:
+        return None, None, None
+
+    base_name = match.group(1).lower()
+    method = match.group(2)
+
+    # Search for test file
+    test_dirs = [
+        os.path.join(uboot_dir, 'test/py/tests'),
+        os.path.join(uboot_dir, 'test/py/tests/test_fs'),
+    ]
+
+    for test_dir in test_dirs:
+        test_file = os.path.join(test_dir, f'test_{base_name}.py')
+        if os.path.exists(test_file):
+            class_name = f'Test{base_name.capitalize()}'
+            # Handle names like 'ext4l' -> 'TestExt4l'
+            if '_' not in base_name:
+                class_name = f'Test{base_name[0].upper()}{base_name[1:]}'
+            return test_file, class_name, method
+
+    return None, None, None
+
+
+def parse_c_test_call(test_file, class_name, method_name):
+    """Parse a Python test file to extract the C test command
+
+    Looks for ubman.run_command() calls in the test method.
+
+    Args:
+        test_file (str): Path to Python test file
+        class_name (str): Test class name
+        method_name (str): Test method name
+
+    Returns:
+        tuple: (suite, c_test_name, arg_key, fixture_name) or (None, None, None, None)
+    """
+    with open(test_file, 'r', encoding='utf-8') as f:
+        source = f.read()
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return None, None, None, None
+
+    # Find the class and method
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name == method_name:
+                    # Look for ubman.run_command() calls
+                    for stmt in ast.walk(item):
+                        if isinstance(stmt, ast.Call):
+                            # Check if it's ubman.run_command()
+                            if (isinstance(stmt.func, ast.Attribute) and
+                                stmt.func.attr == 'run_command'):
+                                # Get the command string
+                                if stmt.args and isinstance(stmt.args[0],
+                                                            ast.JoinedStr):
+                                    # f-string - extract parts
+                                    return extract_fstring_cmd(stmt.args[0])
+
+    return None, None, None, None
+
+
+def extract_fstring_cmd(fstring_node):
+    """Extract C test info from an f-string AST node
+
+    Args:
+        fstring_node: ast.JoinedStr node
+
+    Returns:
+        tuple: (suite, c_test_name, arg_key, fixture_name) or (None, None, None, None)
+    """
+    # Build the command pattern from f-string parts
+    parts = []
+    arg_name = None
+    for value in fstring_node.values:
+        if isinstance(value, ast.Constant):
+            parts.append(value.value)
+        elif isinstance(value, ast.FormattedValue):
+            # This is the variable part like {ext4_image}
+            if isinstance(value.value, ast.Name):
+                arg_name = value.value.id
+            parts.append('{VAR}')
+
+    cmd = ''.join(parts)
+    # Parse: 'ut -f fs fs_test_ext4l_unlink_norun fs_image={VAR}'
+    match = re.match(r'ut\s+-\w+\s+(\w+)\s+(\w+)\s+(\w+)=', cmd)
+    if match:
+        suite = match.group(1)
+        c_test = match.group(2)
+        arg_key = match.group(3)
+        return suite, c_test, arg_key, arg_name
+
+    return None, None, None, None
+
+
+def get_fixture_path(uboot_dir, test_file, fixture_name):
+    """Get the path created by a fixture
+
+    Args:
+        uboot_dir (str): U-Boot source directory
+        test_file (str): Path to Python test file
+        fixture_name (str): Name of the fixture (e.g., 'ext4_image')
+
+    Returns:
+        str: Path to fixture output, or None
+    """
+    # Parse the test file to find the fixture
+    with open(test_file, 'r', encoding='utf-8') as f:
+        source = f.read()
+
+    # Look for the image path pattern in fixture (may span multiple lines)
+    # e.g., image_path = os.path.join(u_boot_config.persistent_data_dir,
+    #                                 'ext4l_test.img')
+    match = re.search(r"image_path\s*=.*?['\"](\w+\.img)['\"]", source, re.DOTALL)
+    if match:
+        img_name = match.group(1)
+        build_dir = settings.get('build_dir', '/tmp/b')
+        return os.path.join(build_dir, 'sandbox', 'persistent-data', img_name)
+
+    return None
+
+
+def run_c_test(args):
+    """Run just the C test part of a pytest test
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    if not args.test_spec:
+        tout.error('Test spec required for -C (e.g., TestExt4l:test_unlink)')
+        return 1
+
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    test_spec = args.test_spec[0]
+    test_file, class_name, method_name = find_test_file(uboot_dir, test_spec)
+    if not test_file:
+        tout.error(f"Cannot find test file for '{test_spec}'")
+        return 1
+
+    if not method_name:
+        tout.error(f"Method name required (e.g., TestExt4l:test_unlink)")
+        return 1
+
+    result = parse_c_test_call(test_file, class_name, method_name)
+    if not result[0]:
+        tout.error(f"Cannot find C test command in {class_name}.{method_name}")
+        return 1
+
+    suite, c_test, arg_key, fixture_name = result
+
+    # Get fixture output path
+    fixture_path = get_fixture_path(uboot_dir, test_file, fixture_name)
+    if not fixture_path:
+        tout.error(f"Cannot determine fixture path for '{fixture_name}'")
+        return 1
+
+    if not os.path.exists(fixture_path):
+        tout.error(f"Setup not done: {fixture_path} not found")
+        tout.error(f"Run first: ut py -SP {test_spec}")
+        return 1
+
+    # Build and run the sandbox command
+    build_dir = settings.get('build_dir', '/tmp/b')
+    sandbox = os.path.join(build_dir, 'sandbox', 'u-boot')
+    if not os.path.exists(sandbox):
+        tout.error('Sandbox not built - run: utool b sandbox')
+        return 1
+
+    ut_cmd = f'ut -Em {suite} {c_test} {arg_key}={fixture_path}'
+    cmd = [sandbox, '-T', '-F', '-c', ut_cmd]
+
+    print(f"{sandbox} -T -F -c '{ut_cmd}'", flush=True)
+    if args.dry_run:
+        return 0
+
+    result = command.run_pipe([cmd], capture=False, raise_on_error=False)
+    return result.return_code
+
+
 def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-branches
     """Handle pytest command - run pytest tests for U-Boot
 
@@ -355,6 +557,10 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
         else:
             tout.warning('No QEMU boards found (is buildman configured?)')
         return 0
+
+    # Handle -C option: run just the C test part
+    if getattr(args, 'c_test', False):
+        return run_c_test(args)
 
     board = args.board or os.environ.get('b')
     if not board:

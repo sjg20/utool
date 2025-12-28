@@ -128,6 +128,9 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '-P', '--persist', action='store_true',
         help='Persist test artifacts (do not clean up after tests)')
+    pyt.add_argument(
+        '-C', '--c-test', action='store_true',
+        help='Run just the C test part (assumes setup already done with -SP)')
     return pyt
 
 

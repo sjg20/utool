@@ -200,6 +200,7 @@ Some simple examples::
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
 - ``-S, --setup-only``: Run only fixture setup without running tests
 - ``-P, --persist``: Persist test artifacts (do not clean up after tests)
+- ``-C, --c-test``: Run just the C test part (assumes setup done with ``-SP``)
 - ``--build-dir DIR``: Override build directory
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 
@@ -229,10 +230,16 @@ This shows the fixture hierarchy and keeps artifacts::
           TEARDOWN C ext4_image        # Skipped with -P
     TEARDOWN S u_boot_config
 
-Now iterate on the C test directly without re-running Python::
+Now iterate on the C test using ``-C`` without re-running Python::
 
-    /tmp/b/sandbox/u-boot -T -c "ut -f fs fs_test_ext4l_unlink_norun \
-        fs_image=/tmp/b/sandbox/persistent-data/ext4l_test.img"
+    # Show the sandbox command that would run
+    utool -n py -C TestExt4l:test_unlink
+
+    # Run the C test directly
+    utool py -C TestExt4l:test_unlink
+
+The ``-C`` flag parses the Python test source to extract the C test command
+and runs sandbox directly. It checks that the fixture output exists first.
 
 **Test Hooks Search Order**:
 

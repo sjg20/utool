@@ -1698,3 +1698,117 @@ class TestBuildSubcommand(TestBase):
             jobs=None, force_reconfig=True)
         cmd = build.build_cmd(args, 'sandbox', '/tmp/b/sandbox')
         self.assertIn('-C', cmd)
+
+
+class TestPytestCTest(TestBase):
+    """Tests for the pytest -C (C test) functionality"""
+
+    def setUp(self):
+        tout.init(tout.WARNING)
+        self.test_dir = tempfile.mkdtemp()
+        self.orig_config = settings.SETTINGS['config']
+        settings.SETTINGS['config'] = None
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
+        settings.SETTINGS['config'] = self.orig_config
+        super().tearDown()
+
+    def test_find_test_file(self):
+        """Test finding Python test file from spec"""
+        # Create a mock U-Boot tree with test file
+        test_fs_dir = os.path.join(self.test_dir, 'test/py/tests/test_fs')
+        os.makedirs(test_fs_dir)
+        test_file = os.path.join(test_fs_dir, 'test_ext4l.py')
+        tools.write_file(test_file, b'# test file')
+
+        # Test with class:method format
+        path, cls, method = cmdpy.find_test_file(self.test_dir,
+                                                  'TestExt4l:test_unlink')
+        self.assertEqual(test_file, path)
+        self.assertEqual('TestExt4l', cls)
+        self.assertEqual('test_unlink', method)
+
+        # Test with just class name
+        path, cls, method = cmdpy.find_test_file(self.test_dir, 'ext4l')
+        self.assertEqual(test_file, path)
+        self.assertIsNone(method)
+
+    def test_find_test_file_not_found(self):
+        """Test find_test_file returns None for non-existent test"""
+        path, _cls, _method = cmdpy.find_test_file(self.test_dir,
+                                                   'NonExistent:test_foo')
+        self.assertIsNone(path)
+
+    def test_get_fixture_path(self):
+        """Test extracting fixture path from test file"""
+        test_content = b'''
+@pytest.fixture
+def ext4_image(self, u_boot_config):
+    image_path = os.path.join(u_boot_config.persistent_data_dir,
+                              'ext4l_test.img')
+    yield image_path
+'''
+        test_file = os.path.join(self.test_dir, 'test_ext4l.py')
+        tools.write_file(test_file, test_content)
+
+        with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+            path = cmdpy.get_fixture_path(self.test_dir, test_file,
+                                          'ext4_image')
+
+        self.assertEqual('/tmp/b/sandbox/persistent-data/ext4l_test.img', path)
+
+    def test_parse_c_test_call(self):
+        """Test parsing C test command from Python test source"""
+        test_content = b'''
+class TestExt4l:
+    def test_unlink(self, ubman, ext4_image):
+        output = ubman.run_command(
+            f'ut -f fs fs_test_ext4l_unlink_norun fs_image={ext4_image}')
+        assert 'failures: 0' in output
+'''
+        test_file = os.path.join(self.test_dir, 'test_ext4l.py')
+        tools.write_file(test_file, test_content)
+
+        result = cmdpy.parse_c_test_call(test_file, 'TestExt4l', 'test_unlink')
+        self.assertIsNotNone(result[0])
+        suite, c_test, arg_key, fixture = result
+        self.assertEqual('fs', suite)
+        self.assertEqual('fs_test_ext4l_unlink_norun', c_test)
+        self.assertEqual('fs_image', arg_key)
+        self.assertEqual('ext4_image', fixture)
+
+    def test_c_test_flag_parsing(self):
+        """Test -C flag is parsed correctly"""
+        args = cmdline.parse_args(['pytest', '-C', 'TestExt4l:test_unlink'])
+        self.assertTrue(args.c_test)
+        self.assertEqual(['TestExt4l:test_unlink'], args.test_spec)
+
+    @mock.patch.object(cmdpy, 'get_uboot_dir')
+    def test_run_c_test_no_spec(self, mock_uboot_dir):
+        """Test run_c_test fails without test spec"""
+        mock_uboot_dir.return_value = self.test_dir
+        args = argparse.Namespace(test_spec=None, dry_run=False,
+                                  show_cmd=False)
+        with terminal.capture() as (_out, err):
+            ret = cmdpy.run_c_test(args)
+        self.assertEqual(1, ret)
+        self.assertIn('Test spec required', err.getvalue())
+
+    @mock.patch.object(cmdpy, 'get_uboot_dir')
+    def test_run_c_test_method_required(self, mock_uboot_dir):
+        """Test run_c_test fails without method name"""
+        mock_uboot_dir.return_value = self.test_dir
+
+        # Create test file without method
+        test_fs_dir = os.path.join(self.test_dir, 'test/py/tests/test_fs')
+        os.makedirs(test_fs_dir)
+        test_file = os.path.join(test_fs_dir, 'test_ext4l.py')
+        tools.write_file(test_file, b'# test')
+
+        args = argparse.Namespace(test_spec=['ext4l'], dry_run=False,
+                                  show_cmd=False)
+        with terminal.capture() as (_out, err):
+            ret = cmdpy.run_c_test(args)
+        self.assertEqual(1, ret)
+        self.assertIn('Method name required', err.getvalue())
