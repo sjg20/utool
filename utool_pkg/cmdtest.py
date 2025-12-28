@@ -10,9 +10,12 @@ in sandbox.
 
 import os
 import re
+import subprocess
+import sys
 
 # pylint: disable=import-error
 from u_boot_pylib import command
+from u_boot_pylib import cros_subprocess
 from u_boot_pylib import tout
 
 from utool_pkg import settings
@@ -131,6 +134,145 @@ def list_tests(args):
     return 0
 
 
+class TestProgress:  # pylint: disable=R0902
+    """Track and display test progress"""
+
+    def __init__(self):
+        self.total = 0
+        self.run = 0
+        self.suite = ''
+        self.failures = 0
+        self.output_lines = []
+        self.current_test = None
+        self.current_test_output = []
+        self.failed_tests = []
+
+    def handle_output(self, stream, data):  # pylint: disable=W0613
+        """Process output from sandbox, updating progress
+
+        Args:
+            stream (file): Output stream (stdout/stderr), unused
+            data (bytes): Bytes received
+
+        Returns:
+            bool: True to terminate, False to continue
+        """
+        text = data.decode('utf-8', errors='replace')
+        self.output_lines.append(text)
+
+        for line in text.splitlines():
+            # Parse "Running N suite tests"
+            match = re.match(r'Running (\d+) (\w+) tests', line)
+            if match:
+                self.total = int(match.group(1))
+                self.suite = match.group(2)
+                continue
+
+            # Parse "Test: name: file.c"
+            match = re.match(r'Test: (\w+): (\S+)', line)
+            if match:
+                # Check if previous test failed
+                self._check_test_failure()
+                self.current_test = match.group(1)
+                self.current_test_output = []
+                self.run += 1
+                self._show_progress()
+                continue
+
+            # Parse final result
+            match = re.match(r'Tests run: (\d+),.*failures: (\d+)', line)
+            if match:
+                self._check_test_failure()
+                self.failures = int(match.group(2))
+                continue
+
+            # Collect output for current test (skip boot messages before tests)
+            if self.current_test and line.strip():
+                self.current_test_output.append(line)
+
+        return False
+
+    def _check_test_failure(self):
+        """Check if current test failed and show it immediately"""
+        if self.current_test and self.current_test_output:
+            # Test had output - likely a failure, show it now
+            self.clear_progress()
+            print(f'{self.suite} {self.current_test}')
+            for line in self.current_test_output:
+                print(f'  {line}')
+            self.failed_tests.append((self.suite, self.current_test))
+
+    def _show_progress(self):
+        """Display current progress on a single line"""
+        if self.total:
+            status = f'{self.run}/{self.total} {self.suite}'
+        else:
+            status = f'{self.run} {self.suite}'
+        sys.stdout.write(f'\r{status}')
+        sys.stdout.flush()
+
+    def clear_progress(self):
+        """Clear the progress line"""
+        sys.stdout.write('\r\033[K')
+        sys.stdout.flush()
+
+
+def run_tests(args):
+    """Run U-Boot sandbox tests
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    sandbox = get_sandbox_path()
+    if not sandbox:
+        tout.error('Sandbox not built - run: utool b sandbox')
+        return 1
+
+    # Build the ut command arguments
+    if args.tests:
+        ut_args = ' '.join(args.tests)
+    else:
+        ut_args = 'all'
+
+    cmd = f'ut {ut_args}'
+
+    # Build sandbox command - skip flat tree tests by default
+    sandbox_args = [sandbox, '-T']
+    if not args.flattree:
+        sandbox_args.append('-F')
+    sandbox_args.extend(['-c', cmd])
+
+    if args.dry_run:
+        tout.notice(' '.join(sandbox_args))
+        return 0
+
+    progress = TestProgress()
+    proc = cros_subprocess.Popen(sandbox_args,
+                                 stdin=None,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+    proc.communicate_filter(progress.handle_output)
+
+    progress.clear_progress()
+
+    if proc.returncode or progress.failures or progress.failed_tests:
+        if not progress.run:
+            # No tests ran - show last few lines of output for error message
+            all_output = ''.join(progress.output_lines)
+            lines = all_output.splitlines()
+            for line in lines[-5:]:
+                if line.strip():
+                    print(line)
+        elif progress.failed_tests:
+            print(f'{len(progress.failed_tests)} test(s) failed')
+        return 1
+
+    return 0
+
+
 def do_test(args):
     """Handle test command - run U-Boot sandbox tests
 
@@ -146,6 +288,4 @@ def do_test(args):
     if args.list_tests:
         return list_tests(args)
 
-    # Running tests will be implemented later
-    tout.error('Running tests not yet implemented')
-    return 1
+    return run_tests(args)
