@@ -8,10 +8,13 @@ This module provides common utility functions used across utool modules.
 """
 
 import os
+import subprocess
 
 # pylint: disable=import-error
 from u_boot_pylib import command
 from u_boot_pylib import tout
+
+from utool_pkg import settings
 
 
 def get_uboot_dir():
@@ -74,3 +77,46 @@ def exec_cmd(cmd, args, env=None, capture=True):
     tout.info(f"Running: {' '.join(cmd)}")
     return command.run_pipe([cmd], env=env, capture=capture,
                             raise_on_error=False)
+
+
+def run_pytest(test_name, board='sandbox', build_dir=None, quiet=True):
+    """Run a pytest test
+
+    Args:
+        test_name (str): Test to run (e.g. 'test_ut.py::test_ut_dm_init')
+        board (str): Board name (default: 'sandbox')
+        build_dir (str): Build directory, or None to use default
+        quiet (bool): If True, capture output; if False, show output
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return False
+
+    if not build_dir:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = os.path.join(base_dir, board)
+
+    pytest_cmd = [
+        'python3', '-m', 'pytest', '-q',
+        f'test/py/tests/{test_name}',
+        '-B', board,
+        '--build-dir', build_dir,
+    ]
+
+    if quiet:
+        result = subprocess.run(pytest_cmd, cwd=uboot_dir, capture_output=True,
+                                check=False)
+        if result.returncode:
+            tout.error(f'pytest {test_name} failed')
+            tout.error(result.stderr.decode('utf-8', errors='replace'))
+            return False
+    else:
+        result = subprocess.run(pytest_cmd, cwd=uboot_dir, check=False)
+        if result.returncode:
+            return False
+
+    return True

@@ -8,6 +8,7 @@ This module handles the 'test' subcommand which runs U-Boot's unit tests
 in sandbox.
 """
 
+import fnmatch
 import os
 import re
 import struct
@@ -20,7 +21,7 @@ from u_boot_pylib import cros_subprocess
 from u_boot_pylib import tout
 
 from utool_pkg import settings
-from utool_pkg.util import get_uboot_dir
+from utool_pkg.util import get_uboot_dir, run_pytest
 
 
 def get_sandbox_path():
@@ -106,20 +107,33 @@ UTF_LIVE_TREE = 0x10
 UTF_DM = 0x80
 
 
-def predict_test_count(sandbox, suite, flattree=False):
+def predict_test_count(sandbox, suite, flattree=False, pattern=None):
     """Predict how many times tests will run
 
     Args:
         sandbox (str): Path to sandbox executable
         suite (str): Suite name
         flattree (bool): Whether flattree tests are enabled (-f flag)
+        pattern (str): Optional glob pattern to filter tests (e.g. 'video*')
 
     Returns:
         int: Predicted number of test runs
     """
+    pre = f'{suite}_test_'
+    plen = len(pre)
+
+    def match(name):
+        """Check if test name matches pattern (strip suite prefix first)"""
+        short = name[plen:] if name.startswith(pre) else name
+        return fnmatch.fnmatch(short, pattern)
+
     test_flags = get_test_flags(sandbox, suite)
     if not test_flags:
         return 0
+
+    # Filter by pattern if provided
+    if pattern:
+        test_flags = [(n, f) for n, f in test_flags if match(n)]
 
     count = 0
     for name, flags in test_flags:
@@ -241,7 +255,7 @@ def list_tests(args):
     return 0
 
 
-class TestProgress:  # pylint: disable=R0902
+class TestProgress:
     """Track and display test progress"""
 
     def __init__(self, predicted_total=0):
@@ -250,15 +264,13 @@ class TestProgress:  # pylint: disable=R0902
         self.suite = ''
         self.failures = 0
         self.output_lines = []
-        self.current_test = None
-        self.current_test_output = []
         self.failed_tests = []
+        self.cur_test = None  # (name, output_lines) tuple when test is active
 
-    def handle_output(self, stream, data):  # pylint: disable=W0613
+    def handle_output(self, _stream, data):
         """Process output from sandbox, updating progress
 
         Args:
-            stream (file): Output stream (stdout/stderr), unused
             data (bytes): Bytes received
 
         Returns:
@@ -282,8 +294,7 @@ class TestProgress:  # pylint: disable=R0902
             if match:
                 # Check if previous test failed
                 self._check_test_failure()
-                self.current_test = match.group(1)
-                self.current_test_output = []
+                self.cur_test = (match.group(1), [])
                 self.run += 1
                 self._show_progress()
                 continue
@@ -296,25 +307,35 @@ class TestProgress:  # pylint: disable=R0902
                 continue
 
             # Collect output for current test (skip boot messages before tests)
-            if self.current_test and line.strip():
-                self.current_test_output.append(line)
+            if self.cur_test and line.strip():
+                self.cur_test[1].append(line)
 
         return False
 
     def _check_test_failure(self):
         """Check if current test failed and show it immediately"""
-        if self.current_test and self.current_test_output:
-            # Test had output - likely a failure, show it now
+        if not self.cur_test or not self.cur_test[1]:
+            self.cur_test = None
+            return
+
+        name, output = self.cur_test
+        # Check for actual failure indicators in output
+        fail_patterns = ('Expected', 'failed', 'ASSERT', 'Error', 'Failure')
+        is_failure = any(any(pat in line for pat in fail_patterns)
+                         for line in output)
+        if is_failure:
             self.clear_progress()
-            print(f'{self.suite} {self.current_test}')
-            for line in self.current_test_output:
+            print(f'{self.suite} {name}')
+            for line in output:
                 print(f'  {line}')
-            self.failed_tests.append((self.suite, self.current_test))
+            self.failed_tests.append((self.suite, name))
+        self.cur_test = None
 
     def _show_progress(self):
         """Display current progress on a single line"""
         if self.total:
-            status = f'{self.run}/{self.total} {self.suite}'
+            width = len(str(self.total))
+            status = f'{self.run:>{width}}/{self.total} {self.suite}'
         else:
             status = f'{self.run} {self.suite}'
         sys.stdout.write(f'\r{status}')
@@ -353,11 +374,8 @@ def needs_dm_init(args):
     return False
 
 
-def ensure_dm_init_files(uboot_dir):
+def ensure_dm_init_files():
     """Ensure dm init data files exist, creating them if needed
-
-    Args:
-        uboot_dir (str): Path to U-Boot source directory
 
     Returns:
         bool: True if files exist or were created successfully
@@ -370,22 +388,102 @@ def ensure_dm_init_files(uboot_dir):
         return True
 
     tout.notice('Creating dm test data files...')
-    pytest_cmd = [
-        'python3', '-m', 'pytest', '-q',
-        'test/py/tests/test_ut.py::test_ut_dm_init',
-        '-B', 'sandbox',
-        '--build-dir', os.path.join(build_dir, 'sandbox'),
-    ]
-    result = subprocess.run(pytest_cmd, cwd=uboot_dir, capture_output=True,
-                            check=False)
-    if result.returncode:
-        tout.error('Failed to create dm test data files')
-        tout.error(result.stderr.decode('utf-8', errors='replace'))
-        return False
-    return True
+    return run_pytest('test_ut.py::test_ut_dm_init')
 
 
-def run_tests(args):  # pylint: disable=R0912,R0914
+def build_sandbox_args(sandbox, args):
+    """Build sandbox command line arguments
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        list: Command and arguments to run
+    """
+    if args.tests:
+        ut_args = ' '.join(args.tests)
+    else:
+        ut_args = 'all'
+
+    cmd = f'ut {ut_args}'
+
+    # Skip flat tree tests by default
+    sandbox_args = [sandbox, '-T']
+    if not args.flattree:
+        sandbox_args.append('-F')
+    sandbox_args.extend(['-c', cmd])
+
+    return sandbox_args
+
+
+def calc_predicted_count(sandbox, args):
+    """Calculate predicted test count based on arguments
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Predicted number of test runs
+    """
+    if not args.tests or args.tests == ['all']:
+        return sum(predict_test_count(sandbox, suite, args.flattree)
+                   for suite in get_suites_from_nm(sandbox))
+
+    # Handle 'suite', 'suite pattern', or ['suite', 'pattern'] formats
+    if len(args.tests) == 1:
+        parts = args.tests[0].split(None, 1)
+        suite = parts[0]
+        pattern = parts[1] if len(parts) > 1 else None
+    elif len(args.tests) == 2:
+        suite, pattern = args.tests
+    else:
+        return 0
+
+    return predict_test_count(sandbox, suite, args.flattree, pattern)
+
+
+def setup_test_env():
+    """Set up environment variables for test execution
+
+    Returns:
+        dict: Environment dictionary with persistent data directory set
+    """
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
+    env = os.environ.copy()
+    env['U_BOOT_PERSISTENT_DATA_DIR'] = persistent_dir
+    return env
+
+
+def handle_test_result(proc, prog):
+    """Handle the result after tests complete
+
+    Args:
+        proc (cros_subprocess.Popen): Completed process
+        prog (TestProgress): Progress tracker
+
+    Returns:
+        int: Exit code (0 for success, 1 for failure)
+    """
+    prog.clear_progress()
+
+    if not (proc.returncode or prog.failures or prog.failed_tests):
+        return 0
+
+    if not prog.run:
+        # No tests ran - show last few lines of output for error message
+        all_output = ''.join(prog.output_lines)
+        for line in all_output.splitlines()[-5:]:
+            if line.strip():
+                print(line)
+    elif prog.failed_tests:
+        print(f'{len(prog.failed_tests)}/{prog.run} test(s) failed')
+    return 1
+
+
+def run_tests(args):
     """Run U-Boot sandbox tests
 
     Args:
@@ -399,49 +497,25 @@ def run_tests(args):  # pylint: disable=R0912,R0914
         tout.error('Sandbox not built - run: utool b sandbox')
         return 1
 
-    # Build the ut command arguments
-    if args.tests:
-        ut_args = ' '.join(args.tests)
-    else:
-        ut_args = 'all'
-
-    cmd = f'ut {ut_args}'
-
-    # Build sandbox command - skip flat tree tests by default
-    sandbox_args = [sandbox, '-T']
-    if not args.flattree:
-        sandbox_args.append('-F')
-    sandbox_args.extend(['-c', cmd])
-
-    if args.dry_run:
-        tout.notice(' '.join(sandbox_args))
-        return 0
-
-    # Predict test count based on suite and flattree setting
-    predicted = 0
-    if args.tests and len(args.tests) == 1:
-        # Single suite specified - predict for that suite
-        predicted = predict_test_count(sandbox, args.tests[0], args.flattree)
-    elif not args.tests or args.tests == ['all']:
-        # All suites - predict total
-        for suite in get_suites_from_nm(sandbox):
-            predicted += predict_test_count(sandbox, suite, args.flattree)
-
-    progress = TestProgress(predicted)
     uboot_dir = get_uboot_dir()
     if not uboot_dir:
         tout.error('Not in a U-Boot tree and $USRC not set')
         return 1
 
+    sandbox_args = build_sandbox_args(sandbox, args)
+    if args.dry_run:
+        tout.notice(' '.join(sandbox_args))
+        return 0
+
     # Ensure dm init data files exist if needed
-    if needs_dm_init(args) and not ensure_dm_init_files(uboot_dir):
+    if needs_dm_init(args) and not ensure_dm_init_files():
         return 1
 
-    # Set up environment with persistent data directory
-    build_dir = settings.get('build_dir', '/tmp/b')
-    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
-    env = os.environ.copy()
-    env['U_BOOT_PERSISTENT_DATA_DIR'] = persistent_dir
+    predicted = calc_predicted_count(sandbox, args)
+    if predicted:
+        tout.notice(f'Running {predicted} tests')
+    prog = TestProgress(predicted)
+    env = setup_test_env()
 
     proc = cros_subprocess.Popen(sandbox_args,
                                  stdin=None,
@@ -449,23 +523,9 @@ def run_tests(args):  # pylint: disable=R0912,R0914
                                  stderr=subprocess.PIPE,
                                  cwd=uboot_dir,
                                  env=env)
-    proc.communicate_filter(progress.handle_output)
+    proc.communicate_filter(prog.handle_output)
 
-    progress.clear_progress()
-
-    if proc.returncode or progress.failures or progress.failed_tests:
-        if not progress.run:
-            # No tests ran - show last few lines of output for error message
-            all_output = ''.join(progress.output_lines)
-            lines = all_output.splitlines()
-            for line in lines[-5:]:
-                if line.strip():
-                    print(line)
-        elif progress.failed_tests:
-            print(f'{len(progress.failed_tests)}/{progress.run} test(s) failed')
-        return 1
-
-    return 0
+    return handle_test_result(proc, prog)
 
 
 def do_test(args):
