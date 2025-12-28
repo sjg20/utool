@@ -19,7 +19,7 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from uman_pkg import (cmdline, cmdpy, control, gitlab_parser, settings,
+from uman_pkg import (build, cmdline, cmdpy, control, gitlab_parser, settings,
                       setup, util)
 
 # Capture stdout and stderr for silent command execution
@@ -195,6 +195,67 @@ class TestUmanCmdline(TestBase):
         args = cmdline.parse_args(['py', '-b', 'sandbox'])
         self.assertEqual(args.cmd, 'pytest')
         self.assertEqual(args.board, 'sandbox')
+
+    def test_build_subcommand_parsing(self):
+        """Test that build subcommand parses correctly"""
+        args = cmdline.parse_args(['build', 'sandbox'])
+        self.assertEqual('build', args.cmd)
+        self.assertEqual('sandbox', args.board)
+
+    def test_build_alias(self):
+        """Test that 'b' alias works for build"""
+        args = cmdline.parse_args(['b', 'sandbox'])
+        self.assertEqual('build', args.cmd)
+        self.assertEqual('sandbox', args.board)
+
+
+class TestBuildSubcommand(TestBase):
+    """Test build subcommand functionality"""
+
+    def test_get_dir(self):
+        """Test build directory generation"""
+        with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+            self.assertEqual('/tmp/b/sandbox', build.get_dir('sandbox'))
+
+    def test_get_dir_default(self):
+        """Test build directory with default when not configured"""
+        with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+            self.assertEqual('/tmp/b/qemu-arm', build.get_dir('qemu-arm'))
+
+    def test_get_cmd_basic(self):
+        """Test basic build command generation"""
+        args = cmdline.parse_args(['build', 'sandbox'])
+        self.assertEqual(['buildman', '-I', '-w', '--boards', 'sandbox',
+                          '-o', '/tmp/b/sandbox'],
+                         build.get_cmd(args, 'sandbox', '/tmp/b/sandbox'))
+
+    def test_run_no_board(self):
+        """Test that run requires a board"""
+        args = cmdline.parse_args(['build'])
+        # Clear any $b environment variable
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with terminal.capture():
+                result = build.run(args)
+        self.assertEqual(1, result)
+
+    def test_run_dry_run(self):
+        """Test build dry-run returns the correct command"""
+        args = cmdline.parse_args(['-n', 'build', 'sandbox'])
+        got_cmd = None
+
+        def mock_exec_cmd(cmd, _args, env=None, capture=True):
+            nonlocal got_cmd
+
+            del env, capture  # unused
+            got_cmd = cmd
+
+        with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(build, 'setup_uboot_dir',
+                                   return_value='/tmp'):
+                with terminal.capture():
+                    result = build.run(args)
+        self.assertEqual(0, result)
+        self.assertIn('buildman', got_cmd)
 
 
 class TestUmanCIVars(TestBase):

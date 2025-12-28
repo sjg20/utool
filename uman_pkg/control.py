@@ -20,6 +20,7 @@ from u_boot_pylib import gitutil
 from u_boot_pylib import tout
 
 from uman_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
+from uman_pkg import build
 from uman_pkg.cmdpy import do_pytest
 from uman_pkg import settings
 from uman_pkg.setup import do_setup
@@ -265,7 +266,7 @@ def validate_ci_args(args):
     return None
 
 
-def run_command(args):
+def run_command(args):  # pylint: disable=R0911
     """Run the appropriate command based on parsed arguments
 
     Args:
@@ -281,6 +282,9 @@ def run_command(args):
     settings.get_all()
 
     tout.info(f'Running command: {args.cmd}')
+
+    if args.cmd == 'build':
+        return build.run(args)
 
     if args.cmd == 'ci':
         # Validate CI arguments and handle help requests

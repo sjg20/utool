@@ -15,6 +15,7 @@ import sys
 ALIASES = {
     'selftest': ['st'],
     'pytest': ['py'],
+    'build': ['b'],
 }
 
 
@@ -123,6 +124,17 @@ def add_pytest_subparser(subparsers):
     return pyt
 
 
+def add_build_subparser(subparsers):
+    """Add the 'build' subparser"""
+    build = subparsers.add_parser(
+        'build', aliases=ALIASES['build'],
+        help='Build U-Boot for a board')
+    build.add_argument(
+        'board', nargs='?', metavar='BOARD',
+        help='Board name to build')
+    return build
+
+
 def add_setup_subparser(subparsers):
     """Add the 'setup' subparser"""
     setup = subparsers.add_parser(
@@ -159,6 +171,7 @@ def setup_parser():
         help='Show what would be executed without running commands')
 
     subparsers = parser.add_subparsers(dest='cmd', required=True)
+    add_build_subparser(subparsers)
     add_ci_subparser(subparsers)
     add_selftest_subparser(subparsers)
     add_pytest_subparser(subparsers)

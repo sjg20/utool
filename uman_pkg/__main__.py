@@ -39,7 +39,8 @@ def run_uman():
         result = test_util.run_test_suites(
             'uman', args.debug, args.verbose, args.no_capture,
             args.test_preserve_dirs, None, to_run, None,
-            [ftest.TestUmanCmdline, ftest.TestUmanCIVars, ftest.TestUmanCI,
+            [ftest.TestUmanCmdline, ftest.TestBuildSubcommand,
+             ftest.TestUmanCIVars, ftest.TestUmanCI,
              ftest.TestUmanControl, ftest.TestGitLabParser,
              ftest.TestUmanMergeRequest, ftest.TestSettings,
              ftest.TestSetupSubcommand])
