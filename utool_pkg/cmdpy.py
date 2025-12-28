@@ -377,7 +377,7 @@ def find_test_file(uboot_dir, test_spec):
 def parse_c_test_call(test_file, class_name, method_name):
     """Parse a Python test file to extract the C test command
 
-    Looks for ubman.run_command() calls in the test method.
+    Looks for ubman.run_ut() calls in the test method.
 
     Args:
         test_file (str): Path to Python test file
@@ -400,52 +400,54 @@ def parse_c_test_call(test_file, class_name, method_name):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == method_name:
-                    # Look for ubman.run_command() calls
+                    # Look for ubman.run_ut() calls
                     for stmt in ast.walk(item):
                         if isinstance(stmt, ast.Call):
-                            # Check if it's ubman.run_command()
+                            # Check if it's ubman.run_ut()
                             if (isinstance(stmt.func, ast.Attribute) and
-                                stmt.func.attr == 'run_command'):
-                                # Get the command string
-                                if stmt.args and isinstance(stmt.args[0],
-                                                            ast.JoinedStr):
-                                    # f-string - extract parts
-                                    return extract_fstring_cmd(stmt.args[0])
+                                stmt.func.attr == 'run_ut'):
+                                return extract_run_ut_args(stmt)
 
     return None, None, None, None
 
 
-def extract_fstring_cmd(fstring_node):
-    """Extract C test info from an f-string AST node
+def extract_run_ut_args(call_node):
+    """Extract C test info from a run_ut() call AST node
+
+    Parses: ubman.run_ut('fs', 'fs_test_ext4l_probe', fs_image=ext4_image)
 
     Args:
-        fstring_node: ast.JoinedStr node
+        call_node: ast.Call node for run_ut()
 
     Returns:
         tuple: (suite, c_test_name, arg_key, fixture_name) or (None, None, None, None)
     """
-    # Build the command pattern from f-string parts
-    parts = []
-    arg_name = None
-    for value in fstring_node.values:
-        if isinstance(value, ast.Constant):
-            parts.append(value.value)
-        elif isinstance(value, ast.FormattedValue):
-            # This is the variable part like {ext4_image}
-            if isinstance(value.value, ast.Name):
-                arg_name = value.value.id
-            parts.append('{VAR}')
+    # Need at least 2 positional args: suite and test name
+    if len(call_node.args) < 2:
+        return None, None, None, None
 
-    cmd = ''.join(parts)
-    # Parse: 'ut -f fs fs_test_ext4l_unlink_norun fs_image={VAR}'
-    match = re.match(r'ut\s+-\w+\s+(\w+)\s+(\w+)\s+(\w+)=', cmd)
-    if match:
-        suite = match.group(1)
-        c_test = match.group(2)
-        arg_key = match.group(3)
-        return suite, c_test, arg_key, arg_name
+    # Extract suite (first arg)
+    if not isinstance(call_node.args[0], ast.Constant):
+        return None, None, None, None
+    suite = call_node.args[0].value
 
-    return None, None, None, None
+    # Extract test name (second arg) - add _norun suffix
+    if not isinstance(call_node.args[1], ast.Constant):
+        return None, None, None, None
+    c_test = call_node.args[1].value + '_norun'
+
+    # Extract first keyword argument (e.g., fs_image=ext4_image)
+    if not call_node.keywords:
+        return None, None, None, None
+
+    kw = call_node.keywords[0]
+    arg_key = kw.arg
+    if isinstance(kw.value, ast.Name):
+        fixture_name = kw.value.id
+    else:
+        return None, None, None, None
+
+    return suite, c_test, arg_key, fixture_name
 
 
 def get_fixture_path(uboot_dir, test_file, fixture_name):
@@ -531,11 +533,30 @@ def run_c_test(args):
     ut_cmd = f'ut -Em {suite} {c_test} {arg_key}={fixture_path}'
     cmd = [sandbox, '-T', '-F', '-c', ut_cmd]
 
-    print(f"{sandbox} -T -F -c '{ut_cmd}'", flush=True)
+    if args.gdb:
+        cmd = ['gdb-multiarch', '-ex', f'break {c_test}',
+               '-ex', 'run', '--args'] + cmd
+        # Can't capture output in gdb mode
+        result = command.run_pipe([cmd], capture=False, raise_on_error=False)
+        return result.return_code
+
     if args.dry_run:
+        print(' '.join(cmd))
         return 0
 
-    result = command.run_pipe([cmd], capture=False, raise_on_error=False)
+    result = command.run_pipe([cmd], capture=True, capture_stderr=True,
+                              raise_on_error=False)
+    output = result.stdout
+    print(output, end='')
+
+    # Check test actually ran (wasn't skipped)
+    if 'Result: SKIP:' in output:
+        tout.error('Test was skipped - check test flags')
+        return 1
+    if 'Result: PASS:' not in output and 'Result: FAIL:' not in output:
+        tout.error('Test did not produce a result - check setup')
+        return 1
+
     return result.return_code
 
 

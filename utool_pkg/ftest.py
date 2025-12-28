@@ -1763,9 +1763,7 @@ def ext4_image(self, u_boot_config):
         test_content = b'''
 class TestExt4l:
     def test_unlink(self, ubman, ext4_image):
-        output = ubman.run_command(
-            f'ut -f fs fs_test_ext4l_unlink_norun fs_image={ext4_image}')
-        assert 'failures: 0' in output
+        ubman.run_ut('fs', 'fs_test_ext4l_unlink', fs_image=ext4_image)
 '''
         test_file = os.path.join(self.test_dir, 'test_ext4l.py')
         tools.write_file(test_file, test_content)
@@ -1789,7 +1787,7 @@ class TestExt4l:
         """Test run_c_test fails without test spec"""
         mock_uboot_dir.return_value = self.test_dir
         args = argparse.Namespace(test_spec=None, dry_run=False,
-                                  show_cmd=False)
+                                  show_cmd=False, gdb=False)
         with terminal.capture() as (_out, err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)
@@ -1807,7 +1805,7 @@ class TestExt4l:
         tools.write_file(test_file, b'# test')
 
         args = argparse.Namespace(test_spec=['ext4l'], dry_run=False,
-                                  show_cmd=False)
+                                  show_cmd=False, gdb=False)
         with terminal.capture() as (_out, err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)

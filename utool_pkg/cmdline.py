@@ -131,6 +131,9 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '-C', '--c-test', action='store_true',
         help='Run just the C test part (assumes setup already done with -SP)')
+    pyt.add_argument(
+        '-g', '--gdb', action='store_true',
+        help='Run C test under gdb-multiarch with breakpoint (use with -C)')
     return pyt
 
 
