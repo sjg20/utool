@@ -217,6 +217,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-g', '--guess-result', action='store_true',
         help='Guess pass/fail from output (for older U-Boot without -E)')
+    test.add_argument(
+        '-m', '--manual', action='store_true',
+        help='Force manual tests to run (tests with _norun suffix)')
     return test
 
 

@@ -674,7 +674,7 @@ def validate_specs(sandbox, specs):
 
 
 def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0,
-                       emit_result=True):
+                       emit_result=True, force_manual=False):
     """Build sandbox command line arguments
 
     Args:
@@ -684,6 +684,7 @@ def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0,
         workers (int): Total number of parallel workers (0 = disabled)
         worker_id (int): This worker's ID (0 to workers-1)
         emit_result (bool): Whether to add -E flag for per-test results
+        force_manual (bool): Whether to add -f flag to force manual tests
 
     Returns:
         list: Command and arguments to run
@@ -702,6 +703,8 @@ def build_sandbox_args(sandbox, specs, flattree, workers=0, worker_id=0,
             cmd = 'ut'
         if emit_result:
             cmd += ' -E'
+        if force_manual:
+            cmd += ' -m'
         if pattern:
             cmds.append(f'{cmd} {suite} {pattern}')
         else:
@@ -841,7 +844,7 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
 
     for i in range(workers):
         sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
-                                          workers, i, emit_result)
+                                          workers, i, emit_result, args.manual)
         thread = threading.Thread(target=run_worker,
                                   args=(sandbox_args, uboot_dir, env,
                                         results[i], shared))
@@ -906,6 +909,10 @@ def run_tests_parallel(sandbox, specs, args, uboot_dir, env, predicted):
         return 1
 
     print(f'{", ".join(parts)} in {elapsed:.1f}s')
+
+    if skips and not args.manual:
+        tout.warning('Some manual tests were skipped (use -m to run them)')
+
     return 1 if any_error else 0
 
 
@@ -945,15 +952,18 @@ def run_tests(args):
         return 1
 
     emit_result = not args.guess_result
+    force_manual = args.manual
     if args.dry_run:
         if args.jobs > 1:
             for i in range(args.jobs):
                 sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
-                                                  args.jobs, i, emit_result)
+                                                  args.jobs, i, emit_result,
+                                                  force_manual)
                 tout.notice(' '.join(sandbox_args))
         else:
             sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
-                                              emit_result=emit_result)
+                                              emit_result=emit_result,
+                                              force_manual=force_manual)
             tout.notice(' '.join(sandbox_args))
         return 0
 
@@ -975,7 +985,8 @@ def run_tests(args):
     if predicted and not args.verbose:
         tout.notice(f'Running {predicted} tests')
     sandbox_args = build_sandbox_args(sandbox, specs, args.flattree,
-                                      emit_result=emit_result)
+                                      emit_result=emit_result,
+                                      force_manual=force_manual)
     prog = TestProgress(predicted, specs)
     prog.verbose = args.verbose
     prog.guess_result = args.guess_result
@@ -1014,6 +1025,9 @@ def run_tests(args):
         show_error_output(prog)
     else:
         print(f'{", ".join(parts)} in {elapsed:.1f}s')
+
+    if skips and not force_manual:
+        tout.warning('Some manual tests were skipped (use -m to run them)')
 
     return 1 if prog.failed_tests else proc.returncode
 
