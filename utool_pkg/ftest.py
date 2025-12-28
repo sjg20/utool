@@ -83,6 +83,9 @@ def make_args(**kwargs):
         'timing': None,
         'list_boards': False,
         'quiet': False,
+        'show_cmd': False,
+        'setup_only': False,
+        'persist': False,
         'cmd': 'ci'
     }
     defaults.update(kwargs)

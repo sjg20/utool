@@ -122,6 +122,12 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '-c', '--show-cmd', action='store_true',
         help='Show QEMU command line without running tests')
+    pyt.add_argument(
+        '-S', '--setup-only', action='store_true',
+        help='Run only fixture setup (create test images) without running tests')
+    pyt.add_argument(
+        '-P', '--persist', action='store_true',
+        help='Persist test artifacts (do not clean up after tests)')
     return pyt
 
 
