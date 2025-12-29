@@ -1738,44 +1738,48 @@ int main(void) { return 0; }
         self.assertNotIn('env.test_env_basic', stdout)
 
     def test_build_ut_cmd_no_tests(self):
-        """Test build_ut_cmd with no test specifications"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [])
+        """Test build_ut_cmd with all specs"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('all', None)])
         self.assertEqual(['/path/to/sandbox', '-c', 'ut -E all'], cmd)
 
     def test_build_ut_cmd_flattree(self):
         """Test build_ut_cmd with flattree flag"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], flattree=True)
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
+                                   flattree=True)
         self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_verbose(self):
         """Test build_ut_cmd with verbose flag"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], verbose=True)
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
+                                   verbose=True)
         self.assertEqual(['/path/to/sandbox', '-c', 'ut -E -v dm'], cmd)
 
     def test_build_ut_cmd_all_flags(self):
         """Test build_ut_cmd with all flags"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'],
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
                                    flattree=True, verbose=True)
         self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -E -v dm'], cmd)
 
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'])
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)])
         self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_specific_test(self):
         """Test build_ut_cmd with specific test (suite.test)"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm.test_one'])
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', 'test_one')])
         self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm test_one'], cmd)
 
     def test_build_ut_cmd_multiple_tests(self):
         """Test build_ut_cmd with multiple test specifications"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm', 'env'])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm env'], cmd)
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox',
+                                   [('dm', None), ('env', None)])
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm; ut -E env'], cmd)
 
     def test_build_ut_cmd_legacy(self):
         """Test build_ut_cmd with legacy flag omits -E"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], legacy=True)
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
+                                   legacy=True)
         self.assertEqual(['/path/to/sandbox', '-c', 'ut dm'], cmd)
 
     def test_run_tests_basic(self):
@@ -1790,7 +1794,8 @@ int main(void) { return 0; }
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
             with terminal.capture():
-                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+                result = cmdtest.run_tests('/path/to/sandbox',
+                                           [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
 
@@ -1806,7 +1811,8 @@ int main(void) { return 0; }
         args = cmdline.parse_args(['test', '-f', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
             with terminal.capture():
-                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+                result = cmdtest.run_tests('/path/to/sandbox',
+                                           [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-D', '-c', 'ut -E dm'), cap[0])
 
@@ -1822,7 +1828,8 @@ int main(void) { return 0; }
         args = cmdline.parse_args(['test', '-V', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
             with terminal.capture():
-                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+                result = cmdtest.run_tests('/path/to/sandbox',
+                                           [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E -v dm'), cap[0])
 
@@ -1935,7 +1942,8 @@ Result: PASS dm_test_second
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
             with terminal.capture() as (out, err):
-                result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
+                result = cmdtest.run_tests('/path/to/sandbox',
+                                           [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertFalse(err.getvalue())
         stdout = out.getvalue()
@@ -1954,8 +1962,130 @@ Result: PASS dm_test_second
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(cmdtest, 'get_sandbox_path',
                                return_value='/path/to/sandbox'):
-            with mock.patch.object(command, 'run_one', mock_run):
-                with terminal.capture():
-                    result = cmdtest.do_test(args)
+            with mock.patch.object(cmdtest, 'validate_specs', return_value=[]):
+                with mock.patch.object(command, 'run_one', mock_run):
+                    with terminal.capture():
+                        result = cmdtest.do_test(args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
+
+    def test_parse_one_test_suite(self):
+        """Test parse_one_test with suite name"""
+        self.assertEqual(('dm', None), cmdtest.parse_one_test('dm'))
+
+    def test_parse_one_test_suite_dot_test(self):
+        """Test parse_one_test with suite.test format"""
+        self.assertEqual(('dm', 'test_acpi'),
+                         cmdtest.parse_one_test('dm.test_acpi'))
+
+    def test_parse_one_test_full_name(self):
+        """Test parse_one_test with full test name (suite_test_name)"""
+        self.assertEqual(('dm', 'acpi'), cmdtest.parse_one_test('dm_test_acpi'))
+
+    def test_parse_one_test_test_prefix(self):
+        """Test parse_one_test with test_ prefix"""
+        self.assertEqual((None, 'something'),
+                         cmdtest.parse_one_test('test_something'))
+
+    def test_parse_test_specs_empty(self):
+        """Test parse_test_specs with no tests"""
+        self.assertEqual([('all', None)], cmdtest.parse_test_specs([]))
+
+    def test_parse_test_specs_all(self):
+        """Test parse_test_specs with 'all'"""
+        self.assertEqual([('all', None)], cmdtest.parse_test_specs(['all']))
+
+    def test_parse_test_specs_single(self):
+        """Test parse_test_specs with single suite"""
+        self.assertEqual([('dm', None)], cmdtest.parse_test_specs(['dm']))
+
+    def test_parse_test_specs_pattern(self):
+        """Test parse_test_specs with suite and glob pattern"""
+        self.assertEqual([('dm', 'video*')],
+                         cmdtest.parse_test_specs(['dm', 'video*']))
+
+    def test_parse_test_specs_multiple(self):
+        """Test parse_test_specs with multiple suites"""
+        self.assertEqual([('dm', None), ('env', None)],
+                         cmdtest.parse_test_specs(['dm', 'env']))
+
+    def test_resolve_specs_with_suite(self):
+        """Test resolve_specs passes through specs with suite"""
+        specs = [('dm', None), ('env', 'basic')]
+        resolved, unmatched = cmdtest.resolve_specs('/path/to/sandbox', specs)
+        self.assertEqual(specs, resolved)
+        self.assertEqual([], unmatched)
+
+    def test_resolve_specs_finds_suite(self):
+        """Test resolve_specs finds suite for pattern-only spec"""
+        all_tests = [('dm', 'test_acpi'), ('dm', 'test_gpio'),
+                     ('env', 'test_env_basic')]
+
+        with mock.patch.object(cmdtest, 'get_tests_from_nm',
+                               return_value=all_tests):
+            resolved, unmatched = cmdtest.resolve_specs(
+                '/path/to/sandbox', [(None, 'acpi')])
+
+        self.assertEqual([('dm', 'acpi')], resolved)
+        self.assertEqual([], unmatched)
+
+    def test_resolve_specs_unmatched(self):
+        """Test resolve_specs returns unmatched for unknown pattern"""
+        all_tests = [('dm', 'test_acpi')]
+
+        with mock.patch.object(cmdtest, 'get_tests_from_nm',
+                               return_value=all_tests):
+            resolved, unmatched = cmdtest.resolve_specs(
+                '/path/to/sandbox', [(None, 'nonexistent')])
+
+        self.assertEqual([], resolved)
+        self.assertEqual([(None, 'nonexistent')], unmatched)
+
+    def test_validate_specs_all(self):
+        """Test validate_specs accepts 'all' without checking"""
+        result = cmdtest.validate_specs('/path/to/sandbox', [('all', None)])
+        self.assertEqual([], result)
+
+    def test_validate_specs_valid_suite(self):
+        """Test validate_specs accepts valid suite"""
+        all_tests = [('dm', 'test_acpi'), ('dm', 'test_gpio')]
+
+        with mock.patch.object(cmdtest, 'get_tests_from_nm',
+                               return_value=all_tests):
+            result = cmdtest.validate_specs('/path/to/sandbox',
+                                            [('dm', None)])
+
+        self.assertEqual([], result)
+
+    def test_validate_specs_valid_pattern(self):
+        """Test validate_specs accepts valid suite with pattern"""
+        all_tests = [('dm', 'test_acpi'), ('dm', 'test_gpio')]
+
+        with mock.patch.object(cmdtest, 'get_tests_from_nm',
+                               return_value=all_tests):
+            result = cmdtest.validate_specs('/path/to/sandbox',
+                                            [('dm', 'acpi')])
+
+        self.assertEqual([], result)
+
+    def test_validate_specs_invalid_suite(self):
+        """Test validate_specs returns unmatched for invalid suite"""
+        all_tests = [('dm', 'test_acpi')]
+
+        with mock.patch.object(cmdtest, 'get_tests_from_nm',
+                               return_value=all_tests):
+            result = cmdtest.validate_specs('/path/to/sandbox',
+                                            [('nonexistent', None)])
+
+        self.assertEqual([('nonexistent', None)], result)
+
+    def test_validate_specs_invalid_pattern(self):
+        """Test validate_specs returns unmatched for invalid pattern"""
+        all_tests = [('dm', 'test_acpi')]
+
+        with mock.patch.object(cmdtest, 'get_tests_from_nm',
+                               return_value=all_tests):
+            result = cmdtest.validate_specs('/path/to/sandbox',
+                                            [('dm', 'nonexistent')])
+
+        self.assertEqual([('dm', 'nonexistent')], result)

@@ -81,12 +81,145 @@ def get_tests_from_nm(sandbox, suite=None):
     return sorted(set(matches))
 
 
-def build_ut_cmd(sandbox, tests, flattree=False, verbose=False, legacy=False):
+def parse_one_test(arg):
+    """Parse a single test argument into (suite, pattern) tuple
+
+    Args:
+        arg (str): Test argument (suite, suite_test_name, "suite pattern",
+                   test_name, or partial_name for searching all suites)
+
+    Returns:
+        tuple: (suite, pattern) where pattern may be None, or suite may be
+               None to search all suites
+    """
+    parts = arg.split(None, 1)
+    suite = parts[0]
+    pattern = parts[1] if len(parts) > 1 else None
+
+    # Check for suite.test format
+    if '.' in suite and pattern is None:
+        suite, pattern = suite.split('.', 1)
+    # Check for full test name: suite_test_name
+    elif '_test_' in suite:
+        suite, pattern = suite.split('_test_', 1)
+    # Check for test name only: test_something -> search all suites
+    elif suite.startswith('test_'):
+        pattern = suite[5:]  # Strip 'test_' prefix
+        suite = None
+    # Check for partial test name containing underscore (e.g. ext4l_unlink)
+    elif '_' in suite and pattern is None:
+        pattern = suite
+        suite = None
+
+    return (suite, pattern)
+
+
+def parse_test_specs(tests):
+    """Parse test arguments into list of (suite, pattern) tuples
+
+    Handles formats:
+        - None or ['all'] -> [('all', None)]
+        - ['dm'] -> [('dm', None)]
+        - ['dm', 'video*'] -> [('dm', 'video*')]
+        - ['dm video*'] -> [('dm', 'video*')]
+        - ['log', 'lib'] -> [('log', None), ('lib', None)]
+        - ['bloblist_test_blob'] -> [('bloblist', 'blob')]
+        - ['dm.test_acpi'] -> [('dm', 'test_acpi')]
+
+    Args:
+        tests (list): Test arguments from command line
+
+    Returns:
+        list: List of (suite, pattern) tuples
+    """
+    if not tests or tests == ['all']:
+        return [('all', None)]
+
+    # Single arg
+    if len(tests) == 1:
+        return [parse_one_test(tests[0])]
+
+    # Two args: could be suite+pattern or two suites/tests
+    # If second arg contains glob chars, treat as pattern
+    if len(tests) == 2 and any(c in tests[1] for c in '*?['):
+        return [(tests[0], tests[1])]
+
+    # Multiple suites or full test names
+    return [parse_one_test(t) for t in tests]
+
+
+def resolve_specs(sandbox, specs):
+    """Resolve specs with suite=None by looking up from nm
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        specs (list): List of (suite, pattern) tuples
+
+    Returns:
+        tuple: (resolved_specs, unmatched_specs)
+    """
+    resolved = []
+    unmatched = []
+    all_tests = None  # Lazy load
+
+    for suite, pattern in specs:
+        if suite is not None:
+            resolved.append((suite, pattern))
+        else:
+            # Need to find suite(s) for this pattern
+            if all_tests is None:
+                all_tests = get_tests_from_nm(sandbox)
+            found = False
+            for test_suite, test_name in all_tests:
+                if test_name.endswith(pattern):
+                    resolved.append((test_suite, pattern))
+                    found = True
+                    break  # Only add first match
+            if not found:
+                unmatched.append((None, pattern))
+
+    return resolved, unmatched
+
+
+def validate_specs(sandbox, specs):
+    """Check that each spec matches at least one test
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        specs (list): List of (suite, pattern) tuples
+
+    Returns:
+        list: List of unmatched specs (empty if all match)
+    """
+    if specs == [('all', None)]:
+        return []
+
+    all_tests = get_tests_from_nm(sandbox)
+    unmatched = []
+
+    for suite, pattern in specs:
+        found = False
+        for test_suite, test_name in all_tests:
+            if test_suite != suite:
+                continue
+            if pattern is None:
+                found = True
+                break
+            if test_name.endswith(pattern):
+                found = True
+                break
+        if not found:
+            unmatched.append((suite, pattern))
+
+    return unmatched
+
+
+def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False):
     """Build the sandbox command line for running tests
 
     Args:
         sandbox (str): Path to sandbox executable
-        tests (list): List of test specifications (suite or suite.test)
+        specs (list): List of (suite, pattern) tuples from parse_test_specs
         flattree (bool): Use flat device tree instead of live tree
         verbose (bool): Enable verbose test output
         legacy (bool): Legacy mode (don't use -E flag for older U-Boot)
@@ -100,26 +233,18 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False, legacy=False):
     if flattree:
         cmd.append('-D')
 
-    # Use -E to emit Result: lines (not for legacy U-Boot)
+    # Build ut commands from specs; use -E to emit Result: lines (not for legacy)
     emit = '' if legacy else '-E '
-
-    # Build the ut command string with flags before suite name
     flags = '-v ' if verbose else ''
-    if tests:
-        # Parse test specs - can be 'suite' or 'suite.test'
-        ut_args = []
-        for spec in tests:
-            if '.' in spec:
-                suite, test = spec.split('.', 1)
-                ut_args.append(f'{suite} {test}')
-            else:
-                ut_args.append(spec)
-        ut_cmd = f"ut {emit}{flags}{' '.join(ut_args)}"
-    else:
-        # Run all tests
-        ut_cmd = f'ut {emit}{flags}all'
+    cmds = []
+    for suite, pattern in specs:
+        if pattern:
+            ut_cmd = f'ut {emit}{flags}{suite} {pattern}'
+        else:
+            ut_cmd = f'ut {emit}{flags}{suite}'
+        cmds.append(ut_cmd)
 
-    cmd.extend(['-c', ut_cmd])
+    cmd.extend(['-c', '; '.join(cmds)])
     return cmd
 
 
@@ -221,18 +346,18 @@ def format_duration(seconds):
     return f'{minutes}m {secs:.1f}s'
 
 
-def run_tests(sandbox, tests, args):
+def run_tests(sandbox, specs, args):
     """Run sandbox tests
 
     Args:
         sandbox (str): Path to sandbox executable
-        tests (list): List of test specifications
+        specs (list): List of (suite, pattern) tuples from parse_test_specs
         args (argparse.Namespace): Arguments from cmdline
 
     Returns:
         int: Exit code from tests
     """
-    cmd = build_ut_cmd(sandbox, tests, flattree=args.flattree,
+    cmd = build_ut_cmd(sandbox, specs, flattree=args.flattree,
                        verbose=args.test_verbose, legacy=args.legacy)
     tout.info(f"Running: {' '.join(cmd)}")
 
@@ -257,7 +382,7 @@ def run_tests(sandbox, tests, args):
     return 1
 
 
-def do_test(args):
+def do_test(args):  # pylint: disable=R0912
     """Handle test command - run U-Boot sandbox tests
 
     Args:
@@ -291,5 +416,25 @@ def do_test(args):
             print(f'  {suite_name}.{test_name}')
         return 0
 
+    # Parse test specs
+    specs = parse_test_specs(args.tests)
+
+    # Resolve any specs that need suite lookup
+    specs, unmatched = resolve_specs(sandbox, specs)
+    if unmatched:
+        for suite, pattern in unmatched:
+            tout.error(f'No tests found matching: {pattern}')
+        return 1
+
+    # Validate that specs match actual tests
+    unmatched = validate_specs(sandbox, specs)
+    if unmatched:
+        for suite, pattern in unmatched:
+            if pattern:
+                tout.error(f'No tests found matching: {suite}.{pattern}')
+            else:
+                tout.error(f'No tests found in suite: {suite}')
+        return 1
+
     # Run tests
-    return run_tests(sandbox, args.tests, args)
+    return run_tests(sandbox, specs, args)
