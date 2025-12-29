@@ -2089,3 +2089,58 @@ Result: PASS dm_test_second
                                             [('dm', 'nonexistent')])
 
         self.assertEqual([('dm', 'nonexistent')], result)
+
+    def test_get_section_info(self):
+        """Test parsing readelf output for section info"""
+        readelf_output = '''
+Section Headers:
+  [Nr] Name              Type             Address           Offset
+       Size              EntSize          Flags  Link  Info  Align
+  [ 0]                   NULL             0000000000000000  00000000
+       0000000000000000  0000000000000000           0     0     0
+  [21] .data.rel.ro      PROGBITS         0000000001234000  00034000
+       0000000000010000  0000000000000000  WA       0     0     32
+'''
+        result = mock.MagicMock(stdout=readelf_output)
+        with mock.patch.object(command, 'run_one', return_value=result):
+            addr, offset = cmdtest.get_section_info('/path/to/sandbox')
+        self.assertEqual(0x01234000, addr)
+        self.assertEqual(0x00034000, offset)
+
+    def test_get_section_info_not_found(self):
+        """Test get_section_info when section is missing"""
+        result = mock.MagicMock(stdout='No .data.rel.ro section')
+        with mock.patch.object(command, 'run_one', return_value=result):
+            addr, offset = cmdtest.get_section_info('/path/to/sandbox')
+        self.assertIsNone(addr)
+        self.assertIsNone(offset)
+
+    def test_predict_test_count_live_tree(self):
+        """Test predict_test_count for live tree (default)"""
+        flags_data = [
+            ('test_a', 0),                      # No flags - runs once
+            ('test_b', cmdtest.UTF_DM),         # Runs once (no flat)
+            ('test_c', cmdtest.UTF_FLAT_TREE),  # Skipped on live tree
+        ]
+        patcher = mock.patch.object(cmdtest, 'get_test_flags',
+                                    return_value=flags_data)
+        with patcher:
+            count = cmdtest.predict_test_count('/path/to/sandbox', 'dm')
+        self.assertEqual(2, count)
+
+    def test_predict_test_count_flat_tree(self):
+        """Test predict_test_count with flattree=True"""
+        flags_data = [
+            ('test_a', 0),                      # No flags - runs once
+            ('test_b', cmdtest.UTF_DM),         # Runs twice
+            ('test_c', cmdtest.UTF_FLAT_TREE),  # Runs once (flat only)
+            ('test_d', cmdtest.UTF_LIVE_TREE),  # Runs once
+            ('video_test', cmdtest.UTF_DM),     # Runs once (skip flat)
+        ]
+        patcher = mock.patch.object(cmdtest, 'get_test_flags',
+                                    return_value=flags_data)
+        with patcher:
+            count = cmdtest.predict_test_count('/path/to/sandbox', 'dm',
+                                               flattree=True)
+        # test_a(1) + test_b(2) + test_c(1) + test_d(1) + video(1) = 6
+        self.assertEqual(6, count)

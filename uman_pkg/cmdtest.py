@@ -11,6 +11,7 @@ in sandbox.
 from collections import namedtuple
 import os
 import re
+import struct
 import time
 
 # pylint: disable=import-error
@@ -27,6 +28,19 @@ TestCounts = namedtuple('TestCounts', ['passed', 'failed', 'skipped'])
 RE_TEST_ALL = re.compile(r'_u_boot_list_2_ut_(\w+?)_2_(\w+)')
 RE_TEST_SUITE = r'_u_boot_list_2_ut_{}_2_(\w+)'
 
+# Pattern for parsing .data.rel.ro section from readelf output
+RE_DATA_REL_RO = re.compile(
+    r'\.data\.rel\.ro\s+PROGBITS\s+([0-9a-f]+)\s+([0-9a-f]+)')
+
+# Patterns for parsing test output
+RE_TEST_NAME = re.compile(r'Test:\s*(\S+)')
+RE_RESULT = re.compile(r'Result:\s*(PASS|FAIL|SKIP):?\s+(\S+)')
+
+# Unit test flags from include/test/test.h
+UTF_FLAT_TREE = 0x08
+UTF_LIVE_TREE = 0x10
+UTF_DM = 0x80
+
 
 def get_sandbox_path():
     """Get path to the sandbox U-Boot executable
@@ -39,6 +53,104 @@ def get_sandbox_path():
     if os.path.exists(sandbox_path):
         return sandbox_path
     return None
+
+
+def get_section_info(sandbox):
+    """Get .data.rel.ro section address and file offset
+
+    Args:
+        sandbox (str): Path to sandbox executable
+
+    Returns:
+        tuple: (section_addr, section_offset) or (None, None) if not found
+    """
+    result = command.run_one('readelf', '-S', sandbox, capture=True)
+    match = RE_DATA_REL_RO.search(result.stdout)
+    if match:
+        return int(match.group(1), 16), int(match.group(2), 16)
+    return None, None
+
+
+def get_test_flags(sandbox, suite):
+    """Get flags for all tests in a suite by parsing the binary
+
+    Reads the unit_test structs from the linker list to extract flags.
+
+    struct unit_test {
+        const char *file;     // offset 0
+        const char *name;     // offset 8
+        int (*func)();        // offset 16
+        int flags;            // offset 24
+        ...
+    };
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        suite (str): Suite name to get flags for
+
+    Returns:
+        list: List of (test_name, flags) tuples
+    """
+    # Get symbol addresses
+    result = command.run_one('nm', sandbox, capture=True)
+    pattern = rf'([0-9a-f]+) D _u_boot_list_2_ut_{suite}_2_(\w+)'
+    tests = re.findall(pattern, result.stdout)
+
+    if not tests:
+        return []
+
+    section_addr, section_offset = get_section_info(sandbox)
+    if section_addr is None:
+        return []
+
+    test_flags = []
+    with open(sandbox, 'rb') as fh:
+        for addr_str, name in tests:
+            addr = int(addr_str, 16)
+            file_offset = section_offset + (addr - section_addr)
+            fh.seek(file_offset)
+            data = fh.read(28)
+            if len(data) < 28:
+                continue
+            _, _, _, flags = struct.unpack('<QQQI', data)
+            test_flags.append((name, flags))
+
+    return test_flags
+
+
+def predict_test_count(sandbox, suite, flattree=False):
+    """Predict how many times tests will run
+
+    Args:
+        sandbox (str): Path to sandbox executable
+        suite (str): Suite name
+        flattree (bool): Whether running with flat tree only (-f flag)
+
+    Returns:
+        int: Predicted number of test runs
+    """
+    test_flags = get_test_flags(sandbox, suite)
+    if not test_flags:
+        return 0
+
+    count = 0
+    for name, flags in test_flags:
+        # Tests with UTF_FLAT_TREE only run on flat tree
+        if flags & UTF_FLAT_TREE:
+            if flattree:
+                count += 1
+            continue
+
+        # All other tests run once on live tree
+        count += 1
+
+        # Tests with UTF_DM run again on flat tree, except video tests
+        if flattree and flags & UTF_DM and not flags & UTF_LIVE_TREE:
+            # Video tests skip flattree (except video_base)
+            if 'video' not in name or 'video_base' in name:
+                count += 1
+
+    return count
 
 
 def get_suites_from_nm(sandbox):
@@ -233,7 +345,7 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False):
     if flattree:
         cmd.append('-D')
 
-    # Build ut commands from specs; use -E to emit Result: lines (not for legacy)
+    # Build ut commands from specs; use -E to emit Result: lines
     emit = '' if legacy else '-E '
     flags = '-v ' if verbose else ''
     cmds = []
@@ -275,7 +387,7 @@ def parse_legacy_results(output, show_results=False):
     skipped = 0
 
     for line in output.splitlines():
-        name_match = re.search(r'Test:\s*(\S+)', line)
+        name_match = RE_TEST_NAME.search(line)
         name = name_match.group(1) if name_match else None
         lower = line.lower()
 
@@ -313,7 +425,7 @@ def parse_results(output, show_results=False):
     skipped = 0
 
     for line in output.splitlines():
-        result_match = re.match(r'Result:\s*(PASS|FAIL|SKIP):?\s+(\S+)', line)
+        result_match = RE_RESULT.match(line)
         if result_match:
             status, name = result_match.groups()
             if status == 'PASS':
