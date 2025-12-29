@@ -185,6 +185,7 @@ hooks to PATH.
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 - ``-S, --setup-only``: Run only fixture setup (create test images) without tests
 - ``-P, --persist``: Persist test artifacts (do not clean up after tests)
+- ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
 
 **Test Hooks Search Order**:
 

@@ -20,6 +20,7 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 
 from uman_pkg import settings
+from uman_pkg.cmdtest import get_sandbox_path
 from uman_pkg.util import exec_cmd, get_uboot_dir
 
 # Pattern to parse test spec: TestClass:method or TestClass.method or just name
@@ -484,6 +485,76 @@ def get_fixture_path(test_file):
     return None
 
 
+def run_c_test(args):
+    """Run just the C test part of a pytest test
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    if not args.test_spec:
+        tout.error('Test spec required for -C (e.g., TestExt4l:test_unlink)')
+        return 1
+
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    sandbox = get_sandbox_path()
+    if not sandbox:
+        tout.error('Sandbox not built - run: uman b sandbox')
+        return 1
+
+    test_name = args.test_spec[0]
+    test_file, class_name, method = find_test(uboot_dir, test_name)
+    if not test_file:
+        tout.error(f"Cannot find test file for '{test_name}'")
+        return 1
+
+    if not method:
+        tout.error('Method name required (e.g., TestExt4l:test_unlink)')
+        return 1
+
+    # Get fixture output path
+    fixture_path = get_fixture_path(test_file)
+    if not fixture_path:
+        tout.error('Cannot determine fixture path')
+        return 1
+
+    if not os.path.exists(fixture_path):
+        tout.error(f'Setup not done: run uman py -SP {test_name}')
+        return 1
+
+    source = tools.read_file(test_file, binary=False)
+    suite, c_test, arg_key, _ = parse_c_test_call(source, class_name, method)
+    if not suite:
+        tout.error(f'Cannot find C test command in {class_name}.{method}')
+        return 1
+
+    ut_cmd = f'ut -Em {suite} {c_test} {arg_key}={fixture_path}'
+    cmd = [sandbox, '-T', '-F', '-c', ut_cmd]
+
+    result = exec_cmd(cmd, args)
+    if not result:
+        return 0
+
+    print(result.stdout, end='')
+
+    # Check test actually ran (wasn't skipped)
+    match = re.search(r'Result: (PASS|FAIL|SKIP):', result.stdout)
+    if not match:
+        tout.error('Test did not produce a result - check setup')
+        return 1
+    if match.group(1) == 'SKIP':
+        tout.error('Test was skipped - check test flags')
+        return 1
+
+    return result.return_code
+
+
 def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-branches
     """Handle pytest command - run pytest tests for U-Boot
 
@@ -502,6 +573,10 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
         else:
             tout.warning('No QEMU boards found (is buildman configured?)')
         return 0
+
+    # Handle -C option: run just the C test part
+    if args.c_test:
+        return run_c_test(args)
 
     board = args.board or os.environ.get('b')
     if not board:

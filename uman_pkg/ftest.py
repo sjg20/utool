@@ -73,6 +73,7 @@ def make_args(**kwargs):
         'board': None,
         'build': False,
         'build_dir': None,
+        'c_test': False,
         'cmd': 'ci',
         'debug': False,
         'dest': None,
@@ -749,6 +750,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         super().setUp()
         self.empty_dir = tempfile.mkdtemp()  # Empty dir (not a U-Boot tree)
         self.orig_cwd = os.getcwd()
+        self.orig_usrc = os.environ.get('USRC')
         if 'USRC' in os.environ:
             del os.environ['USRC']
         os.chdir(self.test_dir)
@@ -758,7 +760,9 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
     def tearDown(self):
         """Clean up test environment"""
         os.chdir(self.orig_cwd)
-        if 'USRC' in os.environ:
+        if self.orig_usrc is not None:
+            os.environ['USRC'] = self.orig_usrc
+        elif 'USRC' in os.environ:
             del os.environ['USRC']
         shutil.rmtree(self.empty_dir)
         super().tearDown()
@@ -2195,8 +2199,8 @@ Section Headers:
         self.assertFalse(result)
 
 
-class TestPytestParsing(TestBase):
-    """Tests for pytest test-file parsing functions"""
+class TestPytestCTest(TestBase):
+    """Tests for the pytest -C (C test) functionality"""
 
     def setUp(self):
         tout.init(tout.WARNING)
@@ -2279,7 +2283,8 @@ class TestFoo:
     def test_parse_c_test_call(self):
         """Test parsing a C test-command from a real test file"""
         uboot_dir = cmdpy.get_uboot_dir()
-        self.assertIsNotNone(uboot_dir)
+        if not uboot_dir:
+            self.skipTest('Not in a U-Boot tree')
 
         test_file = os.path.join(uboot_dir,
                                  'test/py/tests/test_fs/test_ext4l.py')
@@ -2292,3 +2297,38 @@ class TestFoo:
         self.assertEqual('fs_test_ext4l_probe_norun', c_test)
         self.assertEqual('fs_image', arg_key)
         self.assertEqual('ext4_image', fixture)
+
+    def test_c_test_flag_parsing(self):
+        """Test -C flag is parsed correctly"""
+        args = cmdline.parse_args(['pytest', '-C', 'TestExt4l:test_unlink'])
+        self.assertTrue(args.c_test)
+        self.assertEqual(['TestExt4l:test_unlink'], args.test_spec)
+
+    @mock.patch.object(cmdpy, 'get_uboot_dir')
+    def test_run_c_test_no_spec(self, mock_uboot_dir):
+        """Test run_c_test fails without test spec"""
+        mock_uboot_dir.return_value = self.test_dir
+        args = argparse.Namespace(test_spec=None, dry_run=False,
+                                  show_cmd=False)
+        with terminal.capture() as (_out, err):
+            ret = cmdpy.run_c_test(args)
+        self.assertEqual(1, ret)
+        self.assertIn('Test spec required', err.getvalue())
+
+    @mock.patch.object(cmdpy, 'get_uboot_dir')
+    def test_run_c_test_method_required(self, mock_uboot_dir):
+        """Test run_c_test fails without method name"""
+        mock_uboot_dir.return_value = self.test_dir
+
+        # Create test file without method
+        test_fs_dir = os.path.join(self.test_dir, 'test/py/tests/test_fs')
+        os.makedirs(test_fs_dir)
+        test_file = os.path.join(test_fs_dir, 'test_ext4l.py')
+        tools.write_file(test_file, b'# test')
+
+        args = argparse.Namespace(test_spec=['ext4l'], dry_run=False,
+                                  show_cmd=False)
+        with terminal.capture() as (_out, err):
+            ret = cmdpy.run_c_test(args)
+        self.assertEqual(1, ret)
+        self.assertIn('Method name required', err.getvalue())
