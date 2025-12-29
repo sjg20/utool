@@ -1771,10 +1771,10 @@ Test: dm_test_first ... ok
 Test: dm_test_second ... ok
 Test: dm_test_third ... ok
 '''
-        passed, failed, skipped = cmdtest.parse_results(output)
-        self.assertEqual(3, passed)
-        self.assertEqual(0, failed)
-        self.assertEqual(0, skipped)
+        res = cmdtest.parse_results(output)
+        self.assertEqual(3, res.passed)
+        self.assertEqual(0, res.failed)
+        self.assertEqual(0, res.skipped)
 
     def test_parse_results_mixed(self):
         """Test parse_results with mixed results"""
@@ -1784,10 +1784,10 @@ Test: dm_test_second ... FAILED
 Test: dm_test_third ... SKIPPED
 Test: dm_test_fourth ... ok
 '''
-        passed, failed, skipped = cmdtest.parse_results(output)
-        self.assertEqual(2, passed)
-        self.assertEqual(1, failed)
-        self.assertEqual(1, skipped)
+        res = cmdtest.parse_results(output)
+        self.assertEqual(2, res.passed)
+        self.assertEqual(1, res.failed)
+        self.assertEqual(1, res.skipped)
 
     def test_parse_results_result_lines(self):
         """Test parse_results with explicit Result: lines"""
@@ -1796,10 +1796,10 @@ Result: PASS dm_test_first
 Result: FAIL dm_test_second
 Result: SKIP dm_test_third
 '''
-        passed, failed, skipped = cmdtest.parse_results(output)
-        self.assertEqual(1, passed)
-        self.assertEqual(1, failed)
-        self.assertEqual(1, skipped)
+        res = cmdtest.parse_results(output)
+        self.assertEqual(1, res.passed)
+        self.assertEqual(1, res.failed)
+        self.assertEqual(1, res.skipped)
 
     def test_parse_results_mixed_formats(self):
         """Test parse_results with both Test: and Result: lines"""
@@ -1809,17 +1809,26 @@ Result: PASS dm_test_second
 Test: dm_test_third ... FAILED
 Result: SKIP dm_test_fourth
 '''
-        passed, failed, skipped = cmdtest.parse_results(output)
-        self.assertEqual(2, passed)
-        self.assertEqual(1, failed)
-        self.assertEqual(1, skipped)
+        res = cmdtest.parse_results(output)
+        self.assertEqual(2, res.passed)
+        self.assertEqual(1, res.failed)
+        self.assertEqual(1, res.skipped)
 
     def test_parse_results_empty(self):
         """Test parse_results with empty output"""
-        passed, failed, skipped = cmdtest.parse_results('')
-        self.assertEqual(0, passed)
-        self.assertEqual(0, failed)
-        self.assertEqual(0, skipped)
+        res = cmdtest.parse_results('')
+        self.assertEqual(0, res.passed)
+        self.assertEqual(0, res.failed)
+        self.assertEqual(0, res.skipped)
+
+    def test_parse_results_named_tuple(self):
+        """Test parse_results returns TestCounts named tuple"""
+        output = 'Result: PASS test1\nResult: FAIL test2\n'
+        res = cmdtest.parse_results(output)
+        self.assertIsInstance(res, cmdtest.TestCounts)
+        self.assertEqual(1, res.passed)
+        self.assertEqual(1, res.failed)
+        self.assertEqual(0, res.skipped)
 
     def test_parse_results_show_results(self):
         """Test parse_results with show_results flag"""
@@ -1829,11 +1838,10 @@ Test: dm_test_second ... FAILED
 Test: dm_test_third ... SKIPPED
 '''
         with terminal.capture() as (out, _):
-            passed, failed, skipped = cmdtest.parse_results(output,
-                                                            show_results=True)
-        self.assertEqual(1, passed)
-        self.assertEqual(1, failed)
-        self.assertEqual(1, skipped)
+            res = cmdtest.parse_results(output, show_results=True)
+        self.assertEqual(1, res.passed)
+        self.assertEqual(1, res.failed)
+        self.assertEqual(1, res.skipped)
         stdout = out.getvalue()
         self.assertIn('PASS: dm_test_first', stdout)
         self.assertIn('FAIL: dm_test_second', stdout)

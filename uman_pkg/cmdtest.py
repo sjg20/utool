@@ -8,6 +8,7 @@ This module handles the 'test' subcommand which runs U-Boot's unit tests
 in sandbox.
 """
 
+from collections import namedtuple
 import os
 import re
 import time
@@ -17,6 +18,9 @@ from u_boot_pylib import command
 from u_boot_pylib import tout
 
 from uman_pkg import settings
+
+# Named tuple for test result counts
+TestCounts = namedtuple('TestCounts', ['passed', 'failed', 'skipped'])
 
 # Patterns for parsing linker-list symbols from nm output
 # Format: _u_boot_list_2_ut_<suite>_2_<test>
@@ -137,7 +141,7 @@ def parse_results(output, show_results=False):  # pylint: disable=R0912
         show_results (bool): Print per-test results
 
     Returns:
-        tuple: (passed, failed, skipped) counts
+        TestCounts: Counts of passed, failed, skipped tests
     """
     passed = 0
     failed = 0
@@ -175,7 +179,7 @@ def parse_results(output, show_results=False):  # pylint: disable=R0912
             if show_results and name:
                 show_result('SKIP', name)
 
-    return passed, failed, skipped
+    return TestCounts(passed, failed, skipped)
 
 
 def format_duration(seconds):
@@ -221,13 +225,11 @@ def run_tests(sandbox, tests, args):
         print(result.stdout, end='')
 
     # Parse and show results summary
-    passed, failed, skipped = parse_results(result.stdout,
-                                            show_results=show_results)
-    total = passed + failed + skipped
+    res = parse_results(result.stdout, show_results=show_results)
+    total = res.passed + res.failed + res.skipped
     if total:
-        duration = format_duration(elapsed)
-        tout.notice(f'Results: {passed} passed, {failed} failed, '
-                    f'{skipped} skipped in {duration}')
+        tout.notice(f'Results: {res.passed} passed, {res.failed} failed, '
+                    f'{res.skipped} skipped in {format_duration(elapsed)}')
 
     return result.return_code
 
