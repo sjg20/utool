@@ -394,15 +394,20 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False,
         cmd.append('-D')
 
     # Build ut commands from specs; use -E to emit Result: lines
-    emit = '' if legacy else '-E '
-    manual_flag = '-m ' if manual else ''
-    flags = '-v ' if verbose else ''
+    # Flags must come before suite name
+    flags = ''
+    if not legacy:
+        flags += '-E '
+    if manual:
+        flags += '-m '
+    if verbose:
+        flags += '-v '
     cmds = []
     for suite, pattern in specs:
         if pattern:
-            ut_cmd = f'ut {emit}{manual_flag}{flags}{suite} {pattern}'
+            ut_cmd = f'ut {flags}{suite} {pattern}'
         else:
-            ut_cmd = f'ut {emit}{manual_flag}{flags}{suite}'
+            ut_cmd = f'ut {flags}{suite}'
         cmds.append(ut_cmd)
 
     cmd.extend(['-c', '; '.join(cmds)])
@@ -532,7 +537,7 @@ def run_tests(sandbox, specs, args):  # pylint: disable=R0914
     elapsed = time.time() - start_time
 
     # Print output to console only in verbose mode
-    if result.stdout and verbose and not args.results:
+    if result.stdout and args.test_verbose and not args.results:
         print(result.stdout, end='')
 
     # Parse and show results summary

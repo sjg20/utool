@@ -1793,7 +1793,7 @@ int main(void) { return 0; }
         """Test build_ut_cmd with manual flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
                                    manual=True)
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm -m'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E -m dm'], cmd)
 
     def test_run_tests_basic(self):
         """Test run_tests executes sandbox correctly"""
