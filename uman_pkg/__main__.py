@@ -37,10 +37,8 @@ def run_uman():
         to_run = (args.testname if hasattr(args, 'testname') and
                   args.testname not in [None, 'test'] else None)
         result = test_util.run_test_suites(
-            'uman', args.debug, args.verbose,
-            getattr(args, 'no_capture', False),
-            getattr(args, 'test_preserve_dirs', False),
-            None, to_run, None,
+            'uman', args.debug, args.verbose, args.no_capture,
+            args.test_preserve_dirs, None, to_run, None,
             [ftest.TestUmanCmdline, ftest.TestUmanCIVars, ftest.TestUmanCI,
              ftest.TestUmanControl, ftest.TestGitLabParser,
              ftest.TestUmanMergeRequest, ftest.TestSettings,

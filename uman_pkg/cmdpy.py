@@ -373,7 +373,7 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
     args.board = board
 
     # Handle --show-cmd option
-    if getattr(args, 'show_cmd', False):
+    if args.show_cmd:
         qemu_cmd = get_qemu_command(board, args)
         if qemu_cmd:
             print(qemu_cmd)

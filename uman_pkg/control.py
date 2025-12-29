@@ -139,7 +139,7 @@ def git_push_branch(branch, args, ci_vars=None, upstream=False, dest=None):
 
     # Determine destination branch - use provided dest, fall back to
     # args.dest, or current branch
-    dest_branch = dest or getattr(args, 'dest', None) or branch
+    dest_branch = dest or args.dest or branch
 
     # Always push to 'ci' remote, but to the specified destination branch
     if dest_branch == branch:
