@@ -95,7 +95,8 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
     if flattree:
         cmd.append('-D')
 
-    # Build the ut command string
+    # Build the ut command string with flags before suite name
+    flags = '-v ' if verbose else ''
     if tests:
         # Parse test specs - can be 'suite' or 'suite.test'
         ut_args = []
@@ -105,14 +106,10 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
                 ut_args.append(f'{suite} {test}')
             else:
                 ut_args.append(spec)
-        ut_cmd = f"ut {' '.join(ut_args)}"
+        ut_cmd = f"ut {flags}{' '.join(ut_args)}"
     else:
         # Run all tests
-        ut_cmd = 'ut all'
-
-    # Add verbose flag to ut command
-    if verbose:
-        ut_cmd += ' -v'
+        ut_cmd = f'ut {flags}all'
 
     cmd.extend(['-c', ut_cmd])
     return cmd
@@ -219,8 +216,8 @@ def run_tests(sandbox, tests, args):
 
     show_results = args.results
 
-    # Print output to console (unless showing results, which replaces it)
-    if result.stdout and not show_results:
+    # Print output to console only in verbose mode
+    if result.stdout and verbose and not show_results:
         print(result.stdout, end='')
 
     # Parse and show results summary

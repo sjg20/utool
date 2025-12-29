@@ -1696,13 +1696,13 @@ int main(void) { return 0; }
     def test_build_ut_cmd_verbose(self):
         """Test build_ut_cmd with verbose flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm -v'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -v dm'], cmd)
 
     def test_build_ut_cmd_all_flags(self):
         """Test build_ut_cmd with all flags"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'],
                                    flattree=True, verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut dm -v'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -v dm'], cmd)
 
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
@@ -1762,7 +1762,7 @@ int main(void) { return 0; }
             with terminal.capture():
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-c', 'ut dm -v'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut -v dm'), cap[0])
 
     def test_parse_results_all_pass(self):
         """Test parse_results with all passing tests"""
@@ -1867,8 +1867,8 @@ Test: dm_test_second ... ok
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
         stdout = out[0].getvalue()
-        self.assertIn('dm_test_first', stdout)
-        self.assertIn('dm_test_second', stdout)
+        self.assertIn('2 passed', stdout)
+        self.assertIn('0 failed', stdout)
 
     def test_do_test_runs_tests(self):
         """Test do_test runs tests when no list flags"""
