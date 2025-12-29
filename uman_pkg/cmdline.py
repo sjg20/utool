@@ -197,6 +197,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-L', '--legacy', action='store_true',
         help='Use legacy result parsing (for old U-Boot without Result: lines)')
+    test.add_argument(
+        '-m', '--manual', action='store_true',
+        help='Force manual tests to run (tests with _norun suffix)')
     return test
 
 

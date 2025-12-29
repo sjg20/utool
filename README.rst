@@ -215,6 +215,39 @@ source::
     export USRC=~/u
     uman py -b sandbox    # Works from any directory
 
+Test Subcommand
+---------------
+
+The ``test`` command (alias ``t``) runs U-Boot's sandbox unit tests directly,
+without going through pytest. This is faster for quick iteration on C code.
+
+::
+
+    # Run all tests
+    uman test
+
+    # Run specific suite
+    uman test dm
+
+    # Run specific test
+    uman test dm.acpi
+
+    # List available suites
+    uman test -s
+
+    # List tests in a suite
+    uman test -l dm
+
+**Options**:
+
+- ``-l, --list``: List available tests
+- ``-s, --suites``: List available test suites
+- ``-f, --flattree``: Use flat device tree for tests
+- ``-V, --test-verbose``: Enable verbose test output
+- ``-r, --results``: Show per-test pass/fail status
+- ``-L, --legacy``: Use legacy result parsing (for old U-Boot)
+- ``-m, --manual``: Force manual tests to run (tests with _norun suffix)
+
 Setup Subcommand
 ----------------
 

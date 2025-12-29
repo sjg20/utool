@@ -372,7 +372,8 @@ def validate_specs(sandbox, specs):
     return unmatched
 
 
-def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False):
+def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False,
+                 manual=False):
     """Build the sandbox command line for running tests
 
     Args:
@@ -381,6 +382,7 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False):
         flattree (bool): Use flat device tree instead of live tree
         verbose (bool): Enable verbose test output
         legacy (bool): Legacy mode (don't use -E flag for older U-Boot)
+        manual (bool): Force manual tests to run
 
     Returns:
         list: Command and arguments
@@ -393,13 +395,14 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False):
 
     # Build ut commands from specs; use -E to emit Result: lines
     emit = '' if legacy else '-E '
+    manual_flag = '-m ' if manual else ''
     flags = '-v ' if verbose else ''
     cmds = []
     for suite, pattern in specs:
         if pattern:
-            ut_cmd = f'ut {emit}{flags}{suite} {pattern}'
+            ut_cmd = f'ut {emit}{manual_flag}{flags}{suite} {pattern}'
         else:
-            ut_cmd = f'ut {emit}{flags}{suite}'
+            ut_cmd = f'ut {emit}{manual_flag}{flags}{suite}'
         cmds.append(ut_cmd)
 
     cmd.extend(['-c', '; '.join(cmds)])
@@ -504,7 +507,7 @@ def format_duration(seconds):
     return f'{minutes}m {secs:.1f}s'
 
 
-def run_tests(sandbox, specs, args):
+def run_tests(sandbox, specs, args):  # pylint: disable=R0914
     """Run sandbox tests
 
     Args:
@@ -520,7 +523,8 @@ def run_tests(sandbox, specs, args):
         return 1
 
     cmd = build_ut_cmd(sandbox, specs, flattree=args.flattree,
-                       verbose=args.test_verbose, legacy=args.legacy)
+                       verbose=args.test_verbose, legacy=args.legacy,
+                       manual=args.manual)
     tout.info(f"Running: {' '.join(cmd)}")
 
     start_time = time.time()
