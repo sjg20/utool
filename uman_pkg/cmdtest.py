@@ -129,26 +129,60 @@ def show_result(status, name):
     print(f'  {status}: {name}')
 
 
-def parse_results(output, show_results=False):  # pylint: disable=R0912
-    """Parse test output to extract results
+def parse_legacy_results(output, show_results=False):
+    """Parse legacy test output to extract results
 
-    Handles two formats:
-    1. Test lines: "Test: test_name ... ok/FAILED/SKIPPED"
-    2. Result lines: "Result: PASS/FAIL/SKIP test_name"
+    Handles old-style "Test: test_name ... ok/FAILED/SKIPPED" lines
 
     Args:
         output (str): Test output from sandbox
         show_results (bool): Print per-test results
 
     Returns:
-        TestCounts: Counts of passed, failed, skipped tests
+        TestCounts or None: Counts of passed/failed/skipped, or None if none
     """
     passed = 0
     failed = 0
     skipped = 0
 
     for line in output.splitlines():
-        # First check for explicit Result: lines
+        name_match = re.search(r'Test:\s*(\S+)', line)
+        name = name_match.group(1) if name_match else None
+        lower = line.lower()
+
+        if '... ok' in lower:
+            passed += 1
+            if show_results and name:
+                show_result('PASS', name)
+        elif '... failed' in lower:
+            failed += 1
+            if show_results and name:
+                show_result('FAIL', name)
+        elif '... skipped' in lower:
+            skipped += 1
+            if show_results and name:
+                show_result('SKIP', name)
+
+    if not passed and not failed and not skipped:
+        return None
+    return TestCounts(passed, failed, skipped)
+
+
+def parse_results(output, show_results=False):
+    """Parse test output to extract results from Result: lines
+
+    Args:
+        output (str): Test output from sandbox
+        show_results (bool): Print per-test results
+
+    Returns:
+        TestCounts or None: Counts of passed/failed/skipped, or None if none
+    """
+    passed = 0
+    failed = 0
+    skipped = 0
+
+    for line in output.splitlines():
         result_match = re.match(r'Result:\s*(PASS|FAIL|SKIP)\s+(\S+)', line)
         if result_match:
             status, name = result_match.groups()
@@ -160,25 +194,9 @@ def parse_results(output, show_results=False):  # pylint: disable=R0912
                 skipped += 1
             if show_results:
                 show_result(status, name)
-            continue
 
-        # Match test result lines like "Test: test_name ... ok"
-        name_match = re.search(r'Test:\s*(\S+)', line)
-        name = name_match.group(1) if name_match else None
-
-        if '... ok' in line or '... OK' in line:
-            passed += 1
-            if show_results and name:
-                show_result('PASS', name)
-        elif '... FAILED' in line or '... failed' in line:
-            failed += 1
-            if show_results and name:
-                show_result('FAIL', name)
-        elif '... SKIPPED' in line or '... skipped' in line:
-            skipped += 1
-            if show_results and name:
-                show_result('SKIP', name)
-
+    if not passed and not failed and not skipped:
+        return None
     return TestCounts(passed, failed, skipped)
 
 
@@ -218,20 +236,21 @@ def run_tests(sandbox, tests, args):
     result = command.run_one(*cmd, capture=True)
     elapsed = time.time() - start_time
 
-    show_results = args.results
-
     # Print output to console only in verbose mode
-    if result.stdout and verbose and not show_results:
+    if result.stdout and verbose and not args.results:
         print(result.stdout, end='')
 
     # Parse and show results summary
-    res = parse_results(result.stdout, show_results=show_results)
-    total = res.passed + res.failed + res.skipped
-    if total:
+    res = parse_results(result.stdout, show_results=args.results)
+    if not res and args.legacy:
+        res = parse_legacy_results(result.stdout, show_results=args.results)
+    if res:
         tout.notice(f'Results: {res.passed} passed, {res.failed} failed, '
                     f'{res.skipped} skipped in {format_duration(elapsed)}')
+        return result.return_code
 
-    return result.return_code
+    tout.warning('No results detected (use -L for older U-Boot)')
+    return 1
 
 
 def do_test(args):

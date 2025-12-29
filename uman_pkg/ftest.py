@@ -1549,6 +1549,7 @@ int main(void) { return 0; }
 
     def setUp(self):
         super().setUp()
+        tout.init(tout.NOTICE)
         # Compile a test ELF with linker-list symbols
         self.test_elf = os.path.join(self.test_dir, 'test_elf')
         src_file = os.path.join(self.test_dir, 'test.c')
@@ -1725,7 +1726,8 @@ int main(void) { return 0; }
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0, stdout='')
+            return command.CommandResult(return_code=0,
+                                         stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
@@ -1740,7 +1742,8 @@ int main(void) { return 0; }
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0, stdout='')
+            return command.CommandResult(return_code=0,
+                                         stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', '-f', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
@@ -1755,7 +1758,8 @@ int main(void) { return 0; }
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0, stdout='')
+            return command.CommandResult(return_code=0,
+                                         stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', '-V', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
@@ -1764,27 +1768,27 @@ int main(void) { return 0; }
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -v dm'), cap[0])
 
-    def test_parse_results_all_pass(self):
-        """Test parse_results with all passing tests"""
+    def test_parse_legacy_results_all_pass(self):
+        """Test parse_legacy_results with all passing tests"""
         output = '''
 Test: dm_test_first ... ok
 Test: dm_test_second ... ok
 Test: dm_test_third ... ok
 '''
-        res = cmdtest.parse_results(output)
+        res = cmdtest.parse_legacy_results(output)
         self.assertEqual(3, res.passed)
         self.assertEqual(0, res.failed)
         self.assertEqual(0, res.skipped)
 
-    def test_parse_results_mixed(self):
-        """Test parse_results with mixed results"""
+    def test_parse_legacy_results_mixed(self):
+        """Test parse_legacy_results with mixed results"""
         output = '''
 Test: dm_test_first ... ok
 Test: dm_test_second ... FAILED
 Test: dm_test_third ... SKIPPED
 Test: dm_test_fourth ... ok
 '''
-        res = cmdtest.parse_results(output)
+        res = cmdtest.parse_legacy_results(output)
         self.assertEqual(2, res.passed)
         self.assertEqual(1, res.failed)
         self.assertEqual(1, res.skipped)
@@ -1801,8 +1805,8 @@ Result: SKIP dm_test_third
         self.assertEqual(1, res.failed)
         self.assertEqual(1, res.skipped)
 
-    def test_parse_results_mixed_formats(self):
-        """Test parse_results with both Test: and Result: lines"""
+    def test_parse_results_only_result_lines(self):
+        """Test parse_results ignores Test: lines (only Result: lines)"""
         output = '''
 Test: dm_test_first ... ok
 Result: PASS dm_test_second
@@ -1810,16 +1814,13 @@ Test: dm_test_third ... FAILED
 Result: SKIP dm_test_fourth
 '''
         res = cmdtest.parse_results(output)
-        self.assertEqual(2, res.passed)
-        self.assertEqual(1, res.failed)
+        self.assertEqual(1, res.passed)
+        self.assertEqual(0, res.failed)
         self.assertEqual(1, res.skipped)
 
     def test_parse_results_empty(self):
-        """Test parse_results with empty output"""
-        res = cmdtest.parse_results('')
-        self.assertEqual(0, res.passed)
-        self.assertEqual(0, res.failed)
-        self.assertEqual(0, res.skipped)
+        """Test parse_results with empty output returns None"""
+        self.assertIsNone(cmdtest.parse_results(''))
 
     def test_parse_results_named_tuple(self):
         """Test parse_results returns TestCounts named tuple"""
@@ -1830,15 +1831,15 @@ Result: SKIP dm_test_fourth
         self.assertEqual(1, res.failed)
         self.assertEqual(0, res.skipped)
 
-    def test_parse_results_show_results(self):
-        """Test parse_results with show_results flag"""
+    def test_parse_legacy_results_show_results(self):
+        """Test parse_legacy_results with show_results flag"""
         output = '''
 Test: dm_test_first ... ok
 Test: dm_test_second ... FAILED
 Test: dm_test_third ... SKIPPED
 '''
         with terminal.capture() as (out, _):
-            res = cmdtest.parse_results(output, show_results=True)
+            res = cmdtest.parse_legacy_results(output, show_results=True)
         self.assertEqual(1, res.passed)
         self.assertEqual(1, res.failed)
         self.assertEqual(1, res.skipped)
@@ -1862,8 +1863,8 @@ Test: dm_test_third ... SKIPPED
     def test_run_tests_shows_summary(self):
         """Test run_tests shows results summary"""
         output = '''
-Test: dm_test_first ... ok
-Test: dm_test_second ... ok
+Result: PASS dm_test_first
+Result: PASS dm_test_second
 '''
 
         def mock_run(*_args, **_kwargs):
@@ -1871,10 +1872,11 @@ Test: dm_test_second ... ok
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
-            with terminal.capture() as out:
+            with terminal.capture() as (out, err):
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
-        stdout = out[0].getvalue()
+        self.assertFalse(err.getvalue())
+        stdout = out.getvalue()
         self.assertIn('2 passed', stdout)
         self.assertIn('0 failed', stdout)
 
@@ -1884,7 +1886,8 @@ Test: dm_test_second ... ok
 
         def mock_run(*cmd_args, **_kwargs):
             cap.append(cmd_args)
-            return command.CommandResult(return_code=0, stdout='')
+            return command.CommandResult(return_code=0,
+                                         stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(cmdtest, 'get_sandbox_path',

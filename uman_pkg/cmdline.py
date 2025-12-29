@@ -194,6 +194,9 @@ def add_test_subparser(subparsers):
     test.add_argument(
         '-r', '--results', action='store_true',
         help='Show per-test pass/fail status')
+    test.add_argument(
+        '-L', '--legacy', action='store_true',
+        help='Use legacy result parsing (for old U-Boot without Result: lines)')
     return test
 
 
