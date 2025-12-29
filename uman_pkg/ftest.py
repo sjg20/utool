@@ -1530,6 +1530,61 @@ class TestSetupSubcommand(TestBase):
         self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)
 
 
+class TestUtil(TestBase):
+    """Tests for util module"""
+
+    def setUp(self):
+        super().setUp()
+        tout.init(tout.NOTICE)
+
+    def test_run_pytest_success(self):
+        """Test run_pytest returns True on success"""
+        moc = command.CommandResult(return_code=0)
+
+        with mock.patch.object(util, 'get_uboot_dir', return_value='/uboot'):
+            with mock.patch('os.chdir'):
+                with mock.patch.object(util, 'exec_cmd',
+                                       return_value=moc) as run:
+                    result = util.run_pytest('test_ut.py::test_foo')
+
+        self.assertTrue(result)
+        run.assert_called_once()
+        cmd = run.call_args[0][0]
+        self.assertIn('pytest', cmd[2])
+        self.assertIn('test/py/tests/test_ut.py::test_foo', cmd[4])
+
+    def test_run_pytest_failure(self):
+        """Test run_pytest returns False on failure"""
+        moc = command.CommandResult(return_code=1, stderr='Test failed')
+
+        with mock.patch.object(util, 'get_uboot_dir', return_value='/uboot'):
+            with mock.patch('os.chdir'):
+                with mock.patch.object(util, 'exec_cmd', return_value=moc):
+                    with terminal.capture():
+                        result = util.run_pytest('test_ut.py::test_foo')
+
+        self.assertFalse(result)
+
+    def test_run_pytest_no_uboot_dir(self):
+        """Test run_pytest returns False when not in U-Boot tree"""
+        with mock.patch.object(util, 'get_uboot_dir', return_value=None):
+            with terminal.capture():
+                result = util.run_pytest('test_ut.py::test_foo')
+
+        self.assertFalse(result)
+
+    def test_run_pytest_dry_run(self):
+        """Test run_pytest in dry-run mode"""
+        with mock.patch.object(util, 'get_uboot_dir', return_value='/uboot'):
+            with mock.patch('os.chdir'):
+                with terminal.capture() as (out, _):
+                    result = util.run_pytest('test_ut.py::test_foo',
+                                             dry_run=True)
+
+        self.assertTrue(result)
+        self.assertIn('pytest', out.getvalue())
+
+
 class TestTestSubcommand(TestBase):  # pylint: disable=R0904
     """Tests for the test subcommand"""
 

@@ -13,6 +13,8 @@ import os
 from u_boot_pylib import command
 from u_boot_pylib import tout
 
+from uman_pkg import settings
+
 
 def get_uboot_dir():
     """Get the U-Boot source directory
@@ -74,3 +76,50 @@ def exec_cmd(cmd, dry_run=False, env=None, capture=True):
     tout.info(f"Running: {' '.join(cmd)}")
     return command.run_pipe([cmd], env=env, capture=capture,
                             raise_on_error=False)
+
+
+def run_pytest(test_name, board='sandbox', build_dir=None, quiet=True,
+               dry_run=False):
+    """Run a pytest test
+
+    Args:
+        test_name (str): Test to run (e.g. 'test_ut.py::test_ut_dm_init')
+        board (str): Board name (default: 'sandbox')
+        build_dir (str): Build directory, or None to use default
+        quiet (bool): If True, capture output; if False, show output
+        dry_run (bool): If True, just show command without running
+
+    Returns:
+        bool: True if test passed (or dry-run), False otherwise
+    """
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return False
+
+    if not build_dir:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = os.path.join(base_dir, board)
+
+    pytest_cmd = [
+        'python3', '-m', 'pytest', '-q',
+        f'test/py/tests/{test_name}',
+        '-B', board,
+        '--build-dir', build_dir,
+    ]
+
+    orig_dir = os.getcwd()
+    os.chdir(uboot_dir)
+    try:
+        result = exec_cmd(pytest_cmd, dry_run=dry_run, capture=quiet)
+        if result is None:  # dry-run
+            return True
+        if result.return_code:
+            if quiet:
+                tout.error(f'pytest {test_name} failed')
+                tout.error(result.stderr)
+            return False
+    finally:
+        os.chdir(orig_dir)
+
+    return True
