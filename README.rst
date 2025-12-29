@@ -165,8 +165,8 @@ hooks to PATH.
     # Quiet mode with timing info
     uman py -qb sandbox -t
 
-    # Skip building, use custom timeout
-    uman py -b sandbox --no-build -T 600
+    # Build before testing, use custom timeout
+    uman py -b sandbox --build -T 600
 
     # Dry run to see command and environment
     uman --dry-run py -b qemu-riscv64
@@ -180,7 +180,7 @@ hooks to PATH.
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
-- ``--no-build``: Skip building U-Boot (assume already built)
+- ``--build``: Build U-Boot before running tests
 - ``--build-dir DIR``: Override build directory
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 

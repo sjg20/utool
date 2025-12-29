@@ -70,6 +70,7 @@ def make_args(**kwargs):
     """Create an argparse.Namespace with default CI arguments"""
     defaults = {
         'board': None,
+        'build': False,
         'build_dir': None,
         'cmd': 'ci',
         'debug': False,
@@ -78,7 +79,6 @@ def make_args(**kwargs):
         'force': False,
         'list_boards': False,
         'merge': False,
-        'no_build': False,
         'null': False,
         'pytest': None,
         'quiet': False,

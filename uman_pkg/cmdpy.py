@@ -159,7 +159,7 @@ def build_pytest_cmd(args):
         build_dir = f'{base_dir}/{args.board}'
     cmd.extend(['--build-dir', build_dir])
 
-    if not args.no_build:
+    if args.build:
         cmd.append('--build')
 
     cmd.append('--buildman')
