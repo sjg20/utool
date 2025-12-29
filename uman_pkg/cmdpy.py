@@ -180,6 +180,10 @@ def build_pytest_cmd(args):
     if args.timing is not None:
         cmd.extend(['--timing', '--durations=0',
                     f'--durations-min={args.timing}'])
+    if args.setup_only:
+        cmd.append('--setup-only')
+    if args.persist:
+        cmd.append('--persist')
 
     return cmd
 

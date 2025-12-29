@@ -183,6 +183,8 @@ hooks to PATH.
 - ``--build``: Build U-Boot before running tests
 - ``--build-dir DIR``: Override build directory
 - ``-c, --show-cmd``: Show QEMU command line without running tests
+- ``-S, --setup-only``: Run only fixture setup (create test images) without tests
+- ``-P, --persist``: Persist test artifacts (do not clean up after tests)
 
 **Test Hooks Search Order**:
 
