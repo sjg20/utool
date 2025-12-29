@@ -1793,9 +1793,11 @@ int main(void) { return 0; }
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
-            with terminal.capture():
-                result = cmdtest.run_tests('/path/to/sandbox',
-                                           [('dm', None)], args)
+            with mock.patch.object(cmdtest, 'ensure_dm_init_files',
+                                   return_value=True):
+                with terminal.capture():
+                    result = cmdtest.run_tests('/path/to/sandbox',
+                                               [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
 
@@ -1810,9 +1812,11 @@ int main(void) { return 0; }
 
         args = cmdline.parse_args(['test', '-f', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
-            with terminal.capture():
-                result = cmdtest.run_tests('/path/to/sandbox',
-                                           [('dm', None)], args)
+            with mock.patch.object(cmdtest, 'ensure_dm_init_files',
+                                   return_value=True):
+                with terminal.capture():
+                    result = cmdtest.run_tests('/path/to/sandbox',
+                                               [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-D', '-c', 'ut -E dm'), cap[0])
 
@@ -1827,9 +1831,11 @@ int main(void) { return 0; }
 
         args = cmdline.parse_args(['test', '-V', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
-            with terminal.capture():
-                result = cmdtest.run_tests('/path/to/sandbox',
-                                           [('dm', None)], args)
+            with mock.patch.object(cmdtest, 'ensure_dm_init_files',
+                                   return_value=True):
+                with terminal.capture():
+                    result = cmdtest.run_tests('/path/to/sandbox',
+                                               [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E -v dm'), cap[0])
 
@@ -1941,9 +1947,11 @@ Result: PASS dm_test_second
 
         args = cmdline.parse_args(['test', 'dm'])
         with mock.patch.object(command, 'run_one', mock_run):
-            with terminal.capture() as (out, err):
-                result = cmdtest.run_tests('/path/to/sandbox',
-                                           [('dm', None)], args)
+            with mock.patch.object(cmdtest, 'ensure_dm_init_files',
+                                   return_value=True):
+                with terminal.capture() as (out, err):
+                    result = cmdtest.run_tests('/path/to/sandbox',
+                                               [('dm', None)], args)
         self.assertEqual(0, result)
         self.assertFalse(err.getvalue())
         stdout = out.getvalue()
@@ -1963,9 +1971,11 @@ Result: PASS dm_test_second
         with mock.patch.object(cmdtest, 'get_sandbox_path',
                                return_value='/path/to/sandbox'):
             with mock.patch.object(cmdtest, 'validate_specs', return_value=[]):
-                with mock.patch.object(command, 'run_one', mock_run):
-                    with terminal.capture():
-                        result = cmdtest.do_test(args)
+                with mock.patch.object(cmdtest, 'ensure_dm_init_files',
+                                       return_value=True):
+                    with mock.patch.object(command, 'run_one', mock_run):
+                        with terminal.capture():
+                            result = cmdtest.do_test(args)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
 
@@ -2144,3 +2154,33 @@ Section Headers:
                                                flattree=True)
         # test_a(1) + test_b(2) + test_c(1) + test_d(1) + video(1) = 6
         self.assertEqual(6, count)
+
+    def test_needs_dm_init_dm_suite(self):
+        """Test needs_dm_init returns True for dm suite"""
+        self.assertTrue(cmdtest.needs_dm_init([('dm', None)]))
+
+    def test_needs_dm_init_all_suite(self):
+        """Test needs_dm_init returns True for all tests"""
+        self.assertTrue(cmdtest.needs_dm_init([('all', None)]))
+
+    def test_needs_dm_init_other_suite(self):
+        """Test needs_dm_init returns False for non-dm suite"""
+        self.assertFalse(cmdtest.needs_dm_init([('env', None)]))
+
+    def test_needs_dm_init_host_test(self):
+        """Test needs_dm_init returns True for host tests"""
+        self.assertTrue(cmdtest.needs_dm_init([('cmd', 'cmd_host')]))
+
+    def test_ensure_dm_init_files_exists(self):
+        """Test ensure_dm_init_files returns True if files exist"""
+        with mock.patch.object(os.path, 'exists', return_value=True):
+            result = cmdtest.ensure_dm_init_files()
+        self.assertTrue(result)
+
+    def test_ensure_dm_init_files_pytest_fails(self):
+        """Test ensure_dm_init_files fails if run_pytest fails"""
+        with mock.patch.object(os.path, 'exists', return_value=False):
+            with mock.patch.object(cmdtest, 'run_pytest', return_value=False):
+                with terminal.capture():
+                    result = cmdtest.ensure_dm_init_files()
+        self.assertFalse(result)

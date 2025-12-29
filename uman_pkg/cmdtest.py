@@ -19,6 +19,7 @@ from u_boot_pylib import command
 from u_boot_pylib import tout
 
 from uman_pkg import settings
+from uman_pkg.util import run_pytest
 
 # Named tuple for test result counts
 TestCounts = namedtuple('TestCounts', ['passed', 'failed', 'skipped'])
@@ -151,6 +152,51 @@ def predict_test_count(sandbox, suite, flattree=False):
                 count += 1
 
     return count
+
+
+# Tests that require test_ut_dm_init to create data files
+HOST_TESTS = ['cmd_host', 'host', 'host_dup']
+
+
+def needs_dm_init(specs):
+    """Check if tests require dm init data files
+
+    Args:
+        specs (list): List of (suite, pattern) tuples
+
+    Returns:
+        bool: True if dm init is needed
+    """
+    for suite, pattern in specs:
+        # Check if running dm suite or all tests
+        if suite in ('dm', 'all'):
+            return True
+        # Check for specific host tests
+        if pattern:
+            for host_test in HOST_TESTS:
+                if host_test in pattern:
+                    return True
+    return False
+
+
+def ensure_dm_init_files():
+    """Ensure dm init data files exist, creating them if needed
+
+    Returns:
+        bool: True if files exist or were created successfully
+    """
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
+    test_file = os.path.join(persistent_dir, '2MB.ext2.img')
+
+    if os.path.exists(test_file):
+        return True
+
+    tout.notice('Creating dm test data files...')
+    if not run_pytest('test_ut.py::test_ut_dm_init'):
+        tout.error('Failed to create dm test data files')
+        return False
+    return True
 
 
 def get_suites_from_nm(sandbox):
@@ -469,6 +515,10 @@ def run_tests(sandbox, specs, args):
     Returns:
         int: Exit code from tests
     """
+    # Ensure dm init data files exist if needed
+    if needs_dm_init(specs) and not ensure_dm_init_files():
+        return 1
+
     cmd = build_ut_cmd(sandbox, specs, flattree=args.flattree,
                        verbose=args.test_verbose, legacy=args.legacy)
     tout.info(f"Running: {' '.join(cmd)}")
