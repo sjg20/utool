@@ -8,16 +8,25 @@ This module handles the 'pytest' subcommand which runs U-Boot's pytest
 test framework.
 """
 
+import ast
+import glob
 import os
 import re
 import socket
 
 # pylint: disable=import-error
 from u_boot_pylib import command
+from u_boot_pylib import tools
 from u_boot_pylib import tout
 
 from uman_pkg import settings
 from uman_pkg.util import exec_cmd, get_uboot_dir
+
+# Pattern to parse test spec: TestClass:method or TestClass.method or just name
+RE_TEST_SPEC = re.compile(r'(?:Test)?(\w+?)(?:[:.](\w+))?$', re.IGNORECASE)
+
+# Glob pattern to find test files (use with .format(name=...))
+GLOB_TEST = 'test/py/**/test_{name}.py'
 
 
 def setup_riscv_env(board, env):
@@ -329,6 +338,150 @@ def get_qemu_command(board, args):
         cmd_parts.append(qemu_kernel_args)
 
     return ' '.join(cmd_parts)
+
+
+def find_test(uboot_dir, test_spec):
+    """Find the Python test file for a test spec
+
+    Args:
+        uboot_dir (str): U-Boot source directory
+        test_spec (str): Test spec like 'TestExt4l:test_unlink' or 'test_ext4l'
+
+    Returns:
+        tuple: (file_path, class_name, method_name) or (None, None, None)
+    """
+    match = RE_TEST_SPEC.match(test_spec)
+    if not match:
+        return None, None, None
+
+    base_name = match.group(1).lower()
+    method = match.group(2)
+
+    # Search for test file
+    pattern = os.path.join(uboot_dir, GLOB_TEST.format(name=base_name))
+    matches = glob.glob(pattern, recursive=True)
+    if matches:
+        test_file = matches[0]
+        class_name = f'Test{base_name.capitalize()}'
+        # Handle names like 'ext4l' -> 'TestExt4l'
+        if '_' not in base_name:
+            class_name = f'Test{base_name[0].upper()}{base_name[1:]}'
+        return test_file, class_name, method
+
+    return None, None, None
+
+
+def find_run_ut_call(method_node):
+    """Find a run_ut() call in a method's AST
+
+    Args:
+        method_node (ast.FunctionDef): Method node to search
+
+    Returns:
+        ast.Call or None: The run_ut() call node, or None if not found
+    """
+    for stmt in ast.walk(method_node):
+        if not isinstance(stmt, ast.Call):
+            continue
+        if not isinstance(stmt.func, ast.Attribute):
+            continue
+        if stmt.func.attr == 'run_ut':
+            return stmt
+    return None
+
+
+def parse_c_test_call(source, class_name, method_name):
+    """Parse Python test source to extract the C test command
+
+    Looks for ubman.run_ut() calls in the test method.
+
+    Args:
+        source (str): Python source code
+        class_name (str): Test class name
+        method_name (str): Test method name
+
+    Returns:
+        tuple: (suite, c_test_name, arg_key, fixture_name) or (None,)*4
+    """
+    tree = ast.parse(source)
+
+    # Find the class and method
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef) or node.name != class_name:
+            continue
+        for item in node.body:
+            if not isinstance(item, ast.FunctionDef):
+                continue
+            if item.name != method_name:
+                continue
+            call = find_run_ut_call(item)
+            if call:
+                return extract_run_ut_args(call)
+
+    return None, None, None, None
+
+
+def extract_run_ut_args(call_node):
+    """Extract C test info from a run_ut() call AST node
+
+    Parses: ubman.run_ut('fs', 'fs_test_ext4l_probe', fs_image=ext4_image)
+
+    Args:
+        call_node (ast.Call): AST Call node for run_ut()
+
+    Returns:
+        tuple: (suite, c_test_name, arg_key, fixture_name) or (None,)*4
+    """
+    # Need at least 2 positional args: suite and test name
+    if len(call_node.args) < 2:
+        return None, None, None, None
+
+    # Extract suite (first arg)
+    if not isinstance(call_node.args[0], ast.Constant):
+        return None, None, None, None
+    suite = call_node.args[0].value
+
+    # Extract test name (second arg) - add _norun suffix
+    if not isinstance(call_node.args[1], ast.Constant):
+        return None, None, None, None
+    c_test = call_node.args[1].value + '_norun'
+
+    # Extract first keyword argument (e.g., fs_image=ext4_image)
+    if not call_node.keywords:
+        return None, None, None, None
+
+    kw = call_node.keywords[0]
+    arg_key = kw.arg
+    if isinstance(kw.value, ast.Name):
+        fixture_name = kw.value.id
+    else:
+        return None, None, None, None
+
+    return suite, c_test, arg_key, fixture_name
+
+
+def get_fixture_path(test_file):
+    """Get the path created by a fixture
+
+    Args:
+        test_file (str): Path to Python test file
+
+    Returns:
+        str: Path to fixture output, or None
+    """
+    source = tools.read_file(test_file, binary=False)
+
+    # Look for the image path pattern in fixture (may span multiple lines)
+    # e.g., image_path = os.path.join(u_boot_config.persistent_data_dir,
+    #                                 'ext4l_test.img')
+    match = re.search(r"image_path\s*=.*?['\"](\w+\.img)['\"]", source,
+                      re.DOTALL)
+    if match:
+        img_name = match.group(1)
+        build_dir = settings.get('build_dir', '/tmp/b')
+        return os.path.join(build_dir, 'sandbox', 'persistent-data', img_name)
+
+    return None
 
 
 def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-branches

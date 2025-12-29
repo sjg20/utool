@@ -7,6 +7,7 @@
 # pylint: disable=import-error,too-many-lines
 
 import argparse
+import ast
 import os
 import shutil
 import tempfile
@@ -2192,3 +2193,102 @@ Section Headers:
                 with terminal.capture():
                     result = cmdtest.ensure_dm_init_files()
         self.assertFalse(result)
+
+
+class TestPytestParsing(TestBase):
+    """Tests for pytest test-file parsing functions"""
+
+    def setUp(self):
+        tout.init(tout.WARNING)
+        self.test_dir = tempfile.mkdtemp()
+        self.orig_config = settings.SETTINGS['config']
+        settings.SETTINGS['config'] = None
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir)
+        settings.SETTINGS['config'] = self.orig_config
+        super().tearDown()
+
+    def test_find_test(self):
+        """Test finding Python test file from spec"""
+        # Create a mock U-Boot tree with test file
+        test_fs_dir = os.path.join(self.test_dir, 'test/py/tests/test_fs')
+        os.makedirs(test_fs_dir)
+        test_file = os.path.join(test_fs_dir, 'test_ext4l.py')
+        tools.write_file(test_file, b'# test file')
+
+        # Test with class:method format
+        path, cls, method = cmdpy.find_test(self.test_dir,
+                                            'TestExt4l:test_unlink')
+        self.assertEqual(test_file, path)
+        self.assertEqual('TestExt4l', cls)
+        self.assertEqual('test_unlink', method)
+
+        # Test with just class name
+        path, cls, method = cmdpy.find_test(self.test_dir, 'ext4l')
+        self.assertEqual(test_file, path)
+        self.assertIsNone(method)
+
+        # Test not found
+        path, cls, method = cmdpy.find_test(self.test_dir,
+                                            'NonExistent:test_foo')
+        self.assertIsNone(path)
+        self.assertIsNone(cls)
+        self.assertIsNone(method)
+
+    def test_get_fixture_path(self):
+        """Test extracting fixture path from a test file"""
+        test_content = b'''
+@pytest.fixture
+def ext4_image(self, u_boot_config):
+    image_path = os.path.join(u_boot_config.persistent_data_dir,
+                              'ext4l_test.img')
+    yield image_path
+'''
+        test_file = os.path.join(self.test_dir, 'test_ext4l.py')
+        tools.write_file(test_file, test_content)
+
+        with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+            path = cmdpy.get_fixture_path(test_file)
+        self.assertEqual('/tmp/b/sandbox/persistent-data/ext4l_test.img', path)
+
+    def test_find_run_ut_call(self):
+        """Test finding run_ut() call in method AST"""
+        source = '''
+class TestFoo:
+    def test_with_ut(self, ubman):
+        ubman.run_ut('dm', 'dm_test_foo')
+
+    def test_without_ut(self):
+        pass
+'''
+        tree = ast.parse(source)
+        cls = tree.body[0]
+
+        # Method with run_ut() call
+        method = cls.body[0]
+        call = cmdpy.find_run_ut_call(method)
+        self.assertIsNotNone(call)
+        self.assertEqual('run_ut', call.func.attr)
+
+        # Method without run_ut() call
+        method = cls.body[1]
+        call = cmdpy.find_run_ut_call(method)
+        self.assertIsNone(call)
+
+    def test_parse_c_test_call(self):
+        """Test parsing a C test-command from a real test file"""
+        uboot_dir = cmdpy.get_uboot_dir()
+        self.assertIsNotNone(uboot_dir)
+
+        test_file = os.path.join(uboot_dir,
+                                 'test/py/tests/test_fs/test_ext4l.py')
+        source = tools.read_file(test_file, binary=False)
+
+        result = cmdpy.parse_c_test_call(source, 'TestExt4l', 'test_probe')
+        self.assertIsNotNone(result[0])
+        suite, c_test, arg_key, fixture = result
+        self.assertEqual('fs', suite)
+        self.assertEqual('fs_test_ext4l_probe_norun', c_test)
+        self.assertEqual('fs_image', arg_key)
+        self.assertEqual('ext4_image', fixture)
