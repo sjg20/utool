@@ -155,17 +155,18 @@ def parse_legacy_results(output, show_results=False):
         lower = line.lower()
 
         if '... ok' in lower:
+            status = 'PASS'
             passed += 1
-            if show_results and name:
-                show_result('PASS', name)
         elif '... failed' in lower:
+            status = 'FAIL'
             failed += 1
-            if show_results and name:
-                show_result('FAIL', name)
         elif '... skipped' in lower:
+            status = 'SKIP'
             skipped += 1
-            if show_results and name:
-                show_result('SKIP', name)
+        else:
+            continue
+        if show_results and name:
+            show_result(status, name)
 
     if not passed and not failed and not skipped:
         return None
@@ -194,7 +195,7 @@ def parse_results(output, show_results=False):
                 passed += 1
             elif status == 'FAIL':
                 failed += 1
-            else:  # SKIP
+            elif status == 'SKIP':
                 skipped += 1
             if show_results:
                 show_result(status, name)

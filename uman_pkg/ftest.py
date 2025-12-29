@@ -1798,17 +1798,20 @@ Test: dm_test_fourth ... ok
         self.assertEqual(1, res.failed)
         self.assertEqual(1, res.skipped)
 
-    def test_parse_results_result_lines(self):
-        """Test parse_results with explicit Result: lines"""
+    def test_parse_results_legacy(self):
+        """Test parse_legacy_results with old-style Test: lines"""
         output = '''
-Result: PASS dm_test_first
-Result: FAIL dm_test_second
-Result: SKIP dm_test_third
+Test: dm_test_first ... ok
+Test: dm_test_second ... FAILED
+Test: dm_test_third ... SKIPPED
 '''
-        res = cmdtest.parse_results(output)
+        res = cmdtest.parse_legacy_results(output)
         self.assertEqual(1, res.passed)
         self.assertEqual(1, res.failed)
         self.assertEqual(1, res.skipped)
+
+        # parse_results returns None for old-style output
+        self.assertIsNone(cmdtest.parse_results(output))
 
     def test_parse_results_only_result_lines(self):
         """Test parse_results ignores Test: lines (only Result: lines)"""
@@ -1826,6 +1829,7 @@ Result: SKIP dm_test_fourth
     def test_parse_results_empty(self):
         """Test parse_results with empty output returns None"""
         self.assertIsNone(cmdtest.parse_results(''))
+        self.assertIsNone(cmdtest.parse_legacy_results(''))
 
     def test_parse_results_named_tuple(self):
         """Test parse_results returns TestCounts named tuple"""
