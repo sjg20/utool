@@ -81,7 +81,7 @@ def get_tests_from_nm(sandbox, suite=None):
     return sorted(set(matches))
 
 
-def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
+def build_ut_cmd(sandbox, tests, flattree=False, verbose=False, legacy=False):
     """Build the sandbox command line for running tests
 
     Args:
@@ -89,6 +89,7 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
         tests (list): List of test specifications (suite or suite.test)
         flattree (bool): Use flat device tree instead of live tree
         verbose (bool): Enable verbose test output
+        legacy (bool): Legacy mode (don't use -E flag for older U-Boot)
 
     Returns:
         list: Command and arguments
@@ -98,6 +99,9 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
     # Add flat device tree flag if requested
     if flattree:
         cmd.append('-D')
+
+    # Use -E to emit Result: lines (not for legacy U-Boot)
+    emit = '' if legacy else '-E '
 
     # Build the ut command string with flags before suite name
     flags = '-v ' if verbose else ''
@@ -110,10 +114,10 @@ def build_ut_cmd(sandbox, tests, flattree=False, verbose=False):
                 ut_args.append(f'{suite} {test}')
             else:
                 ut_args.append(spec)
-        ut_cmd = f"ut {flags}{' '.join(ut_args)}"
+        ut_cmd = f"ut {emit}{flags}{' '.join(ut_args)}"
     else:
         # Run all tests
-        ut_cmd = f'ut {flags}all'
+        ut_cmd = f'ut {emit}{flags}all'
 
     cmd.extend(['-c', ut_cmd])
     return cmd
@@ -183,7 +187,7 @@ def parse_results(output, show_results=False):
     skipped = 0
 
     for line in output.splitlines():
-        result_match = re.match(r'Result:\s*(PASS|FAIL|SKIP)\s+(\S+)', line)
+        result_match = re.match(r'Result:\s*(PASS|FAIL|SKIP):?\s+(\S+)', line)
         if result_match:
             status, name = result_match.groups()
             if status == 'PASS':
@@ -227,9 +231,8 @@ def run_tests(sandbox, tests, args):
     Returns:
         int: Exit code from tests
     """
-    flattree = args.flattree
-    verbose = args.test_verbose
-    cmd = build_ut_cmd(sandbox, tests, flattree=flattree, verbose=verbose)
+    cmd = build_ut_cmd(sandbox, tests, flattree=args.flattree,
+                       verbose=args.test_verbose, legacy=args.legacy)
     tout.info(f"Running: {' '.join(cmd)}")
 
     start_time = time.time()

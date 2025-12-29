@@ -1687,38 +1687,43 @@ int main(void) { return 0; }
     def test_build_ut_cmd_no_tests(self):
         """Test build_ut_cmd with no test specifications"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut all'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E all'], cmd)
 
     def test_build_ut_cmd_flattree(self):
         """Test build_ut_cmd with flattree flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], flattree=True)
-        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_verbose(self):
         """Test build_ut_cmd with verbose flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -v dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E -v dm'], cmd)
 
     def test_build_ut_cmd_all_flags(self):
         """Test build_ut_cmd with all flags"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'],
                                    flattree=True, verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -v dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -E -v dm'], cmd)
 
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_specific_test(self):
         """Test build_ut_cmd with specific test (suite.test)"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm.test_one'])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm test_one'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm test_one'], cmd)
 
     def test_build_ut_cmd_multiple_tests(self):
         """Test build_ut_cmd with multiple test specifications"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm', 'env'])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm env'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm env'], cmd)
+
+    def test_build_ut_cmd_legacy(self):
+        """Test build_ut_cmd with legacy flag omits -E"""
+        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', ['dm'], legacy=True)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm'], cmd)
 
     def test_run_tests_basic(self):
         """Test run_tests executes sandbox correctly"""
@@ -1734,7 +1739,7 @@ int main(void) { return 0; }
             with terminal.capture():
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-c', 'ut dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
 
     def test_run_tests_flattree(self):
         """Test run_tests with flattree flag"""
@@ -1750,7 +1755,7 @@ int main(void) { return 0; }
             with terminal.capture():
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-D', '-c', 'ut dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-D', '-c', 'ut -E dm'), cap[0])
 
     def test_run_tests_verbose(self):
         """Test run_tests with verbose flag"""
@@ -1766,7 +1771,7 @@ int main(void) { return 0; }
             with terminal.capture():
                 result = cmdtest.run_tests('/path/to/sandbox', ['dm'], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-c', 'ut -v dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut -E -v dm'), cap[0])
 
     def test_parse_legacy_results_all_pass(self):
         """Test parse_legacy_results with all passing tests"""
@@ -1896,4 +1901,4 @@ Result: PASS dm_test_second
                 with terminal.capture():
                     result = cmdtest.do_test(args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-c', 'ut dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
