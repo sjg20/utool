@@ -52,19 +52,19 @@ def setup_uboot_dir():
     return uboot_dir
 
 
-def exec_cmd(cmd, args, env=None, capture=True):
+def exec_cmd(cmd, dry_run=False, env=None, capture=True):
     """Run a command or show what would be run in dry-run mode
 
     Args:
         cmd (list): Command to run
-        args (argparse.Namespace): Arguments object containing dry_run flag
+        dry_run (bool): If True, just show command without running
         env (dict): Optional environment variables to set
         capture (bool): Whether to capture output (default True)
 
     Returns:
         CommandResult or None: Result if run, None if dry-run
     """
-    if args.dry_run:
+    if dry_run:
         tout.notice(' '.join(cmd))
         if env:
             for key, value in env.items():

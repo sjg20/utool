@@ -378,7 +378,7 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
 
     env = os.environ.copy()
     env.update(pytest_vars)
-    result = exec_cmd(cmd, args, env=env, capture=False)
+    result = exec_cmd(cmd, args.dry_run, env=env, capture=False)
 
     if result is None:  # dry-run
         return 0

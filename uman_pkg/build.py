@@ -94,7 +94,7 @@ def show_size(build_dir, args):
         tout.warning('No ELF files found')
         return
 
-    result = exec_cmd(['size'] + elf_files, args)
+    result = exec_cmd(['size'] + elf_files, args.dry_run)
     if result:
         print(result.stdout)
 
@@ -172,7 +172,7 @@ def run(args):
         env = os.environ.copy()
         env['FTRACE'] = '1'
 
-    result = exec_cmd(cmd, args, env=env, capture=False)
+    result = exec_cmd(cmd, args.dry_run, env=env, capture=False)
 
     if result is None:  # dry-run
         if args.objdump:

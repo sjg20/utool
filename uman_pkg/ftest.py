@@ -249,10 +249,10 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         args = cmdline.parse_args(['-n', 'build', 'sandbox'])
         got_cmd = None
 
-        def mock_exec_cmd(cmd, _args, env=None, capture=True):
+        def mock_exec_cmd(cmd, dry_run=False, env=None, capture=True):
             nonlocal got_cmd
 
-            del env, capture  # unused
+            del dry_run, env, capture  # unused
             got_cmd = cmd
 
         with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
@@ -363,8 +363,8 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         # Test that FTRACE is set in environment when trace flag is used
         captured_env = {}
 
-        def mock_exec_cmd(_cmd, _args, env=None, capture=True):
-            del capture  # unused
+        def mock_exec_cmd(_cmd, dry_run=False, env=None, capture=True):
+            del dry_run, capture  # unused
             if env:
                 captured_env.update(env)
 
@@ -385,8 +385,8 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         # Test that the output directory is used in the build command
         captured_cmd = []
 
-        def mock_exec_cmd(cmd, _args, env=None, capture=True):
-            del env, capture  # unused
+        def mock_exec_cmd(cmd, dry_run=False, env=None, capture=True):
+            del dry_run, env, capture  # unused
             captured_cmd.extend(cmd)
 
         with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
@@ -675,18 +675,16 @@ class TestUmanCI(TestBase):
 
     def test_exec_cmd_dry_run(self):
         """Test exec_cmd in dry-run mode shows command"""
-        args = make_args(dry_run=True, verbose=False)
         with terminal.capture() as (out, err):
-            res = control.exec_cmd(['echo', 'test'], args)
+            res = control.exec_cmd(['echo', 'test'], dry_run=True)
         self.assertIsNone(res)
         self.assertEqual('echo test\n', out.getvalue())
         self.assertFalse(err.getvalue())
 
     def test_exec_cmd_normal(self):
         """Test exec_cmd in normal mode"""
-        args = make_args(dry_run=False, verbose=False)
         with terminal.capture() as (out, err):
-            res = control.exec_cmd(['true'], args)
+            res = control.exec_cmd(['true'], dry_run=False)
         self.assertIsNotNone(res)
         self.assertEqual(0, res.return_code)
         self.assertFalse(out.getvalue())

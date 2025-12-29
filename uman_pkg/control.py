@@ -151,7 +151,7 @@ def git_push_branch(branch, args, ci_vars=None, upstream=False, dest=None):
         # Different branch name, use refspec
         push_cmd.extend(['ci', f'{branch}:{dest_branch}'])
 
-    return exec_cmd(push_cmd, args)
+    return exec_cmd(push_cmd, args.dry_run)
 
 
 def show_pytest_choices(parser):
