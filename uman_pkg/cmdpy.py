@@ -177,7 +177,10 @@ def build_pytest_cmd(args):
     cmd.extend(['--id', 'na'])
 
     if args.test_spec:
-        cmd.extend(['-k', ' '.join(args.test_spec)])
+        # Convert Class:method or Class::method to "Class and method" for -k
+        spec = ' '.join(args.test_spec)
+        spec = spec.replace('::', ' and ').replace(':', ' and ')
+        cmd.extend(['-k', spec])
 
     if args.timeout != 300:
         cmd.extend(['-o', f'faulthandler_timeout={args.timeout}'])
@@ -194,6 +197,11 @@ def build_pytest_cmd(args):
         cmd.append('--setup-only')
     if args.persist:
         cmd.append('--persist')
+
+    # Add extra pytest arguments (after --)
+    extra_args = getattr(args, 'extra_args', [])
+    if extra_args:
+        cmd.extend(extra_args)
 
     return cmd
 

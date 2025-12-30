@@ -8,6 +8,7 @@ This module provides common utility functions used across uman modules.
 """
 
 import os
+import subprocess
 
 # pylint: disable=import-error
 from u_boot_pylib import command
@@ -61,7 +62,8 @@ def exec_cmd(cmd, dry_run=False, env=None, capture=True):
         cmd (list): Command to run
         dry_run (bool): If True, just show command without running
         env (dict): Optional environment variables to set
-        capture (bool): Whether to capture output (default True)
+        capture (bool): Whether to capture output (default True). When False,
+            runs interactively with proper Ctrl+C handling.
 
     Returns:
         CommandResult or None: Result if run, None if dry-run
@@ -74,6 +76,14 @@ def exec_cmd(cmd, dry_run=False, env=None, capture=True):
         return None
 
     tout.info(f"Running: {' '.join(cmd)}")
+
+    # For interactive commands (capture=False), use subprocess.run directly
+    # so Ctrl+C is properly forwarded to the child process
+    if not capture:
+        result = subprocess.run(cmd, env=env, check=False)
+        return command.CommandResult(return_code=result.returncode,
+                                     stdout='', stderr='')
+
     return command.run_pipe([cmd], env=env, capture=capture,
                             raise_on_error=False)
 

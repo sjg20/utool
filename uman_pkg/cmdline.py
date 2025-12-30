@@ -131,6 +131,8 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
+    # extra_args is set by parse_args() when '--' is present
+    pyt.set_defaults(extra_args=[])
     return pyt
 
 
@@ -256,7 +258,18 @@ def parse_args(argv=None):
     if not argv:
         argv = sys.argv[1:]
 
+    # Handle '--' separator for extra pytest arguments
+    extra_args = []
+    if '--' in argv:
+        idx = argv.index('--')
+        extra_args = argv[idx + 1:]
+        argv = argv[:idx]
+
     args = parser.parse_args(argv)
+
+    # Set extra_args for pytest command
+    if hasattr(args, 'extra_args'):
+        args.extra_args = extra_args
 
     # Resolve aliases
     for full, aliases in ALIASES.items():

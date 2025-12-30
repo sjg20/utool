@@ -10,6 +10,7 @@ import argparse
 import ast
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -816,17 +817,16 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         """Test pytest command execution"""
         cap = []
 
-        def mock_test_py(pipe_list, **_kwargs):
-            cap.append(pipe_list[0])
-            return command.CommandResult(stdout='', return_code=0)
-
-        command.TEST_RESULT = mock_test_py
+        def mock_subprocess_run(cmd, **_kwargs):
+            cap.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
 
         # Test basic pytest command
         args = make_args(cmd='pytest', board='sandbox')
-        with terminal.capture():
-            res = control.run_command(args)
-        self.assertEqual(res, 0)
+        with mock.patch('subprocess.run', mock_subprocess_run):
+            with terminal.capture():
+                res = control.run_command(args)
+        self.assertEqual(0, res)
 
         # Verify command structure
         cmd = cap[-1]
@@ -838,10 +838,11 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
 
         # Test pytest with test specification and custom timeout
         args = make_args(cmd='pytest', board='malta', test_spec=['test_dm'],
-                        timeout=600)
-        with terminal.capture():
-            res = control.run_command(args)
-        self.assertEqual(res, 0)
+                         timeout=600)
+        with mock.patch('subprocess.run', mock_subprocess_run):
+            with terminal.capture():
+                res = control.run_command(args)
+        self.assertEqual(0, res)
 
         cmd = cap[-1]
         self.assertIn('malta', cmd)
@@ -849,6 +850,30 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         self.assertIn('test_dm', cmd)
         self.assertIn('-o', cmd)
         self.assertIn('faulthandler_timeout=600', cmd)
+
+    def test_pytest_extra_args(self):
+        """Test pytest command with extra arguments after --"""
+        cap = []
+
+        def mock_subprocess_run(cmd, **_kwargs):
+            cap.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+
+        # Test extra args parsing through cmdline
+        args = cmdline.parse_args(['py', '-b', 'sandbox', 'TestFsBasic',
+                                   '--', '--fs-type', 'ext4'])
+        self.assertEqual(['TestFsBasic'], args.test_spec)
+        self.assertEqual(['--fs-type', 'ext4'], args.extra_args)
+
+        # Test command building includes extra args
+        with mock.patch('subprocess.run', mock_subprocess_run):
+            with terminal.capture():
+                res = control.run_command(args)
+        self.assertEqual(0, res)
+
+        cmd = cap[-1]
+        self.assertIn('--fs-type', cmd)
+        self.assertIn('ext4', cmd)
 
     def test_valid_pytest_value(self):
         """Test validation of valid pytest values"""
@@ -896,18 +921,18 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         """Test that pytest uses $b environment variable"""
         cap = []
 
-        def mock_test_py(pipe_list, **_kwargs):
-            cap.append(pipe_list[0])
-            return command.CommandResult(stdout='', return_code=0)
+        def mock_subprocess_run(cmd, **_kwargs):
+            cap.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
 
-        command.TEST_RESULT = mock_test_py
         orig_env = os.environ.get('b')
 
         try:
             os.environ['b'] = 'sandbox'
             args = make_args(cmd='pytest', board=None)
-            with terminal.capture():
-                res = control.run_command(args)
+            with mock.patch('subprocess.run', mock_subprocess_run):
+                with terminal.capture():
+                    res = control.run_command(args)
             self.assertEqual(0, res)
             self.assertIn('sandbox', cap[-1])
         finally:
@@ -920,15 +945,14 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         """Test that quiet mode adds correct flags"""
         cap = []
 
-        def mock_test_py(pipe_list, **_kwargs):
-            cap.append(pipe_list[0])
-            return command.CommandResult(stdout='', return_code=0)
-
-        command.TEST_RESULT = mock_test_py
+        def mock_subprocess_run(cmd, **_kwargs):
+            cap.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
 
         args = make_args(cmd='pytest', board='sandbox', quiet=True)
-        with terminal.capture():
-            res = control.run_command(args)
+        with mock.patch('subprocess.run', mock_subprocess_run):
+            with terminal.capture():
+                res = control.run_command(args)
         self.assertEqual(0, res)
 
         cmd = cap[-1]

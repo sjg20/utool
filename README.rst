@@ -171,6 +171,9 @@ hooks to PATH.
     # Dry run to see command and environment
     uman --dry-run py -b qemu-riscv64
 
+    # Pass extra arguments to pytest (after --)
+    uman py -b sandbox TestFsBasic -- --fs-type ext4
+
 **Options**:
 
 - ``test_spec``: Test specification using pytest -k syntax (positional)
