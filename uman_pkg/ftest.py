@@ -1626,7 +1626,7 @@ int main(void) { return 0; }
         self.assertEqual([], args.tests)
         self.assertFalse(args.list_tests)
         self.assertFalse(args.list_suites)
-        self.assertFalse(args.flattree)
+        self.assertFalse(args.full)
         self.assertFalse(args.test_verbose)
 
         # Test with test names
@@ -1643,7 +1643,7 @@ int main(void) { return 0; }
 
         # Test with -f flag
         args = parser.parse_args(['test', '-f'])
-        self.assertTrue(args.flattree)
+        self.assertTrue(args.full)
 
         # Test with -V flag
         args = parser.parse_args(['test', '-V'])
@@ -1747,53 +1747,56 @@ int main(void) { return 0; }
     def test_build_ut_cmd_no_tests(self):
         """Test build_ut_cmd with all specs"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('all', None)])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E all'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-c', 'ut -E all'], cmd)
 
-    def test_build_ut_cmd_flattree(self):
-        """Test build_ut_cmd with flattree flag"""
+    def test_build_ut_cmd_full(self):
+        """Test build_ut_cmd with full flag (both tree types)"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   flattree=True)
-        self.assertEqual(['/path/to/sandbox', '-D', '-c', 'ut -E dm'], cmd)
+                                   full=True)
+        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_verbose(self):
         """Test build_ut_cmd with verbose flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
                                    verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-v', '-c', 'ut -E dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-v', '-c', 'ut -E dm'],
+                         cmd)
 
     def test_build_ut_cmd_all_flags(self):
         """Test build_ut_cmd with all flags"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   flattree=True, verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-D', '-v', '-c', 'ut -E dm'], cmd)
+                                   full=True, verbose=True)
+        self.assertEqual(['/path/to/sandbox', '-v', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_specific_test(self):
         """Test build_ut_cmd with specific test (suite.test)"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', 'test_one')])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm test_one'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-c', 'ut -E dm test_one'],
+                         cmd)
 
     def test_build_ut_cmd_multiple_tests(self):
         """Test build_ut_cmd with multiple test specifications"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox',
                                    [('dm', None), ('env', None)])
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E dm; ut -E env'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-c',
+                          'ut -E dm; ut -E env'], cmd)
 
     def test_build_ut_cmd_legacy(self):
         """Test build_ut_cmd with legacy flag omits -E"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
                                    legacy=True)
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-c', 'ut dm'], cmd)
 
     def test_build_ut_cmd_manual(self):
         """Test build_ut_cmd with manual flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
                                    manual=True)
-        self.assertEqual(['/path/to/sandbox', '-c', 'ut -E -m dm'], cmd)
+        self.assertEqual(['/path/to/sandbox', '-F', '-c', 'ut -E -m dm'], cmd)
 
     def test_run_tests_basic(self):
         """Test run_tests executes sandbox correctly"""
@@ -1812,10 +1815,10 @@ int main(void) { return 0; }
                     result = cmdtest.run_tests('/path/to/sandbox',
                                                [('dm', None)], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-F', '-c', 'ut -E dm'), cap[0])
 
-    def test_run_tests_flattree(self):
-        """Test run_tests with flattree flag"""
+    def test_run_tests_full(self):
+        """Test run_tests with full flag (both tree types)"""
         cap = []
 
         def mock_run(*cmd_args, **_kwargs):
@@ -1831,7 +1834,7 @@ int main(void) { return 0; }
                     result = cmdtest.run_tests('/path/to/sandbox',
                                                [('dm', None)], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-D', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
 
     def test_run_tests_verbose(self):
         """Test run_tests with verbose flag"""
@@ -1850,7 +1853,8 @@ int main(void) { return 0; }
                     result = cmdtest.run_tests('/path/to/sandbox',
                                                [('dm', None)], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-v', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-F', '-v', '-c', 'ut -E dm'),
+                         cap[0])
 
     def test_parse_legacy_results_all_pass(self):
         """Test parse_legacy_results with all passing tests"""
@@ -1990,7 +1994,7 @@ Result: PASS dm_test_second
                         with terminal.capture():
                             result = cmdtest.do_test(args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/path/to/sandbox', '-F', '-c', 'ut -E dm'), cap[0])
 
     def test_parse_one_test_suite(self):
         """Test parse_one_test with suite name"""
@@ -2156,8 +2160,8 @@ Section Headers:
             count = cmdtest.predict_test_count('/path/to/sandbox', 'dm')
         self.assertEqual(2, count)
 
-    def test_predict_test_count_flat_tree(self):
-        """Test predict_test_count with flattree=True"""
+    def test_predict_test_count_full(self):
+        """Test predict_test_count with full=True (both tree types)"""
         flags_data = [
             ('test_a', 0),                      # No flags - runs once
             ('test_b', cmdtest.UTF_DM),         # Runs twice
@@ -2169,7 +2173,7 @@ Section Headers:
                                     return_value=flags_data)
         with patcher:
             count = cmdtest.predict_test_count('/path/to/sandbox', 'dm',
-                                               flattree=True)
+                                               full=True)
         # test_a(1) + test_b(2) + test_c(1) + test_d(1) + video(1) = 6
         self.assertEqual(6, count)
 

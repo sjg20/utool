@@ -246,7 +246,7 @@ without going through pytest. This is faster for quick iteration on C code.
 
 **Options**:
 
-- ``-f, --flattree``: Use flat device tree for tests
+- ``-f, --full``: Run both live-tree and flat-tree tests (default: live-tree only)
 - ``-l, --list``: List available tests
 - ``-L, --legacy``: Use legacy result parsing (for old U-Boot)
 - ``-m, --manual``: Force manual tests to run (tests with _norun suffix)

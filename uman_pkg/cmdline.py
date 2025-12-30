@@ -189,8 +189,8 @@ def add_test_subparser(subparsers):
         'tests', nargs='*', metavar='TEST',
         help='Test name(s) to run (e.g. "dm" or "env")')
     test.add_argument(
-        '-f', '--flattree', action='store_true',
-        help='Use flat device tree for tests')
+        '-f', '--full', action='store_true',
+        help='Run both live-tree and flat-tree tests (default: live-tree only)')
     test.add_argument(
         '-l', '--list', action='store_true', dest='list_tests',
         help='List available tests')

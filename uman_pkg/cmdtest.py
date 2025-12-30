@@ -119,13 +119,13 @@ def get_test_flags(sandbox, suite):
     return test_flags
 
 
-def predict_test_count(sandbox, suite, flattree=False):
+def predict_test_count(sandbox, suite, full=False):
     """Predict how many times tests will run
 
     Args:
         sandbox (str): Path to sandbox executable
         suite (str): Suite name
-        flattree (bool): Whether running with flat tree only (-f flag)
+        full (bool): Whether running both live-tree and flat-tree tests
 
     Returns:
         int: Predicted number of test runs
@@ -136,17 +136,17 @@ def predict_test_count(sandbox, suite, flattree=False):
 
     count = 0
     for name, flags in test_flags:
-        # Tests with UTF_FLAT_TREE only run on flat tree
+        # Tests with UTF_FLAT_TREE only run on flat tree (skip unless full)
         if flags & UTF_FLAT_TREE:
-            if flattree:
+            if full:
                 count += 1
             continue
 
         # All other tests run once on live tree
         count += 1
 
-        # Tests with UTF_DM run again on flat tree, except video tests
-        if flattree and flags & UTF_DM and not flags & UTF_LIVE_TREE:
+        # Tests with UTF_DM run again on flat tree (only if full)
+        if full and flags & UTF_DM and not flags & UTF_LIVE_TREE:
             # Video tests skip flattree (except video_base)
             if 'video' not in name or 'video_base' in name:
                 count += 1
@@ -382,14 +382,14 @@ def validate_specs(sandbox, specs):
     return unmatched
 
 
-def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False,
+def build_ut_cmd(sandbox, specs, full=False, verbose=False, legacy=False,
                  manual=False):
     """Build the sandbox command line for running tests
 
     Args:
         sandbox (str): Path to sandbox executable
         specs (list): List of (suite, pattern) tuples from parse_test_specs
-        flattree (bool): Use flat device tree instead of live tree
+        full (bool): Run both live-tree and flat-tree tests
         verbose (bool): Enable verbose test output
         legacy (bool): Legacy mode (don't use -E flag for older U-Boot)
         manual (bool): Force manual tests to run
@@ -399,9 +399,9 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False,
     """
     cmd = [sandbox]
 
-    # Add flat device tree flag if requested
-    if flattree:
-        cmd.append('-D')
+    # Add -F to skip flat-tree tests (live-tree only) unless full mode
+    if not full:
+        cmd.append('-F')
 
     # Add -v to sandbox to show test output
     if verbose:
@@ -539,7 +539,7 @@ def run_tests(sandbox, specs, args):  # pylint: disable=R0914
     if needs_dm_init(specs) and not ensure_dm_init_files():
         return 1
 
-    cmd = build_ut_cmd(sandbox, specs, flattree=args.flattree,
+    cmd = build_ut_cmd(sandbox, specs, full=args.full,
                        verbose=args.test_verbose, legacy=args.legacy,
                        manual=args.manual)
     tout.info(f"Running: {' '.join(cmd)}")
