@@ -48,7 +48,12 @@ def build_ci_vars(args):
         ci_flags_set = (args.suites or args.pytest or args.world or
                        args.sjg or args.test_spec)
 
-        if not ci_flags_set:
+        if args.all:
+            ci_vars['SUITES'] = '1'
+            ci_vars['PYTEST'] = '1'
+            ci_vars['WORLD'] = '1'
+            ci_vars['SJG_LAB'] = '1'
+        elif not ci_flags_set:
             ci_vars['SUITES'] = '1'
             ci_vars['PYTEST'] = '1'
             ci_vars['WORLD'] = '1'

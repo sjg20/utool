@@ -71,6 +71,7 @@ class TestBase(unittest.TestCase):
 def make_args(**kwargs):
     """Create an argparse.Namespace with default CI arguments"""
     defaults = {
+        'all': False,
         'board': None,
         'build': False,
         'build_dir': None,
@@ -429,6 +430,18 @@ class TestUmanCIVars(TestBase):
             'PYTEST': '1',
             'WORLD': '1',
             'SJG_LAB': ''
+        }
+        self.assertEqual(expected, ci_vars)
+
+    def test_build_ci_vars_all_flag(self):
+        """Test build_ci_vars with -a flag (all stages including lab)"""
+        args = make_args(all=True)
+        ci_vars = control.build_ci_vars(args)
+        expected = {
+            'SUITES': '1',
+            'PYTEST': '1',
+            'WORLD': '1',
+            'SJG_LAB': '1'
         }
         self.assertEqual(expected, ci_vars)
 

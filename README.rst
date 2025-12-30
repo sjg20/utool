@@ -71,6 +71,7 @@ Some simple examples::
 
 - ``-0, --null``: Skip all CI stages (no builds/tests run, MR can merge
   immediately)
+- ``-a, --all``: Run all CI stages including lab
 - ``-d, --dest BRANCH``: Destination branch name (default: current branch name)
 - ``-f, --force``: Force push (required when rewriting branch history)
 - ``-l, --sjg [BOARD]``: Set SJG_LAB (optionally specify board)

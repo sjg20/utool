@@ -51,6 +51,8 @@ def add_ci_subparser(subparsers):
 
     ci.add_argument('-0', '--null', action='store_true',
                     help='Set all CI vars to 0')
+    ci.add_argument('-a', '--all', action='store_true',
+                    help='Run all CI stages including lab')
     ci.add_argument('-d', '--dest', metavar='BRANCH', default=None,
                     help='Destination branch name (default: current branch)')
     ci.add_argument('-f', '--force', action='store_true',
