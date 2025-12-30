@@ -555,14 +555,22 @@ def run_tests(sandbox, specs, args):  # pylint: disable=R0914
             return 1
     elapsed = time.time() - start_time
 
-    # Print output to console only in verbose mode
-    if result.stdout and args.test_verbose and not args.results:
-        print(result.stdout, end='')
-
-    # Parse and show results summary
+    # Parse results first to check for failures
     res = parse_results(result.stdout, show_results=args.results)
     if not res and args.legacy:
         res = parse_legacy_results(result.stdout, show_results=args.results)
+
+    # Print output in verbose mode, or if there are failures
+    if result.stdout and not args.results:
+        if args.test_verbose or (res and res.failed):
+            # Skip U-Boot banner, show only test output
+            in_tests = False
+            for line in result.stdout.splitlines():
+                if not in_tests:
+                    if line.startswith(('Running ', 'Test: ')):
+                        in_tests = True
+                if in_tests:
+                    print(line)
     if res:
         tout.notice(f'Results: {res.passed} passed, {res.failed} failed, '
                     f'{res.skipped} skipped in {format_duration(elapsed)}')
