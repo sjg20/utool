@@ -1808,12 +1808,13 @@ int main(void) { return 0; }
                                          stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', 'dm'])
+        col = terminal.Color()
         with mock.patch.object(command, 'run_one', mock_run):
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture():
                     result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args)
+                                               [('dm', None)], args, col)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-F', '-c', 'ut -E dm'), cap[0])
 
@@ -1827,12 +1828,13 @@ int main(void) { return 0; }
                                          stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', '-f', 'dm'])
+        col = terminal.Color()
         with mock.patch.object(command, 'run_one', mock_run):
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture():
                     result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args)
+                                               [('dm', None)], args, col)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-c', 'ut -E dm'), cap[0])
 
@@ -1846,12 +1848,13 @@ int main(void) { return 0; }
                                          stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', '-V', 'dm'])
+        col = terminal.Color()
         with mock.patch.object(command, 'run_one', mock_run):
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture():
                     result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args)
+                                               [('dm', None)], args, col)
         self.assertEqual(0, result)
         self.assertEqual(('/path/to/sandbox', '-F', '-v', '-c', 'ut -E dm'),
                          cap[0])
@@ -1930,8 +1933,10 @@ Test: dm_test_first ... ok
 Test: dm_test_second ... FAILED
 Test: dm_test_third ... SKIPPED
 '''
+        col = terminal.Color()
         with terminal.capture() as (out, _):
-            res = cmdtest.parse_legacy_results(output, show_results=True)
+            res = cmdtest.parse_legacy_results(output, show_results=True,
+                                               col=col)
         self.assertEqual(1, res.passed)
         self.assertEqual(1, res.failed)
         self.assertEqual(1, res.skipped)
@@ -1963,12 +1968,13 @@ Result: PASS dm_test_second
             return command.CommandResult(return_code=0, stdout=output)
 
         args = cmdline.parse_args(['test', 'dm'])
+        col = terminal.Color()
         with mock.patch.object(command, 'run_one', mock_run):
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture() as (out, err):
                     result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args)
+                                               [('dm', None)], args, col)
         self.assertEqual(0, result)
         self.assertFalse(err.getvalue())
         stdout = out.getvalue()
@@ -1985,6 +1991,7 @@ Result: PASS dm_test_second
                                          stdout='Result: PASS dm_test\n')
 
         args = cmdline.parse_args(['test', 'dm'])
+        args.col = terminal.Color()
         with mock.patch.object(cmdtest, 'get_sandbox_path',
                                return_value='/path/to/sandbox'):
             with mock.patch.object(cmdtest, 'validate_specs', return_value=[]):

@@ -16,6 +16,7 @@ import time
 
 # pylint: disable=import-error
 from u_boot_pylib import command
+from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
 from uman_pkg import settings
@@ -426,17 +427,24 @@ def build_ut_cmd(sandbox, specs, full=False, verbose=False, legacy=False,
     return cmd
 
 
-def show_result(status, name):
+def show_result(status, name, col):
     """Print a test result if showing results
 
     Args:
         status (str): Result status (PASS, FAIL, SKIP)
         name (str): Test name
+        col (terminal.Color): Color object for output
     """
-    print(f'  {status}: {name}')
+    if status == 'PASS':
+        color = terminal.Color.GREEN
+    elif status == 'FAIL':
+        color = terminal.Color.RED
+    else:
+        color = terminal.Color.YELLOW
+    print(f'  {col.start(color)}{status}{col.stop()}: {name}')
 
 
-def parse_legacy_results(output, show_results=False):
+def parse_legacy_results(output, show_results=False, col=None):
     """Parse legacy test output to extract results
 
     Handles old-style "Test: test_name ... ok/FAILED/SKIPPED" lines
@@ -444,6 +452,7 @@ def parse_legacy_results(output, show_results=False):
     Args:
         output (str): Test output from sandbox
         show_results (bool): Print per-test results
+        col (terminal.Color): Color object for output
 
     Returns:
         TestCounts or None: Counts of passed/failed/skipped, or None if none
@@ -469,19 +478,20 @@ def parse_legacy_results(output, show_results=False):
         else:
             continue
         if show_results and name:
-            show_result(status, name)
+            show_result(status, name, col)
 
     if not passed and not failed and not skipped:
         return None
     return TestCounts(passed, failed, skipped)
 
 
-def parse_results(output, show_results=False):
+def parse_results(output, show_results=False, col=None):
     """Parse test output to extract results from Result: lines
 
     Args:
         output (str): Test output from sandbox
         show_results (bool): Print per-test results
+        col (terminal.Color): Color object for output
 
     Returns:
         TestCounts or None: Counts of passed/failed/skipped, or None if none
@@ -501,7 +511,7 @@ def parse_results(output, show_results=False):
             elif status == 'SKIP':
                 skipped += 1
             if show_results:
-                show_result(status, name)
+                show_result(status, name, col)
 
     if not passed and not failed and not skipped:
         return None
@@ -524,13 +534,14 @@ def format_duration(seconds):
     return f'{minutes}m {secs:.1f}s'
 
 
-def run_tests(sandbox, specs, args):  # pylint: disable=R0914
+def run_tests(sandbox, specs, args, col):  # pylint: disable=R0914
     """Run sandbox tests
 
     Args:
         sandbox (str): Path to sandbox executable
         specs (list): List of (suite, pattern) tuples from parse_test_specs
         args (argparse.Namespace): Arguments from cmdline
+        col (terminal.Color): Color object for output
 
     Returns:
         int: Exit code from tests
@@ -556,9 +567,10 @@ def run_tests(sandbox, specs, args):  # pylint: disable=R0914
     elapsed = time.time() - start_time
 
     # Parse results first to check for failures
-    res = parse_results(result.stdout, show_results=args.results)
+    res = parse_results(result.stdout, show_results=args.results, col=col)
     if not res and args.legacy:
-        res = parse_legacy_results(result.stdout, show_results=args.results)
+        res = parse_legacy_results(result.stdout, show_results=args.results,
+                                   col=col)
 
     # Print output in verbose mode, or if there are failures
     if result.stdout and not args.results:
@@ -572,8 +584,14 @@ def run_tests(sandbox, specs, args):  # pylint: disable=R0914
                 if in_tests:
                     print(line)
     if res:
-        tout.notice(f'Results: {res.passed} passed, {res.failed} failed, '
-                    f'{res.skipped} skipped in {format_duration(elapsed)}')
+        green = col.start(terminal.Color.GREEN)
+        red = col.start(terminal.Color.RED)
+        yellow = col.start(terminal.Color.YELLOW)
+        reset = col.stop()
+        print(f'Results: {green}{res.passed} passed{reset}, '
+              f'{red}{res.failed} failed{reset}, '
+              f'{yellow}{res.skipped} skipped{reset} in '
+              f'{format_duration(elapsed)}')
         return result.return_code
 
     tout.warning('No results detected (use -L for older U-Boot)')
@@ -635,4 +653,4 @@ def do_test(args):  # pylint: disable=R0912
         return 1
 
     # Run tests
-    return run_tests(sandbox, specs, args)
+    return run_tests(sandbox, specs, args, args.col)

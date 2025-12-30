@@ -16,6 +16,7 @@ import gitlab
 from patman import patchstream
 from u_boot_pylib import command
 from u_boot_pylib import gitutil
+from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
 from uman_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
@@ -277,6 +278,9 @@ def run_command(args):  # pylint: disable=R0911
     """
     # Set verbosity level
     tout.init(tout.INFO if args.verbose else tout.NOTICE)
+
+    # Set up terminal color support
+    args.col = terminal.Color()
 
     # Ensure settings file exists
     settings.get_all()
