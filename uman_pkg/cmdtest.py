@@ -555,9 +555,15 @@ def run_tests(sandbox, specs, args, col):  # pylint: disable=R0914
                        manual=args.manual)
     tout.info(f"Running: {' '.join(cmd)}")
 
+    # Set up environment with persistent data directory
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persist_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
+    env = os.environ.copy()
+    env['U_BOOT_PERSISTENT_DATA_DIR'] = persist_dir
+
     start_time = time.time()
     try:
-        result = command.run_one(*cmd, capture=True)
+        result = command.run_one(*cmd, capture=True, env=env)
     except command.CommandExc as exc:
         # Tests may fail but still produce parseable output
         result = exc.result
