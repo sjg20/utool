@@ -138,6 +138,34 @@ def get_cmd(args, board, build_dir):
     return cmd
 
 
+def build_board(board, dry_run=False):
+    """Build U-Boot for a board
+
+    Args:
+        board (str): Board name to build
+        dry_run (bool): If True, just show command without running
+
+    Returns:
+        bool: True if build succeeded, False otherwise
+    """
+    if not setup_uboot_dir():
+        return False
+
+    build_dir = get_dir(board)
+    tout.info(f'Building {board}...')
+
+    cmd = ['buildman', '-I', '-w', '-L', '--boards', board, '-o', build_dir]
+    result = exec_cmd(cmd, dry_run, capture=False)
+
+    if result is None:  # dry-run
+        return True
+
+    if result.return_code != 0:
+        tout.error('Build failed')
+        return False
+    return True
+
+
 def run(args):
     """Handle build command - build U-Boot for a board
 

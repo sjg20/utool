@@ -19,7 +19,7 @@ from u_boot_pylib import command
 from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
-from uman_pkg import settings
+from uman_pkg import build, settings
 from uman_pkg.util import run_pytest
 
 # Named tuple for test result counts
@@ -607,9 +607,16 @@ def do_test(args):  # pylint: disable=R0912
     Returns:
         int: Exit code
     """
+    board = getattr(args, 'board', None) or 'sandbox'
+
+    # Build if requested
+    if args.build:
+        if not build.build_board(board, args.dry_run):
+            return 1
+
     sandbox = get_sandbox_path()
     if not sandbox:
-        tout.error('Sandbox not found. Build it first with: uman build sandbox')
+        tout.error(f'Sandbox not found. Build it first with: uman build {board}')
         return 1
 
     # Handle list suites

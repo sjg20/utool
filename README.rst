@@ -158,27 +158,28 @@ hooks to PATH.
       ...
 
     # Run tests for a board (board is required, or use $b env var)
-    uman py -b sandbox
+    uman py -B sandbox
 
     # Run specific test pattern (no quotes needed for multi-word specs)
-    uman py -b sandbox test_dm or test_env
+    uman py -B sandbox test_dm or test_env
 
     # Quiet mode with timing info
-    uman py -qb sandbox -t
+    uman py -qB sandbox -t
 
     # Build before testing, use custom timeout
-    uman py -b sandbox --build -T 600
+    uman py -B sandbox -b -T 600
 
     # Dry run to see command and environment
-    uman --dry-run py -b qemu-riscv64
+    uman --dry-run py -B qemu-riscv64
 
     # Pass extra arguments to pytest (after --)
-    uman py -b sandbox TestFsBasic -- --fs-type ext4
+    uman py -B sandbox TestFsBasic -- --fs-type ext4
 
 **Options**:
 
 - ``test_spec``: Test specification using pytest -k syntax (positional)
-- ``-b, --board BOARD``: Board name to test (required, or set ``$b``)
+- ``-b, --build``: Build U-Boot before running tests
+- ``-B, --board BOARD``: Board name to test (required, or set ``$b``)
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 - ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
 - ``-l, --list``: List available QEMU boards
@@ -188,7 +189,6 @@ hooks to PATH.
 - ``-S, --setup-only``: Run only fixture setup (create test images) without tests
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
-- ``--build``: Build U-Boot before running tests
 - ``--build-dir DIR``: Override build directory
 
 **Test Hooks Search Order**:
@@ -250,6 +250,8 @@ without going through pytest. This is faster for quick iteration on C code.
 
 **Options**:
 
+- ``-b, --build``: Build before running tests
+- ``-B, --board BOARD``: Board to build/test (default: sandbox)
 - ``-f, --full``: Run both live-tree and flat-tree tests (default: live-tree only)
 - ``-l, --list``: List available tests
 - ``-L, --legacy``: Use legacy result parsing (for old U-Boot)

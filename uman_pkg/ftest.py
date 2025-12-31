@@ -187,24 +187,24 @@ class TestUmanCmdline(TestBase):
         self.assertEqual(args.timeout, 300)
 
         # Test pytest with board specified
-        args = parser.parse_args(['pytest', '-b', 'sandbox', 'test_dm'])
+        args = parser.parse_args(['pytest', '-B', 'sandbox', 'test_dm'])
         self.assertEqual(args.test_spec, ['test_dm'])
         self.assertEqual(args.board, 'sandbox')
 
         # Test pytest with multi-word test spec (no quotes needed)
-        args = parser.parse_args(['pytest', '-b', 'coreboot', 'not', 'sleep'])
+        args = parser.parse_args(['pytest', '-B', 'coreboot', 'not', 'sleep'])
         self.assertEqual(args.test_spec, ['not', 'sleep'])
         self.assertEqual(args.board, 'coreboot')
 
         # Test pytest with all flags
-        args = parser.parse_args(['pytest', '-b', 'coreboot', 'test_dm',
+        args = parser.parse_args(['pytest', '-B', 'coreboot', 'test_dm',
                                  '-T', '600'])
         self.assertEqual(args.board, 'coreboot')
         self.assertEqual(args.test_spec, ['test_dm'])
         self.assertEqual(args.timeout, 600)
 
         # Test pytest alias (use cmdline.parse_args for alias resolution)
-        args = cmdline.parse_args(['py', '-b', 'sandbox'])
+        args = cmdline.parse_args(['py', '-B', 'sandbox'])
         self.assertEqual(args.cmd, 'pytest')
         self.assertEqual(args.board, 'sandbox')
 
@@ -873,7 +873,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
             return subprocess.CompletedProcess(cmd, 0)
 
         # Test extra args parsing through cmdline
-        args = cmdline.parse_args(['py', '-b', 'sandbox', 'TestFsBasic',
+        args = cmdline.parse_args(['py', '-B', 'sandbox', 'TestFsBasic',
                                    '--', '--fs-type', 'ext4'])
         self.assertEqual(['TestFsBasic'], args.test_spec)
         self.assertEqual(['--fs-type', 'ext4'], args.extra_args)

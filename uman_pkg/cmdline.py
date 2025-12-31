@@ -97,7 +97,10 @@ def add_pytest_subparser(subparsers):
         'test_spec', type=str, nargs='*',
         help="Test specification (e.g. 'test_dm', 'not sleep')")
     pyt.add_argument(
-        '-b', '--board', metavar='BOARD',
+        '-b', '--build', action='store_true',
+        help='Build U-Boot before running tests')
+    pyt.add_argument(
+        '-B', '--board', metavar='BOARD',
         help='Board name to test (required; use -l to list QEMU boards)')
     pyt.add_argument(
         '-c', '--show-cmd', action='store_true',
@@ -127,9 +130,6 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '-T', '--timeout', type=int, metavar='SECS', default=300,
         help='Test timeout in seconds (default: 300)')
-    pyt.add_argument(
-        '--build', action='store_true',
-        help='Build U-Boot before running tests')
     pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
@@ -192,6 +192,12 @@ def add_test_subparser(subparsers):
     test.add_argument(
         'tests', nargs='*', metavar='TEST',
         help='Test name(s) to run (e.g. "dm" or "env")')
+    test.add_argument(
+        '-b', '--build', action='store_true',
+        help='Build before running tests')
+    test.add_argument(
+        '-B', '--board', metavar='BOARD', default='sandbox',
+        help='Board to build/test (default: sandbox)')
     test.add_argument(
         '-f', '--full', action='store_true',
         help='Run both live-tree and flat-tree tests (default: live-tree only)')
