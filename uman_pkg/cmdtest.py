@@ -398,7 +398,7 @@ def build_ut_cmd(sandbox, specs, full=False, verbose=False, legacy=False,
     Returns:
         list: Command and arguments
     """
-    cmd = [sandbox]
+    cmd = [sandbox, '-T']
 
     # Add -F to skip flat-tree tests (live-tree only) unless full mode
     if not full:
