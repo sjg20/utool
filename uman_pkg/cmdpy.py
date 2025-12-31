@@ -13,12 +13,15 @@ import glob
 import os
 import re
 import socket
+import subprocess
+import time
 
 # pylint: disable=import-error
 from u_boot_pylib import command
 from u_boot_pylib import tools
 from u_boot_pylib import tout
 
+from uman_pkg import build as build_mod
 from uman_pkg import settings
 from uman_pkg.cmdtest import get_sandbox_path
 from uman_pkg.util import exec_cmd, get_uboot_dir
@@ -197,11 +200,12 @@ def build_pytest_cmd(args):
         cmd.append('--setup-only')
     if args.persist:
         cmd.append('--persist')
+    if args.gdbserver:
+        cmd.extend(['--gdbserver', args.gdbserver])
 
     # Add extra pytest arguments (after --)
-    extra_args = getattr(args, 'extra_args', [])
-    if extra_args:
-        cmd.extend(extra_args)
+    if args.extra_args:
+        cmd.extend(args.extra_args)
 
     return cmd
 
@@ -563,6 +567,100 @@ def run_c_test(args):
     return result.return_code
 
 
+def run_with_gdb(args):
+    """Launch gdb to connect to an existing gdbserver
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    # Get the U-Boot executable path
+    if args.build_dir:
+        build_dir = args.build_dir
+    else:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = f'{base_dir}/{args.board}'
+    uboot_exe = os.path.join(build_dir, 'u-boot')
+
+    if not os.path.exists(uboot_exe):
+        tout.error(f'U-Boot executable not found: {uboot_exe}')
+        return 1
+
+    # Get gdbserver channel
+    channel = args.gdbserver or 'localhost:1234'
+
+    # Build gdb command
+    gdb_cmd = [
+        'gdb-multiarch',
+        uboot_exe,
+        '-ex', f'target remote {channel}',
+        '-ex', 'continue',
+    ]
+
+    tout.info(f"Running: {' '.join(gdb_cmd)}")
+
+    # Parse host:port from channel
+    if ':' in channel:
+        host, port = channel.rsplit(':', 1)
+        port = int(port)
+    else:
+        host, port = 'localhost', int(channel)
+
+    def port_alive():
+        """Check if gdbserver port is accepting connections"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.5)
+            sock.connect((host, port))
+            sock.close()
+            return True
+        except (ConnectionRefusedError, socket.timeout, OSError):
+            return False
+
+    # Run gdb in a loop, reconnecting when server restarts
+    reconnect_timeout = 5  # seconds to wait for server after gdb disconnects
+    while True:
+        # pylint: disable=consider-using-with
+        proc = subprocess.Popen(gdb_cmd)
+
+        # Wait for gdb to connect before monitoring
+        time.sleep(1)
+
+        # Monitor for server to become available (indicates U-Boot restarted)
+        # While gdb is connected, the port is occupied so port_alive() is False
+        # When U-Boot restarts, gdbserver listens again and port_alive() is True
+        try:
+            while proc.poll() is None:
+                if port_alive():
+                    # Server is accepting connections - U-Boot restarted
+                    tout.notice('Server restarted, reconnecting...')
+                    proc.terminate()
+                    proc.wait()
+                    break
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            proc.terminate()
+            proc.wait()
+            break
+
+        # gdb exited - wait briefly for server to come back
+        if proc.returncode is not None:
+            start = time.time()
+            while time.time() - start < reconnect_timeout:
+                if port_alive():
+                    tout.notice('Server restarted, reconnecting...')
+                    break
+                time.sleep(0.2)
+            else:
+                # Server didn't come back, tests finished
+                tout.notice('Server not responding, exiting')
+                break
+
+    return 0
+
+
 def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-branches
     """Handle pytest command - run pytest tests for U-Boot
 
@@ -613,11 +711,30 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
 
     tout.info(f'Running pytest for board: {args.board}')
 
+    # Handle -G: set gdbserver if not already set
+    if args.gdb and not args.gdbserver:
+        args.gdbserver = 'localhost:1234'
+
+    # When using gdbserver with build, do build first so message appears after
+    if args.gdbserver and args.build:
+        if not build_mod.build_board(args.board, args.dry_run):
+            return 1
+        args.build = False  # Don't build again in pytest
+
+    # Show -G command hint when using -g (not in dry-run mode)
+    if args.gdbserver and not args.gdb and not args.dry_run:
+        tout.notice(f'In another terminal: um py -G -B {args.board}')
+
     pytest_vars = pytest_env(args.board)
     cmd = build_pytest_cmd(args)
 
     env = os.environ.copy()
     env.update(pytest_vars)
+
+    # Handle -G: just launch gdb to connect to existing gdbserver
+    if args.gdb:
+        return run_with_gdb(args)
+
     result = exec_cmd(cmd, args.dry_run, env=env, capture=False)
 
     if result is None:  # dry-run

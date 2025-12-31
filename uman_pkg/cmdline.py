@@ -109,6 +109,12 @@ def add_pytest_subparser(subparsers):
         '-C', '--c-test', action='store_true',
         help='Run just the C test part (assumes setup done with -SP)')
     pyt.add_argument(
+        '-g', action='store_const', const='localhost:1234', dest='gdbserver',
+        help='Run sandbox under gdbserver at localhost:1234')
+    pyt.add_argument(
+        '-G', '--gdb', action='store_true',
+        help='Run under gdbserver and launch gdb-multiarch connected to it')
+    pyt.add_argument(
         '-l', '--list', action='store_true', dest='list_boards',
         help='List available QEMU boards')
     pyt.add_argument(
@@ -133,6 +139,9 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
+    pyt.add_argument(
+        '--gdbserver', metavar='CHANNEL', dest='gdbserver',
+        help='Run sandbox under gdbserver (e.g., localhost:5555)')
     # extra_args is set by parse_args() when '--' is present
     pyt.set_defaults(extra_args=[])
     return pyt

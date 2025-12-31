@@ -141,7 +141,7 @@ Pytest Subcommand
 
 The ``pytest`` command (alias ``py``) runs U-Boot's test.py test framework. It
 automatically sets up environment variables and build directories. Set
-``export b=sandbox`` (or another board) to avoid needing ``-b`` each time.
+``export b=sandbox`` (or another board) to avoid needing ``-B`` each time.
 
 It builds U-Boot automatically before testing, uses ``--buildman`` for
 cross-compiler setup, sets ``OPENSBI`` for RISC-V boards, and adds U-Boot test
@@ -182,6 +182,8 @@ hooks to PATH.
 - ``-B, --board BOARD``: Board name to test (required, or set ``$b``)
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 - ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
+- ``-g``: Run sandbox under gdbserver at localhost:1234
+- ``-G, --gdb``: Launch gdb-multiarch and connect to an existing gdbserver
 - ``-l, --list``: List available QEMU boards
 - ``-P, --persist``: Persist test artifacts (do not clean up after tests)
 - ``-q, --quiet``: Quiet mode - only show build errors, progress, and result
@@ -190,6 +192,19 @@ hooks to PATH.
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
 - ``--build-dir DIR``: Override build directory
+- ``--gdbserver CHANNEL``: Run sandbox under gdbserver (e.g., localhost:5555)
+
+**Debugging with GDB**:
+
+Use ``-g`` to start pytest under gdbserver, then ``-G`` in another terminal
+to connect gdb::
+
+    # Terminal 1: Start pytest with gdbserver
+    uman py -b -g -B sandbox bootstd or luks
+    # Shows: In another terminal: um py -G -B sandbox
+
+    # Terminal 2: Connect with gdb
+    um py -G -B sandbox
 
 **Test Hooks Search Order**:
 
