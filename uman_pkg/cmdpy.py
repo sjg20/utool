@@ -205,6 +205,8 @@ def build_pytest_cmd(args):
         cmd.extend(['--gdbserver', args.gdbserver])
     if args.exitfirst:
         cmd.append('-x')
+    if not args.full:
+        cmd.append('--no-full')
 
     # Add extra pytest arguments (after --)
     if args.extra_args:
