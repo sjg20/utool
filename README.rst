@@ -191,6 +191,7 @@ hooks to PATH.
 - ``-S, --setup-only``: Run only fixture setup (create test images) without tests
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
+- ``-x, --exitfirst``: Stop on first test failure
 - ``--build-dir DIR``: Override build directory
 - ``--gdbserver CHANNEL``: Run sandbox under gdbserver (e.g., localhost:5555)
 

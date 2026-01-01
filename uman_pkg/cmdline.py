@@ -137,6 +137,9 @@ def add_pytest_subparser(subparsers):
         '-T', '--timeout', type=int, metavar='SECS', default=300,
         help='Test timeout in seconds (default: 300)')
     pyt.add_argument(
+        '-x', '--exitfirst', action='store_true',
+        help='Stop on first test failure')
+    pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
     pyt.add_argument(

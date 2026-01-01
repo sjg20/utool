@@ -80,6 +80,7 @@ def make_args(**kwargs):
         'debug': False,
         'dest': None,
         'dry_run': False,
+        'exitfirst': False,
         'extra_args': [],
         'force': False,
         'gdb': False,
