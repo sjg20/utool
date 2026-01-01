@@ -140,6 +140,9 @@ def add_pytest_subparser(subparsers):
         '-x', '--exitfirst', action='store_true',
         help='Stop on first test failure')
     pyt.add_argument(
+        '--pollute', metavar='TEST',
+        help='Find which test pollutes TEST (causes it to fail)')
+    pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
     pyt.add_argument(

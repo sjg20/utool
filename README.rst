@@ -191,8 +191,45 @@ hooks to PATH.
 - ``-S, --setup-only``: Run only fixture setup (create test images) without tests
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
+- ``-x, --exitfirst``: Stop on first test failure
+- ``--pollute TEST``: Find which test pollutes TEST
 - ``--build-dir DIR``: Override build directory
 - ``--gdbserver CHANNEL``: Run sandbox under gdbserver (e.g., localhost:5555)
+
+**Finding Test Pollution**:
+
+When a test fails only after other tests have run, use ``--pollute`` to find the
+polluting test::
+
+    # Find which test causes dm_test_host_base to fail
+    uman py -xB sandbox --pollute dm_test_host_base "not slow"
+
+The pollution search process:
+
+1. Collects all tests using ``--collect-only`` (pytest's default order)
+2. Finds the target test's position in the list
+3. Takes all tests **before** the target as candidates
+4. Verifies the target passes alone, fails with all candidates
+5. Binary search: runs first half of candidates + target
+   - If target fails → polluter is in first half
+   - If target passes → polluter is in second half
+6. Repeats until single polluter found
+
+Example: tests ``[A, B, C, D, E, F]`` with ``F`` failing only after others run:
+
+- Candidates: ``[A, B, C, D, E]``
+- Step 1: run ``A B C F`` → PASS → polluter in ``[D, E]``
+- Step 2: run ``D F`` → FAIL → polluter is ``D``
+- Verify: run ``D F`` → FAIL → confirmed
+
+Each bisect step extracts test names from node IDs and uses ``-k`` with an
+"or" expression (e.g., ``-k "ut_dm_foo or ut_dm_bar"``). This preserves
+pytest's execution order while selecting specific tests.
+
+The final verification step confirms the polluter by running just polluter +
+target and checking it fails. This ensures the result is correct.
+
+Uses a separate build directory (``sandbox-bisect``) to avoid conflicts.
 
 **Debugging with GDB**:
 

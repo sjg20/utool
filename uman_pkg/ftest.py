@@ -2411,3 +2411,95 @@ class TestFoo:
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)
         self.assertIn('Method name required', err.getvalue())
+
+
+class TestPytestPollute(TestBase):
+    """Tests for the pytest --pollute functionality"""
+
+    def setUp(self):
+        tout.init(tout.WARNING)
+        self.test_dir = None
+
+    def test_pollute_flag_parsing(self):
+        """Test --pollute flag is parsed correctly"""
+        args = cmdline.parse_args(['pytest', '-B', 'sandbox',
+                                   '--pollute', 'test_foo'])
+        self.assertEqual('test_foo', args.pollute)
+        self.assertEqual('sandbox', args.board)
+
+    def test_collect_tests_parsing(self):
+        """Test parsing of --collect-only output"""
+        collect_output = '''test_ut.py::TestUt::test_dm
+test_ut.py::TestUt::test_env
+test_fs.py::TestFs::test_ext4
+<Module test_other.py>
+'''
+        with mock.patch.object(command, 'run_pipe') as mock_run:
+            mock_run.return_value = mock.Mock(
+                return_code=0,
+                stdout=collect_output,
+                stderr='')
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      test_spec=None, build=False)
+            tests = cmdpy.collect_tests(args)
+
+        self.assertEqual(3, len(tests))
+        self.assertEqual('test_ut.py::TestUt::test_dm', tests[0])
+        self.assertEqual('test_ut.py::TestUt::test_env', tests[1])
+        self.assertEqual('test_fs.py::TestFs::test_ext4', tests[2])
+
+    def test_pollute_run_uses_k_with_names(self):
+        """Test pollute_run uses -k with extracted test names"""
+        captured_cmd = []
+
+        def mock_popen(cmd, **_kwargs):
+            captured_cmd.extend(cmd)
+            proc = mock.Mock()
+            proc.stdout.read.return_value = b''
+            proc.returncode = 0
+            return proc
+
+        with mock.patch('subprocess.Popen', mock_popen):
+            args = argparse.Namespace(board='sandbox', build_dir=None)
+            env = {}
+            tests = ['tests/test_ut.py::test_ut[ut_dm_foo]',
+                     'tests/test_ut.py::test_ut[ut_dm_bar]']
+            target = 'tests/test_ut.py::test_ut[ut_dm_target]'
+            cmdpy.pollute_run(tests, target, args, env)
+
+        # Uses -k with extracted test names
+        self.assertIn('-k', captured_cmd)
+        idx = captured_cmd.index('-k')
+        spec = captured_cmd[idx + 1]
+        self.assertEqual('ut_dm_foo or ut_dm_bar or ut_dm_target', spec)
+
+    def test_node_to_name(self):
+        """Test node_to_name extracts test name from node ID"""
+        # Parameterized test
+        self.assertEqual('ut_dm_foo',
+            cmdpy.node_to_name('tests/test_ut.py::test_ut[ut_dm_foo]'))
+        # Non-parameterized test
+        self.assertEqual('test_bar',
+            cmdpy.node_to_name('tests/test_foo.py::TestClass::test_bar'))
+        # Simple name
+        self.assertEqual('test_simple', cmdpy.node_to_name('test_simple'))
+
+    def test_pollute_run_uses_pollute_build_dir(self):
+        """Test pollute_run uses -pollute suffix for build dir"""
+        captured_cmd = []
+
+        def mock_popen(cmd, **_kwargs):
+            captured_cmd.extend(cmd)
+            proc = mock.Mock()
+            proc.stdout.read.return_value = b''
+            proc.returncode = 0
+            return proc
+
+        with mock.patch('subprocess.Popen', mock_popen):
+            with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+                args = argparse.Namespace(board='sandbox', build_dir=None)
+                cmdpy.pollute_run([], 'test_target', args, {})
+
+        self.assertIn('--build-dir', captured_cmd)
+        idx = captured_cmd.index('--build-dir')
+        self.assertEqual('/tmp/b/sandbox-pollute', captured_cmd[idx + 1])

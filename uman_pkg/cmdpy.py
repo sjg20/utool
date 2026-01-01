@@ -10,6 +10,7 @@ test framework.
 
 import ast
 import glob
+import math
 import os
 import re
 import socket
@@ -663,6 +664,223 @@ def run_with_gdb(args):
     return 0
 
 
+def collect_tests(args):
+    """Collect all tests using pytest --collect-only
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        list: Ordered list of test node IDs, or None on error
+    """
+    if args.build_dir:
+        build_dir = args.build_dir
+    else:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = f'{base_dir}/{args.board}-bisect'
+
+    cmd = ['./test/py/test.py', '-B', args.board, '--build-dir', build_dir,
+           '--buildman', '--id', 'na', '--collect-only', '-q']
+
+    if args.build:
+        cmd.append('--build')
+
+    if args.test_spec:
+        spec = ' '.join(args.test_spec)
+        cmd.extend(['-k', spec])
+
+    result = command.run_pipe([cmd], capture=True, capture_stderr=True,
+                              raise_on_error=False)
+    if result.return_code != 0:
+        tout.error('Failed to collect tests')
+        if result.stderr:
+            print(result.stderr)
+        return None
+
+    tests = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        # Test lines contain :: (e.g., test_ut.py::TestUt::test_dm)
+        if '::' in line and not line.startswith('<'):
+            tests.append(line)
+    return tests
+
+
+def node_to_name(node_id):
+    """Extract test name from a pytest node ID for use with -k
+
+    Args:
+        node_id (str): Full node ID like 'tests/test_ut.py::test_ut[ut_dm_foo]'
+
+    Returns:
+        str: Test name suitable for -k, e.g. 'ut_dm_foo'
+    """
+    # Extract the part in brackets if present (parameterized tests)
+    if '[' in node_id and node_id.endswith(']'):
+        return node_id[node_id.index('[') + 1:-1]
+    # Otherwise use the method name after the last ::
+    if '::' in node_id:
+        return node_id.split('::')[-1]
+    return node_id
+
+
+def pollute_run(tests, target, args, env):
+    """Run a subset of tests followed by the target test
+
+    Args:
+        tests (list): Tests to run before target (full node IDs)
+        target (str): Target test that may fail (full node ID)
+        args (argparse.Namespace): Arguments from cmdline
+        env (dict): Environment variables
+
+    Returns:
+        bool: True if target test failed, False if it passed
+    """
+    if args.build_dir:
+        build_dir = args.build_dir
+    else:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = f'{base_dir}/{args.board}-pollute'
+
+    # Convert node IDs to test names and join with "or" for -k
+    all_tests = tests + [target]
+    names = [node_to_name(t) for t in all_tests]
+    spec = ' or '.join(names)
+
+    cmd = ['./test/py/test.py', '-B', args.board, '--build-dir', build_dir,
+           '--buildman', '--id', 'na', '-q', '-k', spec]
+
+    total = len(all_tests)
+    done = 0
+    # pytest result chars: . pass, F fail, s skip, E error, x xfail, X xpass
+    result_chars = '.FsExX'
+
+    # Run with Popen to show progress as tests complete
+    # pylint: disable=consider-using-with
+    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+    while True:
+        char = proc.stdout.read(1)
+        if not char:
+            break
+        if char.decode('utf-8', errors='replace') in result_chars:
+            done += 1
+            tout.progress(f'    {done}/{total}', trailer='')
+    tout.clear_progress()
+    proc.wait()
+    return proc.returncode != 0
+
+
+def do_pollute(args):
+    """Find which test pollutes the target test
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    target = args.pollute
+
+    # Find U-Boot source directory
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    # Change to U-Boot directory if needed
+    if uboot_dir != os.getcwd():
+        os.chdir(uboot_dir)
+
+    tout.notice('Collecting tests...')
+    tests = collect_tests(args)
+    if tests is None:
+        return 1
+
+    # Find target in test list
+    target_idx = None
+    for i, test in enumerate(tests):
+        if target in test:
+            target_idx = i
+            target = test  # Use full test name
+            break
+
+    if target_idx is None:
+        tout.error(f"Target test '{args.pollute}' not found in collection")
+        tout.info('Available tests containing that string:')
+        for test in tests:
+            if args.pollute.lower() in test.lower():
+                print(f'  {test}')
+        return 1
+
+    tout.notice(f"Found {len(tests)} tests, target '{target}' at position "
+                f'{target_idx + 1}')
+
+    if target_idx == 0:
+        tout.error('Target is the first test - nothing can pollute it')
+        return 1
+
+    candidates = tests[:target_idx]
+    pytest_vars = pytest_env(args.board)
+    env = os.environ.copy()
+    env.update(pytest_vars)
+
+    # Verify target passes alone
+    tout.notice('Verifying target passes alone...')
+    if pollute_run([], target, args, env):
+        tout.error('Target test fails when run alone - not a pollution issue')
+        return 1
+    tout.notice('  OK')
+
+    # Verify target fails with all candidates
+    tout.notice('Verifying target fails with all prior tests...')
+    if not pollute_run(candidates, target, args, env):
+        tout.error('Target test passes with all prior tests - cannot reproduce')
+        return 1
+    tout.notice('  FAIL (confirmed)')
+
+    # Binary search
+    steps = math.ceil(math.log2(len(candidates))) if candidates else 0
+    step = 0
+
+    tout.notice(f'Searching for polluter in {len(candidates)} candidate tests...')
+    while len(candidates) > 1:
+        step += 1
+        mid = len(candidates) // 2
+        first_half = candidates[:mid]
+
+        print(f'  Step {step}/{steps}: {len(first_half)} tests...')
+        if pollute_run(first_half, target, args, env):
+            tout.notice('  -> FAIL (polluter in first half)')
+            candidates = first_half
+        else:
+            tout.notice('  -> PASS (polluter in second half)')
+            candidates = candidates[mid:]
+
+    if not candidates:
+        tout.error('No polluter found - may need multiple tests to trigger')
+        return 1
+
+    polluter = candidates[0]
+
+    # Final verification
+    print(f'  Verifying {node_to_name(polluter)}...')
+    if pollute_run([polluter], target, args, env):
+        tout.notice('  -> FAIL (confirmed)')
+    else:
+        tout.notice('  -> PASS (inconclusive - may need multiple tests)')
+        return 1
+
+    polluter_name = node_to_name(polluter)
+    target_name = node_to_name(target)
+    red = '\033[31m'
+    reset = '\033[0m'
+    tout.notice(
+        f'\nFound: {target_name} polluted by {red}{polluter_name}{reset}')
+    tout.notice(f'  Run: uman py -B {args.board} "{polluter} or {target}"')
+    return 0
+
+
 def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-branches
     """Handle pytest command - run pytest tests for U-Boot
 
@@ -688,9 +906,13 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
 
     board = args.board or os.environ.get('b')
     if not board:
-        tout.error('Board is required: use -b BOARD or set $b (use -l to list)')
+        tout.error('Board is required: use -B BOARD or set $b (use -l to list)')
         return 1
     args.board = board
+
+    # Handle --pollute option
+    if args.pollute:
+        return do_pollute(args)
 
     # Handle --show-cmd option
     if args.show_cmd:
