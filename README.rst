@@ -191,7 +191,6 @@ hooks to PATH.
 - ``-S, --setup-only``: Run only fixture setup (create test images) without tests
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
-- ``-x, --exitfirst``: Stop on first test failure
 - ``--build-dir DIR``: Override build directory
 - ``--gdbserver CHANNEL``: Run sandbox under gdbserver (e.g., localhost:5555)
 
@@ -293,10 +292,14 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
     # Build specific target
     uman build sandbox -t u-boot.bin
 
+    # Build with gprof profiling
+    uman build sandbox --gprof
+
 **Options**:
 
 - ``-f, --force-reconfig``: Force reconfiguration
 - ``-F, --fresh``: Delete build directory first
+- ``--gprof``: Enable gprof profiling (sets GPROF=1)
 - ``-I, --in-tree``: Build in source tree, not separate directory
 - ``-j, --jobs JOBS``: Number of parallel jobs (passed to make)
 - ``-l, --lto``: Enable LTO

@@ -196,9 +196,12 @@ def run(args):
     cmd = get_cmd(args, board, build_dir)
 
     env = None
-    if args.trace:
+    if args.trace or args.gprof:
         env = os.environ.copy()
-        env['FTRACE'] = '1'
+        if args.trace:
+            env['FTRACE'] = '1'
+        if args.gprof:
+            env['GPROF'] = '1'
 
     result = exec_cmd(cmd, args.dry_run, env=env, capture=False)
 

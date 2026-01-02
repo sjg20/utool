@@ -387,6 +387,28 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         self.assertIn('FTRACE', captured_env)
         self.assertEqual('1', captured_env.get('FTRACE'))
 
+    def test_build_gprof_flag(self):
+        """Test -g/--gprof flag sets GPROF environment variable"""
+        args = cmdline.parse_args(['build', 'sandbox', '-g'])
+        self.assertTrue(args.gprof)
+
+        # Test that GPROF is set in environment when gprof flag is used
+        captured_env = {}
+
+        def mock_exec_cmd(_cmd, dry_run=False, env=None, capture=True):
+            del dry_run, capture  # unused
+            if env:
+                captured_env.update(env)
+
+        with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(build, 'setup_uboot_dir',
+                                   return_value='/tmp'):
+                with terminal.capture():
+                    build.run(args)
+
+        self.assertIn('GPROF', captured_env)
+        self.assertEqual('1', captured_env.get('GPROF'))
+
     def test_build_output_dir_flag(self):
         """Test -o/--output-dir flag overrides build directory"""
         args = cmdline.parse_args(['build', 'sandbox', '-o', '/custom/out'])
