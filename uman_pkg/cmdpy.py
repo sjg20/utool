@@ -941,8 +941,8 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
     if args.gdb and not args.gdbserver:
         args.gdbserver = 'localhost:1234'
 
-    # When using gdbserver with build, do build first so message appears after
-    if args.gdbserver and args.build:
+    # Build with um if requested, rather than letting pytest do it
+    if args.build:
         if not build_mod.build_board(args.board, args.dry_run):
             return 1
         args.build = False  # Don't build again in pytest

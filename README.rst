@@ -177,7 +177,7 @@ hooks to PATH.
 **Options**:
 
 - ``test_spec``: Test specification using pytest -k syntax (positional)
-- ``-b, --build``: Build U-Boot before running tests
+- ``-b, --build``: Build U-Boot before running tests (uses um build)
 - ``-B, --board BOARD``: Board name to test (required, or set ``$b``)
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 - ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
