@@ -184,7 +184,7 @@ hooks to PATH.
 - ``-f, --full``: Run both live-tree and flat-tree tests (default: live-tree only)
 - ``-g``: Run sandbox under gdbserver at localhost:1234
 - ``-G, --gdb``: Launch gdb-multiarch and connect to an existing gdbserver
-- ``-l, --list``: List available QEMU boards
+- ``-l, --list``: List available QEMU and sandbox boards
 - ``-P, --persist``: Persist test artifacts (do not clean up after tests)
 - ``-q, --quiet``: Quiet mode - only show build errors, progress, and result
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)

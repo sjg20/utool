@@ -127,18 +127,21 @@ def pytest_env(board):
     return env
 
 
-def list_qemu_boards():
-    """List available QEMU boards using buildman
+def list_boards_by_pattern(pattern):
+    """List available boards matching a pattern using buildman
+
+    Args:
+        pattern (str): Board pattern to match (e.g. 'qemu', 'sandbox')
 
     Returns:
-        list: Sorted list of QEMU board names
+        list: Sorted list of board names
     """
     uboot_dir = get_uboot_dir()
     orig_dir = os.getcwd()
     try:
         if uboot_dir:
             os.chdir(uboot_dir)
-        result = command.run_pipe([['buildman', '-nv', 'qemu']], capture=True,
+        result = command.run_pipe([['buildman', '-nv', pattern]], capture=True,
                                    capture_stderr=True, raise_on_error=False)
     finally:
         os.chdir(orig_dir)
@@ -148,10 +151,19 @@ def list_qemu_boards():
 
     boards = []
     for line in result.stdout.splitlines():
-        # Board names are on indented lines after "qemu : N boards"
+        # Board names are on indented lines after "pattern : N boards"
         if line.startswith('   '):
             boards.extend(line.split())
     return sorted(boards)
+
+
+def list_qemu_boards():
+    """List available QEMU boards using buildman
+
+    Returns:
+        list: Sorted list of QEMU board names
+    """
+    return list_boards_by_pattern('qemu')
 
 
 def build_pytest_cmd(args):
@@ -893,13 +905,18 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
         int: Exit code
     """
     if args.list_boards:
-        boards = list_qemu_boards()
-        if boards:
+        qemu_boards = list_qemu_boards()
+        sandbox_boards = list_boards_by_pattern('sandbox')
+        if qemu_boards:
             tout.notice('Available QEMU boards:')
-            for board in boards:
+            for board in qemu_boards:
                 print(f'  {board}')
-        else:
-            tout.warning('No QEMU boards found (is buildman configured?)')
+        if sandbox_boards:
+            tout.notice('Available sandbox boards:')
+            for board in sandbox_boards:
+                print(f'  {board}')
+        if not qemu_boards and not sandbox_boards:
+            tout.warning('No boards found (is buildman configured?)')
         return 0
 
     # Handle -C option: run just the C test part
