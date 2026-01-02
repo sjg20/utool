@@ -393,6 +393,10 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False,
     if flattree:
         cmd.append('-D')
 
+    # Add -v to sandbox to show test output
+    if verbose:
+        cmd.append('-v')
+
     # Build ut commands from specs; use -E to emit Result: lines
     # Flags must come before suite name
     flags = ''
@@ -400,8 +404,6 @@ def build_ut_cmd(sandbox, specs, flattree=False, verbose=False, legacy=False,
         flags += '-E '
     if manual:
         flags += '-m '
-    if verbose:
-        flags += '-v '
     cmds = []
     for suite, pattern in specs:
         if pattern:
