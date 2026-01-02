@@ -2010,6 +2010,11 @@ Result: PASS dm_test_second
         self.assertEqual((None, 'something'),
                          cmdtest.parse_one_test('test_something'))
 
+    def test_parse_one_test_pytest_name(self):
+        """Test parse_one_test with pytest-style ut_ prefix"""
+        self.assertEqual(('bootstd', 'bootflow_cmd_menu'),
+                         cmdtest.parse_one_test('ut_bootstd_bootflow_cmd_menu'))
+
     def test_parse_test_specs_empty(self):
         """Test parse_test_specs with no tests"""
         self.assertEqual([('all', None)], cmdtest.parse_test_specs([]))

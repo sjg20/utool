@@ -244,7 +244,8 @@ def parse_one_test(arg):
 
     Args:
         arg (str): Test argument (suite, suite_test_name, "suite pattern",
-                   test_name, or partial_name for searching all suites)
+                   test_name, ut_suite_testname, or partial_name for searching
+                   all suites)
 
     Returns:
         tuple: (suite, pattern) where pattern may be None, or suite may be
@@ -253,6 +254,15 @@ def parse_one_test(arg):
     parts = arg.split(None, 1)
     suite = parts[0]
     pattern = parts[1] if len(parts) > 1 else None
+
+    # Strip ut_ prefix from pytest-style names (e.g. ut_bootstd_bootflow)
+    # Format is ut_<suite>_<testname> where suite is first underscore-delimited
+    if suite.startswith('ut_'):
+        suite = suite[3:]
+        # Split on first underscore: suite_testname -> (suite, testname)
+        if '_' in suite and pattern is None:
+            suite, pattern = suite.split('_', 1)
+            return (suite, pattern)
 
     # Check for suite.test format
     if '.' in suite and pattern is None:

@@ -235,6 +235,9 @@ without going through pytest. This is faster for quick iteration on C code.
     # Run specific test
     uman test dm.acpi
 
+    # Run test using pytest-style name (ut_<suite>_<test>)
+    uman test ut_bootstd_bootflow
+
     # List available suites
     uman test -s
 
