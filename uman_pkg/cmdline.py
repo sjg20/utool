@@ -183,6 +183,8 @@ def add_build_subparser(subparsers):
                      help='Build specific target (e.g. u-boot.bin)')
     bld.add_argument('-T', '--trace', action='store_true',
                      help='Enable function tracing (FTRACE=1)')
+    bld.add_argument('--bisect', action='store_true',
+                     help='Bisect to find first failing commit')
     bld.add_argument('--gprof', action='store_true',
                      help='Enable gprof profiling (GPROF=1)')
     return bld

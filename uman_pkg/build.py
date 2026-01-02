@@ -166,6 +166,122 @@ def build_board(board, dry_run=False):
     return True
 
 
+def try_build(board, build_dir):
+    """Try to build a board, returning success/failure
+
+    Args:
+        board (str): Board name to build
+        build_dir (str): Path to build directory
+
+    Returns:
+        bool: True if build succeeded, False otherwise
+    """
+    cmd = ['buildman', '-I', '-w', '-L', '-W', '-C', '--boards', board,
+           '-o', build_dir]
+    result = command.run_pipe([cmd], capture=True, raise_on_error=False)
+    return result.return_code == 0
+
+
+def do_bisect(board, build_dir):
+    """Bisect to find first failing commit
+
+    Assumes the current commit fails to build and upstream is good.
+
+    Args:
+        board (str): Board name to build
+        build_dir (str): Path to build directory
+
+    Returns:
+        int: Exit code (0 for success, 1 for error)
+    """
+    # Check for rebase in progress
+    result = command.run_one('git', 'status', capture=True)
+    if 'rebase in progress' in result.stdout:
+        tout.error('Rebase in progress, cannot bisect')
+        return 1
+
+    # Get current branch name (or commit if detached)
+    try:
+        orig_branch = command.output_one_line('git', 'symbolic-ref', '--short',
+                                              'HEAD')
+    except command.CommandExc:
+        orig_branch = None
+
+    # Get upstream commit
+    try:
+        upstream = command.output_one_line('git', 'rev-parse', '@{u}')
+    except command.CommandExc:
+        tout.error('Cannot find upstream branch')
+        return 1
+
+    head = command.output_one_line('git', 'rev-parse', 'HEAD')
+    tout.notice(f'Bisecting {board} between upstream and HEAD')
+    tout.info(f'  Upstream: {upstream[:12]}')
+    tout.info(f'  HEAD:     {head[:12]}')
+
+    # Verify current commit fails
+    tout.notice('Verifying HEAD fails to build...')
+    if try_build(board, build_dir):
+        tout.error('HEAD builds successfully, nothing to bisect')
+        return 1
+    tout.info('  HEAD: bad (fails to build)')
+
+    # Verify upstream builds
+    tout.notice('Verifying upstream builds...')
+    command.run_one('git', 'checkout', upstream)
+    if not try_build(board, build_dir):
+        command.run_one('git', 'checkout', head)
+        tout.error('Upstream fails to build, cannot bisect')
+        return 1
+    tout.info('  Upstream: good (builds)')
+
+    # Go back to HEAD for bisect
+    command.run_one('git', 'checkout', head)
+
+    # Start bisect
+    command.run_one('git', 'bisect', 'start')
+    command.run_one('git', 'bisect', 'bad', head)
+    command.run_one('git', 'bisect', 'good', upstream)
+
+    # Run bisect
+    tout.notice('Running bisect...')
+    step = 1
+    while True:
+        current = command.output_one_line('git', 'rev-parse', 'HEAD')
+        subject = command.output_one_line('git', 'log', '-1', '--format=%s')
+        tout.progress(f'  Step {step}: {current[:12]} {subject[:50]}',
+                      trailer='')
+
+        if try_build(board, build_dir):
+            result = command.run_one('git', 'bisect', 'good', capture=True)
+        else:
+            result = command.run_one('git', 'bisect', 'bad', capture=True)
+        tout.clear_progress()
+
+        # Check if bisect is done - parse commit from output
+        for line in result.stdout.splitlines():
+            if 'is the first bad commit' in line:
+                bad_commit = line.split()[0]
+                break
+        else:
+            step += 1
+            continue
+        break
+
+    # Get the subject for the bad commit
+    subject = command.output_one_line('git', 'log', '-1', '--format=%s',
+                                       bad_commit)
+
+    # Clean up and return to original branch
+    command.run_one('git', 'bisect', 'reset')
+    if orig_branch:
+        command.run_one('git', 'checkout', orig_branch)
+
+    # Report result
+    tout.notice(f'\nFirst bad commit: {bad_commit[:12]} {subject}')
+    return 0
+
+
 def run(args):
     """Handle build command - build U-Boot for a board
 
@@ -184,6 +300,9 @@ def run(args):
         return 1
 
     build_dir = args.output_dir or get_dir(board)
+
+    if args.bisect:
+        return do_bisect(board, build_dir)
 
     if args.fresh and os.path.exists(build_dir):
         tout.info(f'Removing output directory: {build_dir}')

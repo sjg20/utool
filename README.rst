@@ -135,7 +135,6 @@ The tool can create GitLab merge requests with automated pipeline creation::
 run), not fine-grained selection of specific boards or test specifications.
 For precise targeting like ``-p coreboot`` or ``-t "test_ofplatdata"``, use
 regular CI pushes instead of merge requests.
-
 Pytest Subcommand
 -----------------
 
@@ -333,10 +332,15 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
     # Build with gprof profiling
     uman build sandbox --gprof
 
+    # Bisect to find first commit that breaks the build
+    uman build sandbox --bisect
+
 **Options**:
 
 - ``-f, --force-reconfig``: Force reconfiguration
 - ``-F, --fresh``: Delete build directory first
+- ``--bisect``: Bisect to find first commit that breaks the build (assumes
+  HEAD fails and upstream builds)
 - ``--gprof``: Enable gprof profiling (sets GPROF=1)
 - ``-I, --in-tree``: Build in source tree, not separate directory
 - ``-j, --jobs JOBS``: Number of parallel jobs (passed to make)

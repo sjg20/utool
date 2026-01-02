@@ -434,6 +434,79 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         idx = captured_cmd.index('-o')
         self.assertEqual('/custom/out', captured_cmd[idx + 1])
 
+    def test_do_bisect(self):
+        """Test build bisect finds first bad commit"""
+        git_calls = []
+        # Simulate: HEAD bad, upstream good, bisect finds mid222 as first bad
+        current_commit = ['abc123']
+        bisect_step = [0]
+
+        def mock_run_one(*args, capture=False):
+            del capture
+            git_calls.append(args)
+            result = mock.Mock()
+            result.stdout = ''
+            if args[1] == 'status':
+                result.stdout = 'On branch my-branch'
+            elif args[1] == 'checkout':
+                current_commit[0] = args[2][:6]
+            elif args[1] == 'bisect':
+                if args[2] == 'start':
+                    pass
+                elif args[2] in ('good', 'bad'):
+                    if len(args) == 3:  # bisect good/bad without commit
+                        bisect_step[0] += 1
+                        if bisect_step[0] == 1:
+                            current_commit[0] = 'mid111'
+                        elif bisect_step[0] == 2:
+                            # Bisect complete
+                            result.stdout = 'mid222abc is the first bad commit\n'
+            return result
+
+        def mock_output_one_line(*args):
+            if args[1] == 'rev-parse':
+                if args[2] == '@{u}':
+                    return 'def456'
+                return current_commit[0]
+            if args[1] == 'symbolic-ref':
+                return 'my-branch'
+            if args[1] == 'log':
+                return 'Bad commit message'
+            return ''
+
+        def mock_try_build(_board, _build_dir):
+            # HEAD (abc123) bad, upstream (def456) good, mid111 bad
+            return current_commit[0] == 'def456'
+
+        tout.init(tout.NOTICE)
+        with mock.patch.object(command, 'run_one', mock_run_one):
+            with mock.patch.object(command, 'output_one_line',
+                                   mock_output_one_line):
+                with mock.patch.object(build, 'try_build', mock_try_build):
+                    with terminal.capture() as (out, _err):
+                        result = build.do_bisect('sandbox', '/tmp/b/sandbox')
+
+        self.assertEqual(0, result)
+        self.assertIn('First bad commit: mid222abc', out.getvalue())
+        # Verify we returned to original branch
+        self.assertEqual(('git', 'checkout', 'my-branch'), git_calls[-1])
+
+    def test_do_bisect_rebase_in_progress(self):
+        """Test bisect refuses to start during rebase"""
+        def mock_run_one(*args, capture=False):
+            del capture
+            result = mock.Mock()
+            result.stdout = 'interactive rebase in progress'
+            return result
+
+        tout.init(tout.WARNING)
+        with mock.patch.object(command, 'run_one', mock_run_one):
+            with terminal.capture() as (out, err):
+                result = build.do_bisect('sandbox', '/tmp/b/sandbox')
+
+        self.assertEqual(1, result)
+        self.assertIn('Rebase in progress', err.getvalue())
+
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
 
