@@ -69,17 +69,17 @@ Some simple examples::
 
 **Options**
 
-- ``-s, --suites``: Enable SUITES
+- ``-0, --null``: Skip all CI stages (no builds/tests run, MR can merge
+  immediately)
+- ``-d, --dest BRANCH``: Destination branch name (default: current branch name)
+- ``-f, --force``: Force push (required when rewriting branch history)
+- ``-l, --sjg [BOARD]``: Set SJG_LAB (optionally specify board)
+- ``-m, --merge``: Create merge request using cover letter from patch series
 - ``-p, --pytest [BOARD]``: Enable PYTEST (optionally specify board name)
+- ``-s, --suites``: Enable SUITES
 - ``-t, --test-spec SPEC``: Override test specification (e.g. "not sleep",
   "test_ofplatdata")
 - ``-w, --world``: Enable WORLD
-- ``-l, --sjg [BOARD]``: Set SJG_LAB (optionally specify board)
-- ``-f, --force``: Force push (required when rewriting branch history)
-- ``-0, --null``: Skip all CI stages (no builds/tests run, MR can merge
-  immediately)
-- ``-m, --merge``: Create merge request using cover letter from patch series
-- ``-d, --dest BRANCH``: Destination branch name (default: current branch name)
 
 Pytest Targeting Examples
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -175,17 +175,17 @@ hooks to PATH.
 
 - ``test_spec``: Test specification using pytest -k syntax (positional)
 - ``-b, --board BOARD``: Board name to test (required, or set ``$b``)
+- ``-c, --show-cmd``: Show QEMU command line without running tests
+- ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
 - ``-l, --list``: List available QEMU boards
+- ``-P, --persist``: Persist test artifacts (do not clean up after tests)
 - ``-q, --quiet``: Quiet mode - only show build errors, progress, and result
-- ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
-- ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
+- ``-S, --setup-only``: Run only fixture setup (create test images) without tests
+- ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
+- ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
 - ``--build``: Build U-Boot before running tests
 - ``--build-dir DIR``: Override build directory
-- ``-c, --show-cmd``: Show QEMU command line without running tests
-- ``-S, --setup-only``: Run only fixture setup (create test images) without tests
-- ``-P, --persist``: Persist test artifacts (do not clean up after tests)
-- ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
 
 **Test Hooks Search Order**:
 
@@ -243,13 +243,43 @@ without going through pytest. This is faster for quick iteration on C code.
 
 **Options**:
 
-- ``-l, --list``: List available tests
-- ``-s, --suites``: List available test suites
 - ``-f, --flattree``: Use flat device tree for tests
-- ``-V, --test-verbose``: Enable verbose test output
-- ``-r, --results``: Show per-test pass/fail status
+- ``-l, --list``: List available tests
 - ``-L, --legacy``: Use legacy result parsing (for old U-Boot)
 - ``-m, --manual``: Force manual tests to run (tests with _norun suffix)
+- ``-r, --results``: Show per-test pass/fail status
+- ``-s, --suites``: List available test suites
+- ``-V, --test-verbose``: Enable verbose test output
+
+Build Subcommand
+----------------
+
+The ``build`` command (alias ``b``) builds U-Boot for a specified board::
+
+    # Build for sandbox
+    uman build sandbox
+
+    # Build with LTO enabled
+    uman build sandbox -l
+
+    # Force reconfiguration
+    uman build sandbox -f
+
+    # Build specific target
+    uman build sandbox -t u-boot.bin
+
+**Options**:
+
+- ``-f, --force-reconfig``: Force reconfiguration
+- ``-F, --fresh``: Delete build directory first
+- ``-I, --in-tree``: Build in source tree, not separate directory
+- ``-j, --jobs JOBS``: Number of parallel jobs (passed to make)
+- ``-l, --lto``: Enable LTO
+- ``-o, --output-dir DIR``: Override output directory
+- ``-O, --objdump``: Write disassembly of u-boot and SPL ELFs
+- ``-s, --size``: Show size of u-boot and SPL ELFs
+- ``-t, --target TARGET``: Build specific target (e.g. u-boot.bin)
+- ``-T, --trace``: Enable function tracing (FTRACE=1)
 
 Setup Subcommand
 ----------------
@@ -271,6 +301,11 @@ various architectures::
 
     # Force reinstall
     uman setup opensbi -f
+
+**Options**:
+
+- ``-f, --force``: Force rebuild even if already built
+- ``-l, --list``: List available components
 
 **Components**:
 
@@ -324,6 +359,11 @@ The tool includes comprehensive self-tests using the U-Boot test framework::
 
     # Run a specific test
     uman selftest test_ci_subcommand_parsing
+
+**Options**:
+
+- ``-N, --no-capture``: Disable capturing of console output in tests
+- ``-X, --test-preserve-dirs``: Preserve and display test-created directories
 
 Technical Notes
 ---------------
