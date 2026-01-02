@@ -1759,14 +1759,13 @@ int main(void) { return 0; }
         """Test build_ut_cmd with verbose flag"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
                                    verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-v', '-c', 'ut -E dm'],
-                         cmd)
+        self.assertEqual(['/path/to/sandbox', '-v', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_all_flags(self):
         """Test build_ut_cmd with all flags"""
         cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   full=True, verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-v', '-c', 'ut -E dm'], cmd)
+                                   flattree=True, verbose=True)
+        self.assertEqual(['/path/to/sandbox', '-D', '-v', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
@@ -1851,8 +1850,7 @@ int main(void) { return 0; }
                     result = cmdtest.run_tests('/path/to/sandbox',
                                                [('dm', None)], args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-T', '-F', '-v', '-c', 'ut -E dm'),
-                         cap[0])
+        self.assertEqual(('/path/to/sandbox', '-v', '-c', 'ut -E dm'), cap[0])
 
     def test_parse_legacy_results_all_pass(self):
         """Test parse_legacy_results with all passing tests"""

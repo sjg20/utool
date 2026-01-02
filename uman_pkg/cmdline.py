@@ -46,26 +46,26 @@ def add_ci_subparser(subparsers):
 
     # Help text only - choices shown with 'help' argument
 
-    ci.add_argument('--suites', '-s', action='store_true',
-                    help='Enable SUITES')
     pytest_help = 'Enable PYTEST: to select a particular one: -p help'
     sjg_help = 'Enable SJG_LAB: to select a particular board: -l help'
 
-    ci.add_argument('--pytest', '-p', nargs='?', const='1', default=None,
-                    help=pytest_help)
-    ci.add_argument('--world', '-w', action='store_true', help='Enable WORLD')
-    ci.add_argument('--sjg', '-l', nargs='?', const='1', default=None,
-                    help=sjg_help)
-    ci.add_argument('--force', '-f', action='store_true',
-                    help='Force push to remote branch')
-    ci.add_argument('--null', '-0', action='store_true',
+    ci.add_argument('-0', '--null', action='store_true',
                     help='Set all CI vars to 0')
-    ci.add_argument('--merge', '-m', action='store_true',
-                    help='Create merge request')
-    ci.add_argument('--test-spec', '-t', metavar='SPEC',
-                    help="Override test spec (e.g. 'not sleep')")
-    ci.add_argument('--dest', '-d', metavar='BRANCH', default=None,
+    ci.add_argument('-d', '--dest', metavar='BRANCH', default=None,
                     help='Destination branch name (default: current branch)')
+    ci.add_argument('-f', '--force', action='store_true',
+                    help='Force push to remote branch')
+    ci.add_argument('-l', '--sjg', nargs='?', const='1', default=None,
+                    help=sjg_help)
+    ci.add_argument('-m', '--merge', action='store_true',
+                    help='Create merge request')
+    ci.add_argument('-p', '--pytest', nargs='?', const='1', default=None,
+                    help=pytest_help)
+    ci.add_argument('-s', '--suites', action='store_true',
+                    help='Enable SUITES')
+    ci.add_argument('-t', '--test-spec', metavar='SPEC',
+                    help="Override test spec (e.g. 'not sleep')")
+    ci.add_argument('-w', '--world', action='store_true', help='Enable WORLD')
     return ci
 
 
@@ -98,8 +98,30 @@ def add_pytest_subparser(subparsers):
         '-b', '--board', metavar='BOARD',
         help='Board name to test (required; use -l to list QEMU boards)')
     pyt.add_argument(
+        '-c', '--show-cmd', action='store_true',
+        help='Show QEMU command line without running tests')
+    pyt.add_argument(
+        '-C', '--c-test', action='store_true',
+        help='Run just the C test part (assumes setup done with -SP)')
+    pyt.add_argument(
         '-l', '--list', action='store_true', dest='list_boards',
         help='List available QEMU boards')
+    pyt.add_argument(
+        '-P', '--persist', action='store_true',
+        help='Persist test artifacts (do not clean up after tests)')
+    pyt.add_argument(
+        '-q', '--quiet', action='store_true',
+        help='Quiet mode: only show build output, progress, and result')
+    pyt.add_argument(
+        '-s', '--show-output', action='store_true',
+        help='Show all test output in real-time (pytest -s)')
+    pyt.add_argument(
+        '-S', '--setup-only', action='store_true',
+        help='Run only fixture setup (create test images) without tests')
+    pyt.add_argument(
+        '-t', '--timing', type=float, nargs='?', const=0.1, default=None,
+        metavar='SECS',
+        help='Show test timing (default min: 0.1s)')
     pyt.add_argument(
         '-T', '--timeout', type=int, metavar='SECS', default=300,
         help='Test timeout in seconds (default: 300)')
@@ -109,28 +131,6 @@ def add_pytest_subparser(subparsers):
     pyt.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
-    pyt.add_argument(
-        '-s', '--show-output', action='store_true',
-        help='Show all test output in real-time (pytest -s)')
-    pyt.add_argument(
-        '-t', '--timing', type=float, nargs='?', const=0.1, default=None,
-        metavar='SECS',
-        help='Show test timing (default min: 0.1s)')
-    pyt.add_argument(
-        '-q', '--quiet', action='store_true',
-        help='Quiet mode: only show build output, progress, and result')
-    pyt.add_argument(
-        '-c', '--show-cmd', action='store_true',
-        help='Show QEMU command line without running tests')
-    pyt.add_argument(
-        '-S', '--setup-only', action='store_true',
-        help='Run only fixture setup (create test images) without tests')
-    pyt.add_argument(
-        '-P', '--persist', action='store_true',
-        help='Persist test artifacts (do not clean up after tests)')
-    pyt.add_argument(
-        '-C', '--c-test', action='store_true',
-        help='Run just the C test part (assumes setup done with -SP)')
     return pyt
 
 
@@ -143,24 +143,24 @@ def add_build_subparser(subparsers):
         'board', nargs='?', metavar='BOARD',
         help='Board name to build')
     bld.add_argument('-f', '--force-reconfig', action='store_true',
-                        help='Force reconfiguration')
+                     help='Force reconfiguration')
     bld.add_argument('-F', '--fresh', action='store_true',
-                        help='Delete build dir first')
+                     help='Delete build dir first')
     bld.add_argument('-I', '--in-tree', action='store_true',
-                        help='Build in source tree, not separate directory')
+                     help='Build in source tree, not separate directory')
     bld.add_argument('-j', '--jobs', type=int, metavar='JOBS',
-                        help='Number of parallel jobs (passed to make)')
+                     help='Number of parallel jobs (passed to make)')
     bld.add_argument('-l', '--lto', action='store_true', help='Enable LTO')
     bld.add_argument('-o', '--output-dir', metavar='DIR',
-                        help='Override output directory')
+                     help='Override output directory')
     bld.add_argument('-O', '--objdump', action='store_true',
-                        help='Write disassembly of u-boot and SPL ELFs')
+                     help='Write disassembly of u-boot and SPL ELFs')
     bld.add_argument('-s', '--size', action='store_true',
-                        help='Show size of u-boot and SPL ELFs')
+                     help='Show size of u-boot and SPL ELFs')
     bld.add_argument('-t', '--target', metavar='TARGET',
-                        help='Build specific target (e.g. u-boot.bin)')
+                     help='Build specific target (e.g. u-boot.bin)')
     bld.add_argument('-T', '--trace', action='store_true',
-                        help='Enable function tracing (FTRACE=1)')
+                     help='Enable function tracing (FTRACE=1)')
     return bld
 
 
@@ -172,11 +172,11 @@ def add_setup_subparser(subparsers):
         'component', type=str, nargs='?', default=None,
         help="Component to build (e.g. 'opensbi'), or omit to build all")
     setup.add_argument(
-        '-l', '--list', action='store_true', dest='list_components',
-        help='List available components')
-    setup.add_argument(
         '-f', '--force', action='store_true',
         help='Force rebuild even if already built')
+    setup.add_argument(
+        '-l', '--list', action='store_true', dest='list_components',
+        help='List available components')
     return setup
 
 
@@ -189,26 +189,26 @@ def add_test_subparser(subparsers):
         'tests', nargs='*', metavar='TEST',
         help='Test name(s) to run (e.g. "dm" or "env")')
     test.add_argument(
-        '-l', '--list', action='store_true', dest='list_tests',
-        help='List available tests')
-    test.add_argument(
-        '-s', '--suites', action='store_true', dest='list_suites',
-        help='List available test suites')
-    test.add_argument(
         '-f', '--flattree', action='store_true',
         help='Use flat device tree for tests')
     test.add_argument(
-        '-V', '--test-verbose', action='store_true', dest='test_verbose',
-        help='Enable verbose test output')
-    test.add_argument(
-        '-r', '--results', action='store_true',
-        help='Show per-test pass/fail status')
+        '-l', '--list', action='store_true', dest='list_tests',
+        help='List available tests')
     test.add_argument(
         '-L', '--legacy', action='store_true',
         help='Use legacy result parsing (for old U-Boot without Result: lines)')
     test.add_argument(
         '-m', '--manual', action='store_true',
         help='Force manual tests to run (tests with _norun suffix)')
+    test.add_argument(
+        '-r', '--results', action='store_true',
+        help='Show per-test pass/fail status')
+    test.add_argument(
+        '-s', '--suites', action='store_true', dest='list_suites',
+        help='List available test suites')
+    test.add_argument(
+        '-V', '--test-verbose', action='store_true', dest='test_verbose',
+        help='Enable verbose test output')
     return test
 
 
@@ -225,11 +225,11 @@ def setup_parser():
         '-D', '--debug', action='store_true',
         help='Enable debugging (provides full traceback on error)')
     parser.add_argument(
-        '-v', '--verbose', action='store_true', dest='verbose', default=False,
-        help='Verbose output')
-    parser.add_argument(
         '-n', '--dry-run', action='store_true',
         help='Show what would be executed without running commands')
+    parser.add_argument(
+        '-v', '--verbose', action='store_true', dest='verbose', default=False,
+        help='Verbose output')
 
     subparsers = parser.add_subparsers(dest='cmd', required=True)
     add_build_subparser(subparsers)
