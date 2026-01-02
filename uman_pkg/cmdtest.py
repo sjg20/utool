@@ -545,7 +545,14 @@ def run_tests(sandbox, specs, args):  # pylint: disable=R0914
     tout.info(f"Running: {' '.join(cmd)}")
 
     start_time = time.time()
-    result = command.run_one(*cmd, capture=True)
+    try:
+        result = command.run_one(*cmd, capture=True)
+    except command.CommandExc as exc:
+        # Tests may fail but still produce parseable output
+        result = exc.result
+        if not result:
+            tout.error(f'Command failed: {exc}')
+            return 1
     elapsed = time.time() - start_time
 
     # Print output to console only in verbose mode
