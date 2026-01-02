@@ -1218,7 +1218,7 @@ class TestUmanMergeRequest(TestBase):
         args = parser.parse_args(['ci', '-d', 'develop'])
         self.assertEqual(args.dest, 'develop')
 
-    @mock.patch('uman_pkg.control.gitlab_api')
+    @mock.patch('pickman.gitlab_api', create=True)
     @mock.patch('uman_pkg.control.gitlab')
     @mock.patch('uman_pkg.control.extract_mr_info')
     @mock.patch('uman_pkg.control.gitutil')
@@ -1244,7 +1244,7 @@ class TestUmanMergeRequest(TestBase):
 
         self.assertEqual(result, 1)
 
-    @mock.patch('uman_pkg.control.gitlab_api')
+    @mock.patch('pickman.gitlab_api', create=True)
     @mock.patch('uman_pkg.control.gitlab')
     @mock.patch('uman_pkg.control.extract_mr_info')
     @mock.patch('uman_pkg.control.gitutil')

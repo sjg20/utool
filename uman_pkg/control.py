@@ -14,7 +14,6 @@ import gitlab
 
 # pylint: disable=import-error
 from patman import patchstream
-from pickman import gitlab_api
 from u_boot_pylib import command
 from u_boot_pylib import gitutil
 from u_boot_pylib import tout
@@ -375,6 +374,8 @@ def do_merge_request(args):  # pylint: disable=too-many-locals
     Returns:
         int: Exit code
     """
+    from pickman import gitlab_api
+
     tout.info('Creating merge request from patch series...')
 
     # Get branch and extract title/description
