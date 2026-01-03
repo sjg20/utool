@@ -121,6 +121,9 @@ def add_pytest_subparser(subparsers):
         '-l', '--list', action='store_true', dest='list_boards',
         help='List available QEMU boards')
     pyt.add_argument(
+        '-L', '--lto', action='store_true',
+        help='Enable LTO when building (use with -b)')
+    pyt.add_argument(
         '-P', '--persist', action='store_true',
         help='Persist test artifacts (do not clean up after tests)')
     pyt.add_argument(

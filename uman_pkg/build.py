@@ -138,12 +138,13 @@ def get_cmd(args, board, build_dir):
     return cmd
 
 
-def build_board(board, dry_run=False):
+def build_board(board, dry_run=False, lto=False):
     """Build U-Boot for a board
 
     Args:
         board (str): Board name to build
         dry_run (bool): If True, just show command without running
+        lto (bool): If True, enable LTO (Link Time Optimization)
 
     Returns:
         bool: True if build succeeded, False otherwise
@@ -154,7 +155,9 @@ def build_board(board, dry_run=False):
     build_dir = get_dir(board)
     tout.info(f'Building {board}...')
 
-    cmd = ['buildman', '-I', '-w', '-L', '--boards', board, '-o', build_dir]
+    cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
+    if not lto:
+        cmd.insert(1, '-L')
     result = exec_cmd(cmd, dry_run, capture=False)
 
     if result is None:  # dry-run

@@ -88,6 +88,7 @@ def make_args(**kwargs):
         'gdb': False,
         'gdbserver': None,
         'list_boards': False,
+        'lto': False,
         'merge': False,
         'null': False,
         'persist': False,
@@ -293,6 +294,36 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         """Test that -L is not passed when --lto is specified"""
         args = cmdline.parse_args(['build', 'sandbox', '-L'])
         self.assertNotIn('-L', build.get_cmd(args, 'sandbox', '/tmp/b/sandbox'))
+
+    def test_build_board_lto_default(self):
+        """Test that build_board() passes -L by default (LTO disabled)"""
+        cap = []
+
+        def mock_exec_cmd(cmd, *args, **kwargs):
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+            with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+                with terminal.capture():
+                    build.build_board('sandbox')
+
+        self.assertIn('-L', cap[0])
+
+    def test_build_board_lto_enabled(self):
+        """Test that build_board() omits -L when lto=True"""
+        cap = []
+
+        def mock_exec_cmd(cmd, *args, **kwargs):
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+            with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+                with terminal.capture():
+                    build.build_board('sandbox', lto=True)
+
+        self.assertNotIn('-L', cap[0])
 
     def test_build_fresh_flag(self):
         """Test -F/--fresh flag"""
@@ -1078,6 +1109,36 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         cmd = cap[-1]
         self.assertIn('--no-header', cmd)
         self.assertIn('--quiet-hooks', cmd)
+
+    def test_pytest_lto_flag(self):
+        """Test -L/--lto flag for pytest"""
+        args = cmdline.parse_args(['pytest', '-B', 'sandbox', '-L'])
+        self.assertTrue(args.lto)
+
+        args = cmdline.parse_args(['pytest', '-B', 'sandbox', '--lto'])
+        self.assertTrue(args.lto)
+
+    def test_pytest_lto_with_build(self):
+        """Test that -L with -b passes lto to build_board()"""
+        cap = []
+
+        def mock_exec_cmd(cmd, *args, **kwargs):
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        def mock_subprocess_run(cmd, **_kwargs):
+            cap.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0)
+
+        args = make_args(cmd='pytest', board='sandbox', build=True, lto=True)
+        with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+            with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+                with mock.patch('subprocess.run', mock_subprocess_run):
+                    with terminal.capture():
+                        control.run_command(args)
+
+        # First command should be buildman without -L (LTO enabled)
+        self.assertNotIn('-L', cap[0])
 
     def test_pytest_list_boards(self):
         """Test listing QEMU boards"""

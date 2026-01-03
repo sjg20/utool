@@ -763,6 +763,8 @@ def pollute_run(tests, target, args, env):
 
     cmd = ['./test/py/test.py', '-B', args.board, '--build-dir', build_dir,
            '--buildman', '--id', 'na', '-q', '-k', spec]
+    if args.lto:
+        cmd.append('--lto')
 
     total = len(all_tests)
     done = 0
@@ -960,7 +962,7 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
 
     # Build with um if requested, rather than letting pytest do it
     if args.build:
-        if not build_mod.build_board(args.board, args.dry_run):
+        if not build_mod.build_board(args.board, args.dry_run, args.lto):
             return 1
         args.build = False  # Don't build again in pytest
 
