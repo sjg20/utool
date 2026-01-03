@@ -182,6 +182,7 @@ hooks to PATH.
 - ``-c, --show-cmd``: Show QEMU command line without running tests
 - ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
 - ``-f, --full``: Run both live-tree and flat-tree tests (default: live-tree only)
+- ``-F, --find PATTERN``: Find tests matching PATTERN and show full IDs
 - ``-g``: Run sandbox under gdbserver at localhost:1234
 - ``-G, --gdb``: Launch gdb-multiarch and connect to an existing gdbserver
 - ``-l, --list``: List available QEMU and sandbox boards

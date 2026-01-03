@@ -83,6 +83,7 @@ def make_args(**kwargs):
         'dry_run': False,
         'exitfirst': False,
         'extra_args': [],
+        'find': None,
         'force': False,
         'full': False,
         'gdb': False,
@@ -1139,6 +1140,47 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
 
         # First command should be buildman without -L (LTO enabled)
         self.assertNotIn('-L', cap[0])
+
+    def test_pytest_find_flag(self):
+        """Test -F/--find flag for pytest"""
+        args = cmdline.parse_args(['pytest', '-B', 'sandbox', '-F', 'video'])
+        self.assertEqual('video', args.find)
+
+        args = cmdline.parse_args(['pytest', '-B', 'sandbox', '--find', 'dm'])
+        self.assertEqual('dm', args.find)
+
+    def test_pytest_find_tests(self):
+        """Test finding tests with -F option"""
+        def mock_collect(**_kwargs):
+            return command.CommandResult(
+                stdout='test_ut.py::TestUt::test_dm_video\n'
+                       'test_ut.py::TestUt::test_dm_gpio\n'
+                       'test_ut.py::TestUt::test_fs_fat\n',
+                return_code=0)
+
+        command.TEST_RESULT = mock_collect
+
+        args = make_args(cmd='pytest', board='sandbox', find='video')
+        with terminal.capture() as (out, _):
+            res = control.run_command(args)
+        self.assertEqual(0, res)
+        self.assertIn('test_dm_video', out.getvalue())
+        self.assertNotIn('test_dm_gpio', out.getvalue())
+
+    def test_pytest_find_no_match(self):
+        """Test -F with no matching tests"""
+        def mock_collect(**_kwargs):
+            return command.CommandResult(
+                stdout='test_ut.py::TestUt::test_dm_gpio\n',
+                return_code=0)
+
+        command.TEST_RESULT = mock_collect
+
+        args = make_args(cmd='pytest', board='sandbox', find='nonexistent')
+        with terminal.capture() as (_, err):
+            res = control.run_command(args)
+        self.assertEqual(1, res)
+        self.assertIn("No tests matching 'nonexistent'", err.getvalue())
 
     def test_pytest_list_boards(self):
         """Test listing QEMU boards"""

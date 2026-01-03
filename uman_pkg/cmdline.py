@@ -112,6 +112,9 @@ def add_pytest_subparser(subparsers):
         '-f', '--full', action='store_true',
         help='Run both live-tree and flat-tree tests (default: live-tree only)')
     pyt.add_argument(
+        '-F', '--find', metavar='PATTERN',
+        help='Find tests matching PATTERN and show full IDs')
+    pyt.add_argument(
         '-g', action='store_const', const='localhost:1234', dest='gdbserver',
         help='Run sandbox under gdbserver at localhost:1234')
     pyt.add_argument(

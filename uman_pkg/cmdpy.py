@@ -720,6 +720,41 @@ def collect_tests(args):
     return tests
 
 
+def find_tests(args):
+    """Find tests matching a pattern and show their full IDs
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code
+    """
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    if uboot_dir != os.getcwd():
+        os.chdir(uboot_dir)
+
+    tout.notice('Collecting tests...')
+    tests = collect_tests(args)
+    if tests is None:
+        return 1
+
+    pattern = args.find.lower()
+    matches = [t for t in tests if pattern in t.lower()]
+
+    if not matches:
+        tout.warning(f"No tests matching '{args.find}'")
+        return 1
+
+    tout.notice(f'Found {len(matches)} test(s):')
+    for test in matches:
+        print(f'  {test}')
+    return 0
+
+
 def node_to_name(node_id):
     """Extract test name from a pytest node ID for use with -k
 
@@ -934,6 +969,10 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
     # Handle --pollute option
     if args.pollute:
         return do_pollute(args)
+
+    # Handle --find option
+    if args.find:
+        return find_tests(args)
 
     # Handle --show-cmd option
     if args.show_cmd:
