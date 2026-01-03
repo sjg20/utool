@@ -691,7 +691,7 @@ def collect_tests(args):
         build_dir = args.build_dir
     else:
         base_dir = settings.get('build_dir', '/tmp/b')
-        build_dir = f'{base_dir}/{args.board}-bisect'
+        build_dir = f'{base_dir}/{args.board}-pollute'
 
     cmd = ['./test/py/test.py', '-B', args.board, '--build-dir', build_dir,
            '--buildman', '--id', 'na', '--collect-only', '-q']
@@ -846,6 +846,19 @@ def do_pollute(args):
     # Change to U-Boot directory if needed
     if uboot_dir != os.getcwd():
         os.chdir(uboot_dir)
+
+    # Build to the pollute directory if requested
+    if args.build:
+        base_dir = settings.get('build_dir', '/tmp/b')
+        build_dir = f'{base_dir}/{args.board}-pollute'
+        tout.notice(f'Building to {build_dir}...')
+        cmd = ['buildman', '-I', '-w', '--boards', args.board, '-o', build_dir]
+        if not args.lto:
+            cmd.insert(1, '-L')
+        result = exec_cmd(cmd, args.dry_run, capture=False)
+        if result and result.return_code != 0:
+            tout.error('Build failed')
+            return 1
 
     tout.notice('Collecting tests...')
     tests = collect_tests(args)

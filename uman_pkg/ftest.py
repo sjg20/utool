@@ -2748,3 +2748,57 @@ test_fs.py::TestFs::test_ext4
             cmdpy.pollute_run([], 'test_target', args, {})
 
         self.assertNotIn('--no-full', captured_cmd)
+
+    def test_pollute_build_to_pollute_dir(self):
+        """Test --pollute -b builds to pollute directory"""
+        cap = []
+
+        def mock_exec_cmd(cmd, *args, **kwargs):
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        def mock_collect(**_kwargs):
+            return command.CommandResult(
+                stdout='test_ut.py::TestUt::test_dm_foo\n'
+                       'test_ut.py::TestUt::test_dm_bar\n',
+                return_code=0)
+
+        command.TEST_RESULT = mock_collect
+
+        args = make_args(cmd='pytest', board='sandbox', build=True,
+                         pollute='test_dm_foo')
+        with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+            with mock.patch.object(cmdpy, 'exec_cmd', mock_exec_cmd):
+                with terminal.capture():
+                    control.run_command(args)
+
+        # First command should be buildman to pollute directory
+        self.assertIn('buildman', cap[0])
+        self.assertIn('-o', cap[0])
+        idx = cap[0].index('-o')
+        self.assertIn('-pollute', cap[0][idx + 1])
+
+    def test_pollute_build_respects_lto(self):
+        """Test --pollute -b -L respects LTO flag"""
+        cap = []
+
+        def mock_exec_cmd(cmd, *args, **kwargs):
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        def mock_collect(**_kwargs):
+            return command.CommandResult(
+                stdout='test_ut.py::TestUt::test_dm_foo\n',
+                return_code=0)
+
+        command.TEST_RESULT = mock_collect
+
+        # With lto=True, -L should NOT be in buildman command
+        args = make_args(cmd='pytest', board='sandbox', build=True,
+                         lto=True, pollute='test_dm_foo')
+        with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+            with mock.patch.object(cmdpy, 'exec_cmd', mock_exec_cmd):
+                with terminal.capture():
+                    control.run_command(args)
+
+        self.assertNotIn('-L', cap[0])
