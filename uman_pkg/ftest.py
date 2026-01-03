@@ -2681,9 +2681,70 @@ test_fs.py::TestFs::test_ext4
 
         with mock.patch('subprocess.Popen', mock_popen):
             with mock.patch.object(settings, 'get', return_value='/tmp/b'):
-                args = argparse.Namespace(board='sandbox', build_dir=None)
+                args = argparse.Namespace(board='sandbox', build_dir=None,
+                                          lto=False, full=False)
                 cmdpy.pollute_run([], 'test_target', args, {})
 
         self.assertIn('--build-dir', captured_cmd)
         idx = captured_cmd.index('--build-dir')
         self.assertEqual('/tmp/b/sandbox-pollute', captured_cmd[idx + 1])
+
+    def test_collect_tests_no_full_flag(self):
+        """Test collect_tests adds --no-full when full=False"""
+        with mock.patch.object(command, 'run_pipe') as mock_run:
+            mock_run.return_value = mock.Mock(
+                return_code=0, stdout='', stderr='')
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      test_spec=None, build=False, full=False)
+            cmdpy.collect_tests(args)
+
+        cmd = mock_run.call_args[0][0][0]
+        self.assertIn('--no-full', cmd)
+
+    def test_collect_tests_full_flag(self):
+        """Test collect_tests omits --no-full when full=True"""
+        with mock.patch.object(command, 'run_pipe') as mock_run:
+            mock_run.return_value = mock.Mock(
+                return_code=0, stdout='', stderr='')
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      test_spec=None, build=False, full=True)
+            cmdpy.collect_tests(args)
+
+        cmd = mock_run.call_args[0][0][0]
+        self.assertNotIn('--no-full', cmd)
+
+    def test_pollute_run_no_full_flag(self):
+        """Test pollute_run adds --no-full when full=False"""
+        captured_cmd = []
+
+        def mock_popen(cmd, **_kwargs):
+            captured_cmd.extend(cmd)
+            proc = mock.Mock()
+            proc.stdout.read.return_value = b''
+            proc.returncode = 0
+            return proc
+
+        with mock.patch('subprocess.Popen', mock_popen):
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      lto=False, full=False)
+            cmdpy.pollute_run([], 'test_target', args, {})
+
+        self.assertIn('--no-full', captured_cmd)
+
+    def test_pollute_run_full_flag(self):
+        """Test pollute_run omits --no-full when full=True"""
+        captured_cmd = []
+
+        def mock_popen(cmd, **_kwargs):
+            captured_cmd.extend(cmd)
+            proc = mock.Mock()
+            proc.stdout.read.return_value = b''
+            proc.returncode = 0
+            return proc
+
+        with mock.patch('subprocess.Popen', mock_popen):
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      lto=False, full=True)
+            cmdpy.pollute_run([], 'test_target', args, {})
+
+        self.assertNotIn('--no-full', captured_cmd)

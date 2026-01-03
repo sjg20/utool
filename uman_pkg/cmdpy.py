@@ -698,6 +698,8 @@ def collect_tests(args):
 
     if args.build:
         cmd.append('--build')
+    if not args.full:
+        cmd.append('--no-full')
 
     if args.test_spec:
         spec = ' '.join(args.test_spec)
@@ -800,6 +802,8 @@ def pollute_run(tests, target, args, env):
            '--buildman', '--id', 'na', '-q', '-k', spec]
     if args.lto:
         cmd.append('--lto')
+    if not args.full:
+        cmd.append('--no-full')
 
     total = len(all_tests)
     done = 0
