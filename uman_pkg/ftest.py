@@ -391,8 +391,8 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         self.assertEqual('1', captured_env.get('FTRACE'))
 
     def test_build_gprof_flag(self):
-        """Test -g/--gprof flag sets GPROF environment variable"""
-        args = cmdline.parse_args(['build', 'sandbox', '-g'])
+        """Test --gprof flag sets GPROF environment variable"""
+        args = cmdline.parse_args(['build', 'sandbox', '--gprof'])
         self.assertTrue(args.gprof)
 
         # Test that GPROF is set in environment when gprof flag is used
