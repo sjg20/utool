@@ -198,8 +198,8 @@ def build_pytest_cmd(args):
         spec = spec.replace('::', ' and ').replace(':', ' and ')
         cmd.extend(['-k', spec])
 
-    if args.timeout != 300:
-        cmd.extend(['-o', f'faulthandler_timeout={args.timeout}'])
+    if args.no_timeout:
+        cmd.append('--no-timeout')
 
     cmd.append('-q')
     if args.quiet:

@@ -143,8 +143,8 @@ def add_pytest_subparser(subparsers):
         metavar='SECS',
         help='Show test timing (default min: 0.1s)')
     pyt.add_argument(
-        '-T', '--timeout', type=int, metavar='SECS', default=300,
-        help='Test timeout in seconds (default: 300)')
+        '-T', '--no-timeout', action='store_true',
+        help='Disable test timeout')
     pyt.add_argument(
         '-x', '--exitfirst', action='store_true',
         help='Stop on first test failure')

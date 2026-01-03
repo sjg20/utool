@@ -91,6 +91,7 @@ def make_args(**kwargs):
         'list_boards': False,
         'lto': False,
         'merge': False,
+        'no_timeout': False,
         'null': False,
         'persist': False,
         'pollute': None,
@@ -102,7 +103,6 @@ def make_args(**kwargs):
         'sjg': None,
         'suites': False,
         'test_spec': [],
-        'timeout': 300,
         'timing': None,
         'verbose': False,
         'world': False,
@@ -193,7 +193,7 @@ class TestUmanCmdline(TestBase):
         self.assertEqual(args.cmd, 'pytest')
         self.assertIsNone(args.board)
         self.assertEqual(args.test_spec, [])
-        self.assertEqual(args.timeout, 300)
+        self.assertFalse(args.no_timeout)
 
         # Test pytest with board specified
         args = parser.parse_args(['pytest', '-B', 'sandbox', 'test_dm'])
@@ -205,12 +205,11 @@ class TestUmanCmdline(TestBase):
         self.assertEqual(args.test_spec, ['not', 'sleep'])
         self.assertEqual(args.board, 'coreboot')
 
-        # Test pytest with all flags
-        args = parser.parse_args(['pytest', '-B', 'coreboot', 'test_dm',
-                                 '-T', '600'])
+        # Test pytest with --no-timeout flag
+        args = parser.parse_args(['pytest', '-B', 'coreboot', 'test_dm', '-T'])
         self.assertEqual(args.board, 'coreboot')
         self.assertEqual(args.test_spec, ['test_dm'])
-        self.assertEqual(args.timeout, 600)
+        self.assertTrue(args.no_timeout)
 
         # Test pytest alias (use cmdline.parse_args for alias resolution)
         args = cmdline.parse_args(['py', '-B', 'sandbox'])
@@ -980,12 +979,12 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         self.assertTrue(cmd[0].endswith('/test/py/test.py'))
         self.assertIn('-B', cmd)
         self.assertIn('sandbox', cmd)
-        # Default timeout (300) shouldn't add -o flag
-        self.assertNotIn('-o', cmd)
+        # Default should not add --no-timeout
+        self.assertNotIn('--no-timeout', cmd)
 
-        # Test pytest with test specification and custom timeout
+        # Test pytest with --no-timeout flag
         args = make_args(cmd='pytest', board='malta', test_spec=['test_dm'],
-                         timeout=600)
+                         no_timeout=True)
         with mock.patch('subprocess.run', mock_subprocess_run):
             with terminal.capture():
                 res = control.run_command(args)
@@ -995,8 +994,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         self.assertIn('malta', cmd)
         self.assertIn('-k', cmd)
         self.assertIn('test_dm', cmd)
-        self.assertIn('-o', cmd)
-        self.assertIn('faulthandler_timeout=600', cmd)
+        self.assertIn('--no-timeout', cmd)
 
     def test_pytest_extra_args(self):
         """Test pytest command with extra arguments after --"""
@@ -2624,7 +2622,7 @@ test_fs.py::TestFs::test_ext4
                 stdout=collect_output,
                 stderr='')
             args = argparse.Namespace(board='sandbox', build_dir=None,
-                                      test_spec=None, build=False)
+                                      test_spec=None, build=False, full=False)
             tests = cmdpy.collect_tests(args)
 
         self.assertEqual(3, len(tests))
@@ -2644,7 +2642,8 @@ test_fs.py::TestFs::test_ext4
             return proc
 
         with mock.patch('subprocess.Popen', mock_popen):
-            args = argparse.Namespace(board='sandbox', build_dir=None)
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      lto=False, full=False)
             env = {}
             tests = ['tests/test_ut.py::test_ut[ut_dm_foo]',
                      'tests/test_ut.py::test_ut[ut_dm_bar]']

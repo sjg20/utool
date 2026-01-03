@@ -165,8 +165,8 @@ hooks to PATH.
     # Quiet mode with timing info
     uman py -qB sandbox -t
 
-    # Build before testing, use custom timeout
-    uman py -B sandbox -b -T 600
+    # Build before testing, disable timeout
+    uman py -B sandbox -bT
 
     # Dry run to see command and environment
     uman --dry-run py -B qemu-riscv64
@@ -192,7 +192,7 @@ hooks to PATH.
 - ``-s, --show-output``: Show all test output in real-time (pytest -s)
 - ``-S, --setup-only``: Run only fixture setup (create test images) without tests
 - ``-t, --timing [SECS]``: Show test timing (default min: 0.1s)
-- ``-T, --timeout SECS``: Test timeout in seconds (default: 300)
+- ``-T, --no-timeout``: Disable test timeout
 - ``-x, --exitfirst``: Stop on first test failure
 - ``--pollute TEST``: Find which test pollutes TEST
 - ``--build-dir DIR``: Override build directory
