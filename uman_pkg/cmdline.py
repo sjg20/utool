@@ -172,7 +172,7 @@ def add_build_subparser(subparsers):
                      help='Build in source tree, not separate directory')
     bld.add_argument('-j', '--jobs', type=int, metavar='JOBS',
                      help='Number of parallel jobs (passed to make)')
-    bld.add_argument('-l', '--lto', action='store_true', help='Enable LTO')
+    bld.add_argument('-L', '--lto', action='store_true', help='Enable LTO')
     bld.add_argument('-o', '--output-dir', metavar='DIR',
                      help='Override output directory')
     bld.add_argument('-O', '--objdump', action='store_true',

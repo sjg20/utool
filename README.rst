@@ -321,7 +321,7 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
     uman build sandbox
 
     # Build with LTO enabled
-    uman build sandbox -l
+    uman build sandbox -L
 
     # Force reconfiguration
     uman build sandbox -f
@@ -344,7 +344,7 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
 - ``--gprof``: Enable gprof profiling (sets GPROF=1)
 - ``-I, --in-tree``: Build in source tree, not separate directory
 - ``-j, --jobs JOBS``: Number of parallel jobs (passed to make)
-- ``-l, --lto``: Enable LTO
+- ``-L, --lto``: Enable LTO
 - ``-o, --output-dir DIR``: Override output directory
 - ``-O, --objdump``: Write disassembly of u-boot and SPL ELFs
 - ``-s, --size``: Show size of u-boot and SPL ELFs

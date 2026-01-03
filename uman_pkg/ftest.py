@@ -277,8 +277,8 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         self.assertIn('buildman', got_cmd)
 
     def test_build_lto_flag(self):
-        """Test -l/--lto flag"""
-        args = cmdline.parse_args(['build', 'sandbox', '-l'])
+        """Test -L/--lto flag"""
+        args = cmdline.parse_args(['build', 'sandbox', '-L'])
         self.assertTrue(args.lto)
 
         args = cmdline.parse_args(['build', 'sandbox', '--lto'])
@@ -291,7 +291,7 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
 
     def test_get_cmd_lto_enabled(self):
         """Test that -L is not passed when --lto is specified"""
-        args = cmdline.parse_args(['build', 'sandbox', '-l'])
+        args = cmdline.parse_args(['build', 'sandbox', '-L'])
         self.assertNotIn('-L', build.get_cmd(args, 'sandbox', '/tmp/b/sandbox'))
 
     def test_build_fresh_flag(self):
