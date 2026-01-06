@@ -80,9 +80,13 @@ def exec_cmd(cmd, dry_run=False, env=None, capture=True):
     # For interactive commands (capture=False), use subprocess.run directly
     # so Ctrl+C is properly forwarded to the child process
     if not capture:
-        result = subprocess.run(cmd, env=env, check=False)
+        result = subprocess.run(cmd, env=env, check=False,
+                                stderr=subprocess.PIPE)
+        stderr = ''
+        if result.stderr:
+            stderr = result.stderr.decode('utf-8', errors='replace')
         return command.CommandResult(return_code=result.returncode,
-                                     stdout='', stderr='')
+                                     stdout='', stderr=stderr)
 
     return command.run_pipe([cmd], env=env, capture=capture,
                             raise_on_error=False)

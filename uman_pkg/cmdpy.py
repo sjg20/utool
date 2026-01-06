@@ -15,6 +15,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import time
 
 # pylint: disable=import-error
@@ -708,9 +709,13 @@ def collect_tests(args):
     result = command.run_pipe([cmd], capture=True, capture_stderr=True,
                               raise_on_error=False)
     if result.return_code != 0:
-        tout.error('Failed to collect tests')
-        if result.stderr:
-            print(result.stderr)
+        if 'unrecognized arguments: --no-full' in result.stderr:
+            tout.error(
+                'U-Boot does not support --no-full; use -f to run all tests')
+        else:
+            tout.error('Failed to collect tests')
+            if result.stderr:
+                print(result.stderr)
         return None
 
     tests = []
@@ -1042,8 +1047,14 @@ def do_pytest(args):  # pylint: disable=too-many-return-statements,too-many-bran
         return 0
 
     if result.return_code != 0:
-        if not args.quiet:
-            tout.error('pytest failed')
+        if 'unrecognized arguments: --no-full' in result.stderr:
+            tout.error(
+                'U-Boot does not support --no-full; use -f to run all tests')
+        else:
+            if result.stderr:
+                print(result.stderr, file=sys.stderr)
+            if not args.quiet:
+                tout.error('pytest failed')
         return result.return_code
 
     if not args.quiet:
