@@ -567,10 +567,17 @@ def run_tests(sandbox, specs, args, col):  # pylint: disable=R0914
     except command.CommandExc as exc:
         # Tests may fail but still produce parseable output
         result = exc.result
+        if result and isinstance(result.stdout, (bytes, bytearray)):
+            result.to_output(False)
         if not result:
             tout.error(f'Command failed: {exc}')
             return 1
     elapsed = time.time() - start_time
+
+    # Detect old U-Boot that doesn't understand -F flag
+    if 'failed while parsing option: -F' in result.stdout:
+        tout.error('U-Boot does not support -F flag; use -f to run all tests')
+        return 1
 
     # Parse results first to check for failures
     res = parse_results(result.stdout, show_results=args.results, col=col)
