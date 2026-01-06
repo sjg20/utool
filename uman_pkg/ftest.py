@@ -1109,6 +1109,21 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         self.assertIn('--no-header', cmd)
         self.assertIn('--quiet-hooks', cmd)
 
+    def test_pytest_no_full_unsupported(self):
+        """Test do_pytest detects --no-full not supported"""
+
+        def mock_subprocess_run(cmd, **_kwargs):
+            return subprocess.CompletedProcess(
+                cmd, 4, stderr=b'error: unrecognized arguments: --no-full')
+
+        args = make_args(cmd='pytest', board='sandbox')
+        with mock.patch('subprocess.run', mock_subprocess_run):
+            with terminal.capture() as (_, err):
+                res = control.run_command(args)
+        self.assertEqual(4, res)
+        self.assertIn('--no-full', err.getvalue())
+        self.assertIn('use -f', err.getvalue())
+
     def test_pytest_lto_flag(self):
         """Test -L/--lto flag for pytest"""
         args = cmdline.parse_args(['pytest', '-B', 'sandbox', '-L'])
@@ -2711,6 +2726,21 @@ test_fs.py::TestFs::test_ext4
 
         cmd = mock_run.call_args[0][0][0]
         self.assertNotIn('--no-full', cmd)
+
+    def test_collect_tests_no_full_unsupported(self):
+        """Test collect_tests detects --no-full not supported"""
+        with mock.patch.object(command, 'run_pipe') as mock_run:
+            mock_run.return_value = mock.Mock(
+                return_code=4, stdout='',
+                stderr='error: unrecognized arguments: --no-full')
+            args = argparse.Namespace(board='sandbox', build_dir=None,
+                                      test_spec=None, build=False, full=False)
+            with terminal.capture() as (_, err):
+                result = cmdpy.collect_tests(args)
+
+        self.assertIsNone(result)
+        self.assertIn('--no-full', err.getvalue())
+        self.assertIn('use -f', err.getvalue())
 
     def test_pollute_run_no_full_flag(self):
         """Test pollute_run adds --no-full when full=False"""
