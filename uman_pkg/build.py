@@ -10,6 +10,7 @@ specified board using buildman.
 
 import os
 import shutil
+import sys
 
 # pylint: disable=import-error
 from u_boot_pylib import command
@@ -164,6 +165,8 @@ def build_board(board, dry_run=False, lto=False):
         return True
 
     if result.return_code != 0:
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
         tout.error('Build failed')
         return False
     return True
@@ -335,6 +338,8 @@ def run(args):
         return 0
 
     if result.return_code != 0:
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
         tout.info('Build failed')
         return result.return_code
 

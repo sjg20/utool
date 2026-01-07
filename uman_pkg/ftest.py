@@ -539,6 +539,38 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         self.assertEqual(1, result)
         self.assertIn('Rebase in progress', err.getvalue())
 
+    def test_build_shows_stderr_on_failure(self):
+        """Test build run() shows stderr when build fails"""
+        def mock_exec_cmd(cmd, dry_run=False, env=None, capture=True):
+            del cmd, dry_run, env, capture
+            return command.CommandResult(
+                return_code=2, stdout='', stderr='error: something failed\n')
+
+        args = cmdline.parse_args(['build', 'sandbox'])
+        with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+                with terminal.capture() as (_, err):
+                    result = build.run(args)
+
+        self.assertEqual(2, result)
+        self.assertIn('something failed', err.getvalue())
+
+    def test_build_board_shows_stderr_on_failure(self):
+        """Test build_board() shows stderr when build fails"""
+        def mock_exec_cmd(cmd, dry_run=False, env=None, capture=True):
+            del cmd, dry_run, env, capture
+            return command.CommandResult(
+                return_code=1, stdout='', stderr='make: *** Error 1\n')
+
+        with mock.patch.object(build, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(build, 'setup_uboot_dir', return_value=True):
+                with terminal.capture() as (_, err):
+                    result = build.build_board('sandbox')
+
+        self.assertFalse(result)
+        self.assertIn('Error 1', err.getvalue())
+
+
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
 
