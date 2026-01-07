@@ -91,6 +91,7 @@ def make_args(**kwargs):
         'merge': False,
         'null': False,
         'persist': False,
+        'pollute': None,
         'pytest': None,
         'quiet': False,
         'setup_only': False,
