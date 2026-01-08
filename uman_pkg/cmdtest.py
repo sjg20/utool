@@ -585,14 +585,14 @@ def run_tests(sandbox, specs, args, col):  # pylint: disable=R0914
         res = parse_legacy_results(result.stdout, show_results=args.results,
                                    col=col)
 
-    # Print output in verbose mode, or if there are failures
+    # Print output in verbose mode, if there are failures, or no results
     if result.stdout and not args.results:
-        if args.test_verbose or (res and res.failed):
+        if args.test_verbose or (res and res.failed) or not res:
             # Skip U-Boot banner, show only test output
             in_tests = False
             for line in result.stdout.splitlines():
                 if not in_tests:
-                    if line.startswith(('Running ', 'Test: ')):
+                    if line.startswith(('Running ', 'Test: ', 'Missing ')):
                         in_tests = True
                 if in_tests:
                     print(line)
