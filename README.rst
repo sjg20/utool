@@ -17,6 +17,9 @@ Subcommands
 ``pytest`` (alias: ``py``)
     Run U-Boot's test.py framework with automatic environment setup
 
+``config`` (alias: ``cfg``)
+    Examine U-Boot .config files
+
 ``selftest`` (alias: ``st``)
     Run uman's own test suite
 
@@ -352,6 +355,23 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
 - ``-s, --size``: Show size of u-boot and SPL ELFs
 - ``-t, --target TARGET``: Build specific target (e.g. u-boot.bin)
 - ``-T, --trace``: Enable function tracing (FTRACE=1)
+
+Config Subcommand
+-----------------
+
+The ``config`` command (alias ``cfg``) provides tools for examining U-Boot
+.config files::
+
+    # Search for VIDEO-related config options
+    uman config -B sandbox -g VIDEO
+
+    # Search for DM_TEST options
+    uman cfg -g DM_TEST
+
+**Options**:
+
+- ``-B, --board BOARD``: Board to examine (default: sandbox)
+- ``-g, --grep PATTERN``: Search .config for pattern (case-insensitive regex)
 
 Setup Subcommand
 ----------------

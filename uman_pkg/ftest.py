@@ -21,8 +21,8 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from uman_pkg import (build, cmdline, cmdpy, cmdtest, control, gitlab_parser,
-                      settings, setup, util)
+from uman_pkg import (build, cmdconfig, cmdline, cmdpy, cmdtest, control,
+                      gitlab_parser, settings, setup, util)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -569,6 +569,99 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
 
         self.assertFalse(result)
         self.assertIn('Error 1', err.getvalue())
+
+
+class TestConfigSubcommand(TestBase):
+    """Test config subcommand"""
+
+    def setUp(self):
+        super().setUp()
+        tout.init(tout.WARNING)
+        self.build_dir = os.path.join(self.test_dir, 'sandbox')
+        os.makedirs(self.build_dir)
+
+        # Create a sample .config file
+        config_content = """#
+# Automatically generated file
+#
+CONFIG_SANDBOX=y
+CONFIG_SYS_ARCH="sandbox"
+CONFIG_VIDEO=y
+# CONFIG_VIDEO_FONT_4X6 is not set
+CONFIG_DM_TEST=y
+"""
+        with open(os.path.join(self.build_dir, '.config'), 'w') as outf:
+            outf.write(config_content)
+
+    def test_config_subcommand_parsing(self):
+        """Test config subcommand argument parsing"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-g', 'VIDEO'])
+        self.assertEqual('config', args.cmd)
+        self.assertEqual('sandbox', args.board)
+        self.assertEqual('VIDEO', args.grep)
+
+    def test_config_alias(self):
+        """Test cfg alias works"""
+        args = cmdline.parse_args(['cfg', '-B', 'sandbox', '-g', 'TEST'])
+        self.assertEqual('config', args.cmd)
+
+    def test_config_grep(self):
+        """Test config grep finds matches"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-g', 'VIDEO',
+                                   '--build-dir', self.build_dir])
+        with terminal.capture() as (out, _):
+            ret = cmdconfig.run(args)
+        self.assertEqual(0, ret)
+        self.assertIn('CONFIG_VIDEO=y', out.getvalue())
+        self.assertIn('VIDEO_FONT', out.getvalue())
+
+    def test_config_grep_case_insensitive(self):
+        """Test config grep is case-insensitive"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-g', 'video',
+                                   '--build-dir', self.build_dir])
+        with terminal.capture() as (out, _):
+            ret = cmdconfig.run(args)
+        self.assertEqual(0, ret)
+        self.assertIn('CONFIG_VIDEO=y', out.getvalue())
+
+    def test_config_grep_no_match(self):
+        """Test config grep with no matches"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-g', 'NONEXISTENT',
+                                   '--build-dir', self.build_dir])
+        with terminal.capture() as (out, _):
+            ret = cmdconfig.run(args)
+        self.assertEqual(0, ret)
+        self.assertFalse(out.getvalue())
+
+    def test_config_no_board(self):
+        """Test config fails without board"""
+        orig_b = os.environ.pop('b', None)
+        try:
+            args = cmdline.parse_args(['config', '-g', 'VIDEO'])
+            with terminal.capture() as (_, err):
+                ret = cmdconfig.run(args)
+            self.assertEqual(1, ret)
+            self.assertIn('Board is required', err.getvalue())
+        finally:
+            if orig_b:
+                os.environ['b'] = orig_b
+
+    def test_config_no_action(self):
+        """Test config fails without action"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox'])
+        with terminal.capture() as (_, err):
+            ret = cmdconfig.run(args)
+        self.assertEqual(1, ret)
+        self.assertIn('No action specified', err.getvalue())
+
+    def test_config_missing_config_file(self):
+        """Test config fails when .config not found"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-g', 'VIDEO',
+                                   '--build-dir', '/nonexistent/path'])
+        with terminal.capture() as (_, err):
+            ret = cmdconfig.run(args)
+        self.assertEqual(1, ret)
+        self.assertIn('Config file not found', err.getvalue())
 
 
 class TestUmanCIVars(TestBase):

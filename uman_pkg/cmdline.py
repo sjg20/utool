@@ -13,6 +13,7 @@ import sys
 
 # Aliases for subcommands
 ALIASES = {
+    'config': ['cfg'],
     'selftest': ['st'],
     'pytest': ['py'],
     'build': ['b'],
@@ -250,6 +251,23 @@ def add_test_subparser(subparsers):
     return test
 
 
+def add_config_subparser(subparsers):
+    """Add the 'config' subparser"""
+    cfg = subparsers.add_parser(
+        'config', aliases=['cfg'],
+        help='Examine U-Boot configuration')
+    cfg.add_argument(
+        '-B', '--board', metavar='BOARD',
+        help='Board name (required; or set $b)')
+    cfg.add_argument(
+        '-g', '--grep', metavar='PATTERN',
+        help='Grep .config for PATTERN (regex, case-insensitive)')
+    cfg.add_argument(
+        '--build-dir', metavar='DIR',
+        help='Override build directory (default: /tmp/b/BOARD)')
+    return cfg
+
+
 def setup_parser():
     """Set up command-line parser
 
@@ -272,6 +290,7 @@ def setup_parser():
     subparsers = parser.add_subparsers(dest='cmd', required=True)
     add_build_subparser(subparsers)
     add_ci_subparser(subparsers)
+    add_config_subparser(subparsers)
     add_selftest_subparser(subparsers)
     add_pytest_subparser(subparsers)
     add_setup_subparser(subparsers)
