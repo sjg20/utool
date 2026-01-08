@@ -97,7 +97,7 @@ def run_pytest(test_name, board='sandbox', build_dir=None, quiet=True,
     """Run a pytest test
 
     Args:
-        test_name (str): Test to run (e.g. 'test_ut.py::test_ut_dm_init')
+        test_name (str): Test to run (e.g. 'test_ut_dm_init')
         board (str): Board name (default: 'sandbox')
         build_dir (str): Build directory, or None to use default
         quiet (bool): If True, capture output; if False, show output
@@ -116,10 +116,8 @@ def run_pytest(test_name, board='sandbox', build_dir=None, quiet=True,
         build_dir = os.path.join(base_dir, board)
 
     pytest_cmd = [
-        'python3', '-m', 'pytest', '-q',
-        f'test/py/tests/{test_name}',
-        '-B', board,
-        '--build-dir', build_dir,
+        './test/py/test.py', '-B', board, '--build-dir', build_dir,
+        '--buildman', '-q', '-k', test_name,
     ]
 
     orig_dir = os.getcwd()

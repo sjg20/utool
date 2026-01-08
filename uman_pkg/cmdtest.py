@@ -194,7 +194,7 @@ def ensure_dm_init_files():
         return True
 
     tout.notice('Creating dm test data files...')
-    if not run_pytest('test_ut.py::test_ut_dm_init'):
+    if not run_pytest('test_ut_dm_init'):
         tout.error('Failed to create dm test data files')
         return False
     return True
