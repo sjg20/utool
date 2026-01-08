@@ -10,11 +10,14 @@ examining U-Boot .config files.
 
 import os
 import re
+import shutil
 
 # pylint: disable=import-error
 from u_boot_pylib import tout
 
+from uman_pkg import build as build_mod
 from uman_pkg import settings
+from uman_pkg.util import exec_cmd, get_uboot_dir
 
 
 def get_config_path(board, build_dir=None):
@@ -68,6 +71,73 @@ def do_grep(args):
     return 0
 
 
+def do_sync(args):
+    """Resync the defconfig from current .config
+
+    Builds with 'cfg' target, runs savedefconfig, and copies back to
+    configs/<board>_defconfig.
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure)
+    """
+    board = args.board or os.environ.get('b')
+    if not board:
+        tout.error('Board is required: use -B BOARD or set $b')
+        return 1
+
+    uboot_dir = get_uboot_dir()
+    if not uboot_dir:
+        tout.error('Not in a U-Boot tree and $USRC not set')
+        return 1
+
+    build_dir = args.build_dir or build_mod.get_dir(board)
+    defconfig_path = os.path.join(uboot_dir, 'configs', f'{board}_defconfig')
+
+    # Change to U-Boot directory for make
+    orig_dir = os.getcwd()
+    os.chdir(uboot_dir)
+    try:
+        # Step 1: Run defconfig to set up .config
+        tout.info(f'Running {board}_defconfig...')
+        cmd = ['make', '-s', f'{board}_defconfig', f'O={build_dir}']
+        result = exec_cmd(cmd, args.dry_run, capture=False)
+        if result and result.return_code != 0:
+            tout.error('defconfig failed')
+            return result.return_code
+
+        # Step 2: Run savedefconfig
+        tout.info('Running savedefconfig...')
+        cmd = ['make', '-s', f'O={build_dir}', 'savedefconfig']
+        result = exec_cmd(cmd, args.dry_run, capture=False)
+        if result and result.return_code != 0:
+            tout.error('savedefconfig failed')
+            return result.return_code
+
+        # Step 3: Show diff and copy defconfig back
+        src = os.path.join(build_dir, 'defconfig')
+        if not args.dry_run and os.path.exists(defconfig_path):
+            # Show diff between old and new
+            diff_cmd = ['diff', '-u', '--color=always', defconfig_path, src]
+            diff_result = exec_cmd(diff_cmd, capture=True)
+            if diff_result and diff_result.stdout:
+                print(diff_result.stdout)
+            elif diff_result and diff_result.return_code == 0:
+                tout.notice('No changes to defconfig')
+                return 0
+
+        tout.info(f'Copying {src} -> {defconfig_path}')
+        if not args.dry_run:
+            shutil.copy(src, defconfig_path)
+
+        tout.notice('Defconfig synced')
+        return 0
+    finally:
+        os.chdir(orig_dir)
+
+
 def run(args):
     """Handle config command
 
@@ -80,5 +150,8 @@ def run(args):
     if args.grep:
         return do_grep(args)
 
-    tout.error('No action specified (use -g PATTERN)')
+    if args.sync:
+        return do_sync(args)
+
+    tout.error('No action specified (use -g PATTERN or -s)')
     return 1

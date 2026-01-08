@@ -663,6 +663,44 @@ CONFIG_DM_TEST=y
         self.assertEqual(1, ret)
         self.assertIn('Config file not found', err.getvalue())
 
+    def test_config_sync_flag(self):
+        """Test -s/--sync flag parsing"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-s'])
+        self.assertEqual('config', args.cmd)
+        self.assertTrue(args.sync)
+
+    def test_config_sync_runs_commands(self):
+        """Test config sync runs make defconfig and savedefconfig"""
+        cap = []
+
+        def mock_exec_cmd(cmd, dry_run=False, env=None, capture=True):
+            del dry_run, env, capture
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-s',
+                                   '--build-dir', self.build_dir])
+        # Create defconfig in build dir for copy
+        with open(os.path.join(self.build_dir, 'defconfig'), 'w') as outf:
+            outf.write('CONFIG_SANDBOX=y\n')
+        # Create configs dir for destination
+        os.makedirs(os.path.join(self.test_dir, 'configs'))
+
+        with mock.patch.object(cmdconfig, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(cmdconfig, 'get_uboot_dir',
+                                   return_value=self.test_dir):
+                with terminal.capture():
+                    ret = cmdconfig.do_sync(args)
+
+        self.assertEqual(0, ret)
+        # Should have called make twice (defconfig and savedefconfig)
+        self.assertEqual(2, len(cap))
+        self.assertIn('make', cap[0])
+        self.assertIn('-s', cap[0])
+        self.assertIn('sandbox_defconfig', cap[0])
+        self.assertIn('make', cap[1])
+        self.assertIn('savedefconfig', cap[1])
+
 
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""

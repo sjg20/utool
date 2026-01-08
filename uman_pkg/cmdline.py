@@ -263,6 +263,9 @@ def add_config_subparser(subparsers):
         '-g', '--grep', metavar='PATTERN',
         help='Grep .config for PATTERN (regex, case-insensitive)')
     cfg.add_argument(
+        '-s', '--sync', action='store_true',
+        help='Resync defconfig from .config (build cfg, savedefconfig, copy)')
+    cfg.add_argument(
         '--build-dir', metavar='DIR',
         help='Override build directory (default: /tmp/b/BOARD)')
     return cfg

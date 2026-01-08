@@ -317,6 +317,30 @@ without going through pytest. This is faster for quick iteration on C code.
 - ``-s, --suites``: List available test suites
 - ``-V, --test-verbose``: Enable verbose test output
 
+Config Subcommand
+-----------------
+
+The ``config`` command (alias ``cfg``) provides tools for examining and
+modifying U-Boot configuration::
+
+    # Grep .config for a pattern (case-insensitive regex)
+    uman config -B sandbox -g VIDEO
+    um cfg -g DM_TEST
+
+    # Resync defconfig from current .config
+    uman config -B sandbox -s
+
+The sync option runs ``make <board>_defconfig``, then ``make savedefconfig``,
+shows a colored diff of changes, and copies the result back to
+``configs/<board>_defconfig``.
+
+**Options**:
+
+- ``-B, --board BOARD``: Board name (required; or set ``$b``)
+- ``-g, --grep PATTERN``: Grep .config for PATTERN (regex, case-insensitive)
+- ``-s, --sync``: Resync defconfig from .config
+- ``--build-dir DIR``: Override build directory
+
 Build Subcommand
 ----------------
 
@@ -355,23 +379,6 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
 - ``-s, --size``: Show size of u-boot and SPL ELFs
 - ``-t, --target TARGET``: Build specific target (e.g. u-boot.bin)
 - ``-T, --trace``: Enable function tracing (FTRACE=1)
-
-Config Subcommand
------------------
-
-The ``config`` command (alias ``cfg``) provides tools for examining U-Boot
-.config files::
-
-    # Search for VIDEO-related config options
-    uman config -B sandbox -g VIDEO
-
-    # Search for DM_TEST options
-    uman cfg -g DM_TEST
-
-**Options**:
-
-- ``-B, --board BOARD``: Board to examine (default: sandbox)
-- ``-g, --grep PATTERN``: Search .config for pattern (case-insensitive regex)
 
 Setup Subcommand
 ----------------
