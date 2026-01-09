@@ -2754,7 +2754,8 @@ from fs_helper import FsHelper
 @pytest.fixture
 def pxe_image(u_boot_config):
     fsh = FsHelper(u_boot_config, 'vfat', 4, prefix='pxe_test')
-    return fsh.setup(), '/extlinux/extlinux.conf'
+    cfg_path = create_extlinux_conf(fsh.srcdir, labels)
+    return fsh.path, cfg_path
 '''
         test_file = os.path.join(self.test_dir, 'test_pxe.py')
         tools.write_file(test_file, test_content)

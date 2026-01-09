@@ -582,11 +582,10 @@ def get_fixture_paths(test_file, kwargs, fixtures):
                 continue
 
         elif arg_key == 'cfg_path':
-            # Look for config path (quoted absolute path) in fixture definitions
+            # Check if fixture calls create_extlinux_conf (standard path)
             for fixture_src in fixture_defs.values():
-                match = re.search(r"['\"](/\w+/[\w.]+)['\"]", fixture_src)
-                if match:
-                    paths[arg_key] = match.group(1)
+                if 'create_extlinux_conf' in fixture_src:
+                    paths[arg_key] = '/extlinux/extlinux.conf'
                     break
             if arg_key in paths:
                 continue
