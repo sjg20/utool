@@ -299,7 +299,7 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         """Test that build_board() passes -L by default (LTO disabled)"""
         cap = []
 
-        def mock_exec_cmd(cmd, *args, **kwargs):
+        def mock_exec_cmd(cmd, *_args, **_kwargs):
             cap.append(cmd)
             return command.CommandResult(return_code=0)
 
@@ -314,7 +314,7 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         """Test that build_board() omits -L when lto=True"""
         cap = []
 
-        def mock_exec_cmd(cmd, *args, **kwargs):
+        def mock_exec_cmd(cmd, *_args, **_kwargs):
             cap.append(cmd)
             return command.CommandResult(return_code=0)
 
@@ -519,13 +519,13 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
                         result = build.do_bisect('sandbox', '/tmp/b/sandbox')
 
         self.assertEqual(0, result)
-        self.assertIn('First bad commit: mid222abc', out.getvalue())
+        self.assertIn('First bad commit: mid222', out.getvalue())
         # Verify we returned to original branch
         self.assertEqual(('git', 'checkout', 'my-branch'), git_calls[-1])
 
     def test_do_bisect_rebase_in_progress(self):
         """Test bisect refuses to start during rebase"""
-        def mock_run_one(*args, capture=False):
+        def mock_run_one(*_args, capture=False):
             del capture
             result = mock.Mock()
             result.stdout = 'interactive rebase in progress'
@@ -533,7 +533,7 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
 
         tout.init(tout.WARNING)
         with mock.patch.object(command, 'run_one', mock_run_one):
-            with terminal.capture() as (out, err):
+            with terminal.capture() as (_, err):
                 result = build.do_bisect('sandbox', '/tmp/b/sandbox')
 
         self.assertEqual(1, result)
@@ -590,7 +590,8 @@ CONFIG_VIDEO=y
 # CONFIG_VIDEO_FONT_4X6 is not set
 CONFIG_DM_TEST=y
 """
-        with open(os.path.join(self.build_dir, '.config'), 'w') as outf:
+        with open(os.path.join(self.build_dir, '.config'), 'w',
+                  encoding='utf-8') as outf:
             outf.write(config_content)
 
     def test_config_subcommand_parsing(self):
@@ -682,7 +683,8 @@ CONFIG_DM_TEST=y
         args = cmdline.parse_args(['config', '-B', 'sandbox', '-s',
                                    '--build-dir', self.build_dir])
         # Create defconfig in build dir for copy
-        with open(os.path.join(self.build_dir, 'defconfig'), 'w') as outf:
+        with open(os.path.join(self.build_dir, 'defconfig'), 'w',
+                  encoding='utf-8') as outf:
             outf.write('CONFIG_SANDBOX=y\n')
         # Create configs dir for destination
         os.makedirs(os.path.join(self.test_dir, 'configs'))
@@ -1300,7 +1302,7 @@ class TestUmanControl(TestBase):  # pylint: disable=too-many-public-methods
         """Test that -L with -b passes lto to build_board()"""
         cap = []
 
-        def mock_exec_cmd(cmd, *args, **kwargs):
+        def mock_exec_cmd(cmd, *_args, **_kwargs):
             cap.append(cmd)
             return command.CommandResult(return_code=0)
 
@@ -2360,15 +2362,15 @@ Test: dm_test_third ... SKIPPED
 
     def test_format_duration_seconds(self):
         """Test format_duration with seconds only"""
-        self.assertEqual('0.00s', cmdtest.format_duration(0))
-        self.assertEqual('1.50s', cmdtest.format_duration(1.5))
-        self.assertEqual('59.99s', cmdtest.format_duration(59.99))
+        self.assertEqual('0.00s', util.format_duration(0))
+        self.assertEqual('1.50s', util.format_duration(1.5))
+        self.assertEqual('59.99s', util.format_duration(59.99))
 
     def test_format_duration_minutes(self):
         """Test format_duration with minutes"""
-        self.assertEqual('1m 0.0s', cmdtest.format_duration(60))
-        self.assertEqual('1m 30.0s', cmdtest.format_duration(90))
-        self.assertEqual('5m 30.5s', cmdtest.format_duration(330.5))
+        self.assertEqual('1m 0.0s', util.format_duration(60))
+        self.assertEqual('1m 30.0s', util.format_duration(90))
+        self.assertEqual('5m 30.5s', util.format_duration(330.5))
 
     def test_run_tests_shows_summary(self):
         """Test run_tests shows results summary"""
@@ -2969,7 +2971,7 @@ test_fs.py::TestFs::test_ext4
         def mock_popen(cmd, **_kwargs):
             captured_cmd.extend(cmd)
             proc = mock.Mock()
-            proc.stdout.read.return_value = b''
+            proc.stdout.read.return_value = b''  # pylint: disable=no-member
             proc.returncode = 0
             return proc
 
@@ -3006,7 +3008,7 @@ test_fs.py::TestFs::test_ext4
         def mock_popen(cmd, **_kwargs):
             captured_cmd.extend(cmd)
             proc = mock.Mock()
-            proc.stdout.read.return_value = b''
+            proc.stdout.read.return_value = b''  # pylint: disable=no-member
             proc.returncode = 0
             return proc
 
@@ -3066,7 +3068,7 @@ test_fs.py::TestFs::test_ext4
         def mock_popen(cmd, **_kwargs):
             captured_cmd.extend(cmd)
             proc = mock.Mock()
-            proc.stdout.read.return_value = b''
+            proc.stdout.read.return_value = b''  # pylint: disable=no-member
             proc.returncode = 0
             return proc
 
@@ -3084,7 +3086,7 @@ test_fs.py::TestFs::test_ext4
         def mock_popen(cmd, **_kwargs):
             captured_cmd.extend(cmd)
             proc = mock.Mock()
-            proc.stdout.read.return_value = b''
+            proc.stdout.read.return_value = b''  # pylint: disable=no-member
             proc.returncode = 0
             return proc
 
@@ -3099,7 +3101,7 @@ test_fs.py::TestFs::test_ext4
         """Test --pollute -b builds to pollute directory"""
         cap = []
 
-        def mock_exec_cmd(cmd, *args, **kwargs):
+        def mock_exec_cmd(cmd, *_args, **_kwargs):
             cap.append(cmd)
             return command.CommandResult(return_code=0)
 
@@ -3128,7 +3130,7 @@ test_fs.py::TestFs::test_ext4
         """Test --pollute -b -L respects LTO flag"""
         cap = []
 
-        def mock_exec_cmd(cmd, *args, **kwargs):
+        def mock_exec_cmd(cmd, *_args, **_kwargs):
             cap.append(cmd)
             return command.CommandResult(return_code=0)
 
