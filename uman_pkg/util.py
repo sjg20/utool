@@ -8,7 +8,9 @@ This module provides common utility functions used across uman modules.
 """
 
 import os
+import shlex
 import subprocess
+import sys
 
 # pylint: disable=import-error
 from u_boot_pylib import command
@@ -70,22 +72,24 @@ def exec_cmd(cmd, dry_run=False, env=None, capture=True):
         CommandResult or None: Result if run, None if dry-run
     """
     if dry_run:
-        tout.notice(' '.join(cmd))
+        tout.notice(shlex.join(cmd))
         if env:
             for key, value in env.items():
                 tout.notice(f"  {key}={value}")
         return None
 
-    tout.info(f"Running: {' '.join(cmd)}")
+    tout.info(f"Running: {shlex.join(cmd)}")
 
     # For interactive commands (capture=False), use subprocess.run directly
-    # so Ctrl+C is properly forwarded to the child process
+    # so Ctrl+C is properly forwarded to the child process. Capture stderr
+    # so callers can check for specific errors, but also print it.
     if not capture:
         result = subprocess.run(cmd, env=env, check=False,
                                 stderr=subprocess.PIPE)
         stderr = ''
         if result.stderr:
             stderr = result.stderr.decode('utf-8', errors='replace')
+            print(stderr, file=sys.stderr, end='')
         return command.CommandResult(return_code=result.returncode,
                                      stdout='', stderr=stderr)
 

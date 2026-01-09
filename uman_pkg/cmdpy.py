@@ -589,6 +589,11 @@ def run_c_test(args):
         tout.error('Not in a U-Boot tree and $USRC not set')
         return 1
 
+    # Build if requested
+    if args.build:
+        if not build_mod.build_board('sandbox', args.dry_run, args.lto):
+            return 1
+
     sandbox = get_sandbox_path()
     if not sandbox:
         tout.error('Sandbox not built - run: uman b sandbox')
@@ -627,6 +632,8 @@ def run_c_test(args):
     ut_args = ' '.join(f'{k}={v}' for k, v in paths.items())
     ut_cmd = f'ut -Em {info.suite} {info.c_test} {ut_args}'
     cmd = [sandbox, '-T', '-F', '-c', ut_cmd]
+    if args.show_output:
+        cmd.insert(1, '-v')
 
     start = time.time()
     result = exec_cmd(cmd, dry_run=args.dry_run,

@@ -2819,7 +2819,8 @@ class TestFoo:
         """Test run_c_test fails without test spec"""
         mock_uboot_dir.return_value = self.test_dir
         args = argparse.Namespace(test_spec=None, dry_run=False,
-                                  show_cmd=False, show_output=False)
+                                  show_cmd=False, show_output=False,
+                                  build=False, lto=False)
         with terminal.capture() as (_out, err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)
@@ -2837,7 +2838,8 @@ class TestFoo:
         tools.write_file(test_file, b'# test')
 
         args = argparse.Namespace(test_spec=['ext4l'], dry_run=False,
-                                  show_cmd=False, show_output=False)
+                                  show_cmd=False, show_output=False,
+                                  build=False, lto=False)
         with terminal.capture() as (_out, err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)
@@ -2873,7 +2875,7 @@ class TestExt4l:
 
         args = argparse.Namespace(test_spec=['TestExt4l:test_unlink'],
                                   dry_run=False, show_cmd=False,
-                                  show_output=True)
+                                  show_output=True, build=False, lto=False)
         ret = cmdpy.run_c_test(args)
         self.assertEqual(0, ret)
 
@@ -2914,7 +2916,7 @@ class TestExt4l:
 
         args = argparse.Namespace(test_spec=['TestExt4l:test_unlink'],
                                   dry_run=False, show_cmd=False,
-                                  show_output=False)
+                                  show_output=False, build=False, lto=False)
         with terminal.capture() as (out, _err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(0, ret)
