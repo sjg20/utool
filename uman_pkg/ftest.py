@@ -2739,8 +2739,9 @@ def ext4_image(self, u_boot_config):
         tools.write_file(test_file, test_content)
 
         kwargs = [('fs_image', 'ext4_image')]
+        fixtures = ['ext4_image']
         with mock.patch.object(settings, 'get', return_value='/tmp/b'):
-            paths, reason = cmdpy.get_fixture_paths(test_file, kwargs)
+            paths, reason = cmdpy.get_fixture_paths(test_file, kwargs, fixtures)
         self.assertEqual('/tmp/b/sandbox/persistent-data/ext4l_test.img',
                          paths['fs_image'])
         self.assertIsNone(reason)
@@ -2753,16 +2754,15 @@ from fs_helper import FsHelper
 @pytest.fixture
 def pxe_image(u_boot_config):
     fsh = FsHelper(u_boot_config, 'vfat', 4, prefix='pxe_test')
-
-def create_extlinux_conf():
-    return '/extlinux/extlinux.conf'
+    return fsh.setup(), '/extlinux/extlinux.conf'
 '''
         test_file = os.path.join(self.test_dir, 'test_pxe.py')
         tools.write_file(test_file, test_content)
 
         kwargs = [('fs_image', 'fs_img'), ('cfg_path', 'cfg_path')]
+        fixtures = ['pxe_image']
         with mock.patch.object(settings, 'get', return_value='/tmp/b'):
-            paths, reason = cmdpy.get_fixture_paths(test_file, kwargs)
+            paths, reason = cmdpy.get_fixture_paths(test_file, kwargs, fixtures)
         self.assertEqual('/tmp/b/sandbox/persistent-data/pxe_test.vfat.img',
                          paths['fs_image'])
         self.assertEqual('/extlinux/extlinux.conf', paths['cfg_path'])
@@ -2807,6 +2807,7 @@ class TestFoo:
         self.assertEqual('fs', info.suite)
         self.assertEqual('fs_test_ext4l_probe_norun', info.c_test)
         self.assertEqual([('fs_image', 'ext4_image')], info.kwargs)
+        self.assertEqual(['ext4_image'], info.fixtures)
 
     def test_c_test_flag_parsing(self):
         """Test -C flag is parsed correctly"""

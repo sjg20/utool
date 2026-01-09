@@ -43,9 +43,12 @@ GLOB_TEST = 'test/py/**/test_{name}.py'
 #         (e.g., 'fs_test_ext4l_probe_norun')
 #     kwargs (list): List of (arg_key, fixture_name) tuples for run_ut() kwargs
 #         (e.g., [('fs_image', 'ext4_image'), ('cfg_path', 'cfg')])
+#     fixtures (list): List of fixture names from test method signature
+#         (e.g., ['ext4_image'] or ['pxe_fdtdir_image'])
 #
 # All fields are None on parse failure.
-CTestInfo = collections.namedtuple('CTestInfo', ['suite', 'c_test', 'kwargs'])
+CTestInfo = collections.namedtuple('CTestInfo',
+                                   ['suite', 'c_test', 'kwargs', 'fixtures'])
 
 
 def setup_riscv_env(board, env):
@@ -458,8 +461,8 @@ def parse_c_test_call(source, class_name, method_name):
         method_name (str): Test method name
 
     Returns:
-        CTestInfo: Named tuple with suite, c_test, kwargs fields,
-            or CTestInfo(None, None, None) on failure
+        CTestInfo: Named tuple with suite, c_test, kwargs, fixtures fields,
+            or CTestInfo(None, None, None, None) on failure
     """
     tree = ast.parse(source)
 
@@ -474,9 +477,13 @@ def parse_c_test_call(source, class_name, method_name):
                 continue
             call = find_run_ut_call(item)
             if call:
-                return extract_run_ut_args(call)
+                # Extract fixture names from method parameters (skip self, ubman)
+                fixtures = [arg.arg for arg in item.args.args
+                            if arg.arg not in ('self', 'ubman')]
+                info = extract_run_ut_args(call)
+                return CTestInfo(info.suite, info.c_test, info.kwargs, fixtures)
 
-    return CTestInfo(None, None, None)
+    return CTestInfo(None, None, None, None)
 
 
 def extract_run_ut_args(call_node):
@@ -488,26 +495,26 @@ def extract_run_ut_args(call_node):
         call_node (ast.Call): AST Call node for run_ut()
 
     Returns:
-        CTestInfo: Named tuple with suite, c_test, kwargs fields,
-            or CTestInfo(None, None, None) on failure
+        CTestInfo: Named tuple with suite, c_test, kwargs fields (fixtures=None),
+            or CTestInfo(None, None, None, None) on failure
     """
     # Need at least 2 positional args: suite and test name
     if len(call_node.args) < 2:
-        return CTestInfo(None, None, None)
+        return CTestInfo(None, None, None, None)
 
     # Extract suite (first arg)
     if not isinstance(call_node.args[0], ast.Constant):
-        return CTestInfo(None, None, None)
+        return CTestInfo(None, None, None, None)
     suite = call_node.args[0].value
 
     # Extract test name (second arg) - add _norun suffix
     if not isinstance(call_node.args[1], ast.Constant):
-        return CTestInfo(None, None, None)
+        return CTestInfo(None, None, None, None)
     c_test = call_node.args[1].value + '_norun'
 
     # Extract all keyword arguments (e.g., fs_image=ext4_image, cfg_path=cfg)
     if not call_node.keywords:
-        return CTestInfo(None, None, None)
+        return CTestInfo(None, None, None, None)
 
     kwargs = []
     for kw in call_node.keywords:
@@ -515,17 +522,18 @@ def extract_run_ut_args(call_node):
             kwargs.append((kw.arg, kw.value.id))
 
     if not kwargs:
-        return CTestInfo(None, None, None)
+        return CTestInfo(None, None, None, None)
 
-    return CTestInfo(suite, c_test, kwargs)
+    return CTestInfo(suite, c_test, kwargs, None)
 
 
-def get_fixture_paths(test_file, kwargs):
+def get_fixture_paths(test_file, kwargs, fixtures):
     """Get fixture paths for all kwargs in a run_ut() call
 
     Args:
         test_file (str): Path to Python test file
         kwargs (list): List of (arg_key, fixture_name) tuples from run_ut()
+        fixtures (list): List of fixture names from method signature
 
     Returns:
         tuple: (paths_dict, reason) where paths_dict maps arg_key to path,
@@ -535,34 +543,52 @@ def get_fixture_paths(test_file, kwargs):
     build_dir = settings.get('build_dir', '/tmp/b')
     persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
 
+    # Find fixture definitions for image fixtures
+    fixture_defs = {}
+    for fixture in fixtures:
+        # Match: def fixture_name(...):  ...until next def or end
+        pattern = rf"def\s+{re.escape(fixture)}\s*\([^)]*\):\s*(.*?)(?=\ndef\s|\Z)"
+        match = re.search(pattern, source, re.DOTALL)
+        if match:
+            fixture_defs[fixture] = match.group(1)
+
     paths = {}
     for arg_key, _ in kwargs:
         if arg_key in ('fs_image', 'image'):
-            # Look for FsHelper pattern: FsHelper(..., 'fs_type', prefix='name')
-            match = re.search(
-                r"FsHelper\s*\([^,]+,\s*['\"](\w+)['\"].*?"
-                r"prefix\s*=\s*['\"](\w+)['\"]",
-                source, re.DOTALL)
-            if match:
-                fs_type = match.group(1)
-                prefix = match.group(2)
-                img_name = f'{prefix}.{fs_type}.img'
-                paths[arg_key] = os.path.join(persistent_dir, img_name)
+            # Search in fixture definitions for FsHelper pattern
+            for fixture_src in fixture_defs.values():
+                match = re.search(
+                    r"FsHelper\s*\([^,]+,\s*['\"](\w+)['\"].*?"
+                    r"prefix\s*=\s*['\"](\w+)['\"]",
+                    fixture_src, re.DOTALL)
+                if match:
+                    fs_type = match.group(1)
+                    prefix = match.group(2)
+                    img_name = f'{prefix}.{fs_type}.img'
+                    paths[arg_key] = os.path.join(persistent_dir, img_name)
+                    break
+            if arg_key in paths:
                 continue
 
-            # Look for image_path pattern
-            match = re.search(r"image_path\s*=.*?['\"](\w+\.img)['\"]",
-                              source, re.DOTALL)
-            if match:
-                img_name = match.group(1)
-                paths[arg_key] = os.path.join(persistent_dir, img_name)
+            # Look for image_path pattern in fixture definitions
+            for fixture_src in fixture_defs.values():
+                match = re.search(r"image_path\s*=.*?['\"](\w+\.img)['\"]",
+                                  fixture_src, re.DOTALL)
+                if match:
+                    img_name = match.group(1)
+                    paths[arg_key] = os.path.join(persistent_dir, img_name)
+                    break
+            if arg_key in paths:
                 continue
 
         elif arg_key == 'cfg_path':
-            # Look for return statement with config path
-            match = re.search(r"return\s+['\"](/\w+/[\w.]+)['\"]", source)
-            if match:
-                paths[arg_key] = match.group(1)
+            # Look for config path (quoted absolute path) in fixture definitions
+            for fixture_src in fixture_defs.values():
+                match = re.search(r"['\"](/\w+/[\w.]+)['\"]", fixture_src)
+                if match:
+                    paths[arg_key] = match.group(1)
+                    break
+            if arg_key in paths:
                 continue
 
         # Couldn't find path for this kwarg
@@ -616,7 +642,7 @@ def run_c_test(args):
         return 1
 
     # Get fixture paths for all kwargs
-    paths, reason = get_fixture_paths(test_file, info.kwargs)
+    paths, reason = get_fixture_paths(test_file, info.kwargs, info.fixtures)
     if not paths:
         tout.error(f'Test {reason} - not suitable for -C')
         tout.notice(f'Run the full test instead: um py {test_name}')
