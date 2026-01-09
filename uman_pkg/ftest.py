@@ -492,7 +492,7 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
                             current_commit[0] = 'mid111'
                         elif bisect_step[0] == 2:
                             # Bisect complete
-                            result.stdout = 'mid222abc is the first bad commit\n'
+                            result.stdout = 'mid222 is the first bad commit\n'
             return result
 
         def mock_output_one_line(*args):
@@ -626,8 +626,9 @@ CONFIG_DM_TEST=y
 
     def test_config_grep_no_match(self):
         """Test config grep with no matches"""
-        args = cmdline.parse_args(['config', '-B', 'sandbox', '-g', 'NONEXISTENT',
-                                   '--build-dir', self.build_dir])
+        args = cmdline.parse_args(
+            ['config', '-B', 'sandbox', '-g', 'NONEXISTENT',
+             '--build-dir', self.build_dir])
         with terminal.capture() as (out, _):
             ret = cmdconfig.run(args)
         self.assertEqual(0, ret)
@@ -2170,57 +2171,49 @@ int main(void) { return 0; }
 
     def test_build_ut_cmd_no_tests(self):
         """Test build_ut_cmd with all specs"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('all', None)])
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-c', 'ut -E all'], cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('all', None)])
+        self.assertEqual(['/sb', '-T', '-F', '-c', 'ut -E all'], cmd)
 
     def test_build_ut_cmd_full(self):
         """Test build_ut_cmd with full flag (both tree types)"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   full=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-c', 'ut -E dm'], cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None)], full=True)
+        self.assertEqual(['/sb', '-T', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_verbose(self):
         """Test build_ut_cmd with verbose flag"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-v', '-c', 'ut -E dm'],
-                         cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None)], verbose=True)
+        self.assertEqual(['/sb', '-T', '-F', '-v', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_all_flags(self):
         """Test build_ut_cmd with all flags"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None)],
                                    full=True, verbose=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-v', '-c', 'ut -E dm'], cmd)
+        self.assertEqual(['/sb', '-T', '-v', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_suite(self):
         """Test build_ut_cmd with suite name"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)])
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-c', 'ut -E dm'], cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None)])
+        self.assertEqual(['/sb', '-T', '-F', '-c', 'ut -E dm'], cmd)
 
     def test_build_ut_cmd_specific_test(self):
         """Test build_ut_cmd with specific test (suite.test)"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', 'test_one')])
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-c', 'ut -E dm test_one'],
-                         cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', 'test_one')])
+        self.assertEqual(['/sb', '-T', '-F', '-c', 'ut -E dm test_one'], cmd)
 
     def test_build_ut_cmd_multiple_tests(self):
         """Test build_ut_cmd with multiple test specifications"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox',
-                                   [('dm', None), ('env', None)])
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-c',
-                          'ut -E dm; ut -E env'], cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None), ('env', None)])
+        self.assertEqual(['/sb', '-T', '-F', '-c', 'ut -E dm; ut -E env'], cmd)
 
     def test_build_ut_cmd_legacy(self):
         """Test build_ut_cmd with legacy flag omits -E"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   legacy=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-c', 'ut dm'], cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None)], legacy=True)
+        self.assertEqual(['/sb', '-T', '-F', '-c', 'ut dm'], cmd)
 
     def test_build_ut_cmd_manual(self):
         """Test build_ut_cmd with manual flag"""
-        cmd = cmdtest.build_ut_cmd('/path/to/sandbox', [('dm', None)],
-                                   manual=True)
-        self.assertEqual(['/path/to/sandbox', '-T', '-F', '-c', 'ut -E -m dm'], cmd)
+        cmd = cmdtest.build_ut_cmd('/sb', [('dm', None)], manual=True)
+        self.assertEqual(['/sb', '-T', '-F', '-c', 'ut -E -m dm'], cmd)
 
     def test_run_tests_basic(self):
         """Test run_tests executes sandbox correctly"""
@@ -2237,10 +2230,9 @@ int main(void) { return 0; }
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture():
-                    result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args, col)
+                    result = cmdtest.run_tests('/sb', [('dm', None)], args, col)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-T', '-F', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/sb', '-T', '-F', '-c', 'ut -E dm'), cap[0])
 
     def test_run_tests_full(self):
         """Test run_tests with full flag (both tree types)"""
@@ -2257,10 +2249,9 @@ int main(void) { return 0; }
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture():
-                    result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args, col)
+                    result = cmdtest.run_tests('/sb', [('dm', None)], args, col)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-T', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/sb', '-T', '-c', 'ut -E dm'), cap[0])
 
     def test_run_tests_verbose(self):
         """Test run_tests with verbose flag"""
@@ -2277,11 +2268,9 @@ int main(void) { return 0; }
             with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                    return_value=True):
                 with terminal.capture():
-                    result = cmdtest.run_tests('/path/to/sandbox',
-                                               [('dm', None)], args, col)
+                    result = cmdtest.run_tests('/sb', [('dm', None)], args, col)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-T', '-F', '-v', '-c', 'ut -E dm'),
-                         cap[0])
+        self.assertEqual(('/sb', '-T', '-F', '-v', '-c', 'ut -E dm'), cap[0])
 
     def test_parse_legacy_results_all_pass(self):
         """Test parse_legacy_results with all passing tests"""
@@ -2440,8 +2429,7 @@ Tests run: 1, failures: 1
 
         args = cmdline.parse_args(['test', 'dm'])
         args.col = terminal.Color()
-        with mock.patch.object(cmdtest, 'get_sandbox_path',
-                               return_value='/path/to/sandbox'):
+        with mock.patch.object(cmdtest, 'get_sandbox_path', return_value='/sb'):
             with mock.patch.object(cmdtest, 'validate_specs', return_value=[]):
                 with mock.patch.object(cmdtest, 'ensure_dm_init_files',
                                        return_value=True):
@@ -2449,7 +2437,7 @@ Tests run: 1, failures: 1
                         with terminal.capture():
                             result = cmdtest.do_test(args)
         self.assertEqual(0, result)
-        self.assertEqual(('/path/to/sandbox', '-T', '-F', '-c', 'ut -E dm'), cap[0])
+        self.assertEqual(('/sb', '-T', '-F', '-c', 'ut -E dm'), cap[0])
 
     def test_parse_one_test_suite(self):
         """Test parse_one_test with suite name"""
