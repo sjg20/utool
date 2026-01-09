@@ -9,6 +9,7 @@ test framework.
 """
 
 import ast
+import collections
 import glob
 import math
 import os
@@ -33,6 +34,18 @@ RE_TEST_SPEC = re.compile(r'(?:Test)?(\w+?)(?:[:.](\w+))?$', re.IGNORECASE)
 
 # Glob pattern to find test files (use with .format(name=...))
 GLOB_TEST = 'test/py/**/test_{name}.py'
+
+# Named tuple for C test information extracted from Python test files
+#
+# Attributes:
+#     suite (str): Test suite name (e.g., 'fs', 'pxe', 'dm')
+#     c_test (str): C test function name with _norun suffix
+#         (e.g., 'fs_test_ext4l_probe_norun')
+#     kwargs (list): List of (arg_key, fixture_name) tuples for run_ut() kwargs
+#         (e.g., [('fs_image', 'ext4_image'), ('cfg_path', 'cfg')])
+#
+# All fields are None on parse failure.
+CTestInfo = collections.namedtuple('CTestInfo', ['suite', 'c_test', 'kwargs'])
 
 
 def setup_riscv_env(board, env):
@@ -445,7 +458,8 @@ def parse_c_test_call(source, class_name, method_name):
         method_name (str): Test method name
 
     Returns:
-        tuple: (suite, c_test_name, arg_key, fixture_name) or (None,)*4
+        CTestInfo: Named tuple with suite, c_test, kwargs fields,
+            or CTestInfo(None, None, None) on failure
     """
     tree = ast.parse(source)
 
@@ -462,70 +476,99 @@ def parse_c_test_call(source, class_name, method_name):
             if call:
                 return extract_run_ut_args(call)
 
-    return None, None, None, None
+    return CTestInfo(None, None, None)
 
 
 def extract_run_ut_args(call_node):
     """Extract C test info from a run_ut() call AST node
 
-    Parses: ubman.run_ut('fs', 'fs_test_ext4l_probe', fs_image=ext4_image)
+    Parses: ubman.run_ut('fs', 'fs_test_ext4l_probe', fs_image=img, cfg=path)
 
     Args:
         call_node (ast.Call): AST Call node for run_ut()
 
     Returns:
-        tuple: (suite, c_test_name, arg_key, fixture_name) or (None,)*4
+        CTestInfo: Named tuple with suite, c_test, kwargs fields,
+            or CTestInfo(None, None, None) on failure
     """
     # Need at least 2 positional args: suite and test name
     if len(call_node.args) < 2:
-        return None, None, None, None
+        return CTestInfo(None, None, None)
 
     # Extract suite (first arg)
     if not isinstance(call_node.args[0], ast.Constant):
-        return None, None, None, None
+        return CTestInfo(None, None, None)
     suite = call_node.args[0].value
 
     # Extract test name (second arg) - add _norun suffix
     if not isinstance(call_node.args[1], ast.Constant):
-        return None, None, None, None
+        return CTestInfo(None, None, None)
     c_test = call_node.args[1].value + '_norun'
 
-    # Extract first keyword argument (e.g., fs_image=ext4_image)
+    # Extract all keyword arguments (e.g., fs_image=ext4_image, cfg_path=cfg)
     if not call_node.keywords:
-        return None, None, None, None
+        return CTestInfo(None, None, None)
 
-    kw = call_node.keywords[0]
-    arg_key = kw.arg
-    if isinstance(kw.value, ast.Name):
-        fixture_name = kw.value.id
-    else:
-        return None, None, None, None
+    kwargs = []
+    for kw in call_node.keywords:
+        if isinstance(kw.value, ast.Name):
+            kwargs.append((kw.arg, kw.value.id))
 
-    return suite, c_test, arg_key, fixture_name
+    if not kwargs:
+        return CTestInfo(None, None, None)
+
+    return CTestInfo(suite, c_test, kwargs)
 
 
-def get_fixture_path(test_file):
-    """Get the path created by a fixture
+def get_fixture_paths(test_file, kwargs):
+    """Get fixture paths for all kwargs in a run_ut() call
 
     Args:
         test_file (str): Path to Python test file
+        kwargs (list): List of (arg_key, fixture_name) tuples from run_ut()
 
     Returns:
-        str: Path to fixture output, or None
+        tuple: (paths_dict, reason) where paths_dict maps arg_key to path,
+            or (None, reason) on failure
     """
     source = tools.read_file(test_file, binary=False)
+    build_dir = settings.get('build_dir', '/tmp/b')
+    persistent_dir = os.path.join(build_dir, 'sandbox', 'persistent-data')
 
-    # Look for the image path pattern in fixture (may span multiple lines)
-    # e.g., image_path = os.path.join(u_boot_config.persistent_data_dir,
-    #                                 'ext4l_test.img')
-    match = re.search(r"image_path\s*=.*?['\"](\w+\.img)['\"]", source,
-                      re.DOTALL)
-    if match:
-        img_name = match.group(1)
-        build_dir = settings.get('build_dir', '/tmp/b')
-        return os.path.join(build_dir, 'sandbox', 'persistent-data', img_name)
+    paths = {}
+    for arg_key, _ in kwargs:
+        if arg_key in ('fs_image', 'image'):
+            # Look for FsHelper pattern: FsHelper(..., 'fs_type', prefix='name')
+            match = re.search(
+                r"FsHelper\s*\([^,]+,\s*['\"](\w+)['\"].*?"
+                r"prefix\s*=\s*['\"](\w+)['\"]",
+                source, re.DOTALL)
+            if match:
+                fs_type = match.group(1)
+                prefix = match.group(2)
+                img_name = f'{prefix}.{fs_type}.img'
+                paths[arg_key] = os.path.join(persistent_dir, img_name)
+                continue
 
-    return None
+            # Look for image_path pattern
+            match = re.search(r"image_path\s*=.*?['\"](\w+\.img)['\"]",
+                              source, re.DOTALL)
+            if match:
+                img_name = match.group(1)
+                paths[arg_key] = os.path.join(persistent_dir, img_name)
+                continue
+
+        elif arg_key == 'cfg_path':
+            # Look for return statement with config path
+            match = re.search(r"return\s+['\"](/\w+/[\w.]+)['\"]", source)
+            if match:
+                paths[arg_key] = match.group(1)
+                continue
+
+        # Couldn't find path for this kwarg
+        return None, f'cannot determine {arg_key} path'
+
+    return paths, None
 
 
 def run_c_test(args):
@@ -561,23 +604,28 @@ def run_c_test(args):
         tout.error('Method name required (e.g., TestExt4l:test_unlink)')
         return 1
 
-    # Get fixture output path
-    fixture_path = get_fixture_path(test_file)
-    if not fixture_path:
-        tout.error('Cannot determine fixture path')
-        return 1
-
-    if not os.path.exists(fixture_path):
-        tout.error(f'Setup not done: run uman py -SP {test_name}')
-        return 1
-
     source = tools.read_file(test_file, binary=False)
-    suite, c_test, arg_key, _ = parse_c_test_call(source, class_name, method)
-    if not suite:
+    info = parse_c_test_call(source, class_name, method)
+    if not info.suite:
         tout.error(f'Cannot find C test command in {class_name}.{method}')
         return 1
 
-    ut_cmd = f'ut -Em {suite} {c_test} {arg_key}={fixture_path}'
+    # Get fixture paths for all kwargs
+    paths, reason = get_fixture_paths(test_file, info.kwargs)
+    if not paths:
+        tout.error(f'Test {reason} - not suitable for -C')
+        tout.notice(f'Run the full test instead: um py {test_name}')
+        return 1
+
+    # Check fs_image exists (the main fixture file)
+    for arg_key, path in paths.items():
+        if arg_key in ('fs_image', 'image') and not os.path.exists(path):
+            tout.error(f'Setup not done: run um py -SP {test_name}')
+            return 1
+
+    # Build ut command with all kwargs
+    ut_args = ' '.join(f'{k}={v}' for k, v in paths.items())
+    ut_cmd = f'ut -Em {info.suite} {info.c_test} {ut_args}'
     cmd = [sandbox, '-T', '-F', '-c', ut_cmd]
 
     start = time.time()

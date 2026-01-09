@@ -202,6 +202,30 @@ hooks to PATH.
 - ``--build-dir DIR``: Override build directory
 - ``--gdbserver CHANNEL``: Run sandbox under gdbserver (e.g., localhost:5555)
 
+**Running C Tests Directly**:
+
+Some pytest tests are thin wrappers around C unit tests. The ``-C`` option lets
+you run just the C test part after setting up fixtures once::
+
+    # First, set up the test fixtures (creates filesystem images etc.)
+    uman py -SP TestExt4l:test_unlink
+
+    # Run only the C test (fast iteration during development)
+    uman py -C TestExt4l:test_unlink
+
+    # Show output while running
+    uman py -C TestExt4l:test_unlink -s
+
+This is useful when iterating on C code - you avoid the pytest overhead and
+fixture setup on each run. The ``-C`` option:
+
+- Parses the Python test to find the ``ubman.run_ut()`` call
+- Extracts the C test command (suite, test name, fixture path)
+- Runs sandbox directly with the ``ut`` command
+- Shows a summary: ``Results: 1 passed, 0 failed, 0 skipped in 0.21s``
+
+Without ``-s``, output is only shown on failure.
+
 **Finding Test Pollution**:
 
 When a test fails only after other tests have run, use ``--pollute`` to find the

@@ -2726,8 +2726,8 @@ class TestPytestCTest(TestBase):
         self.assertEqual('my_long_name', cmdpy.camel_to_snake('MyLongName'))
         self.assertEqual('simple', cmdpy.camel_to_snake('Simple'))
 
-    def test_get_fixture_path(self):
-        """Test extracting fixture path from a test file"""
+    def test_get_fixture_paths(self):
+        """Test extracting fixture paths from a test file"""
         test_content = b'''
 @pytest.fixture
 def ext4_image(self, u_boot_config):
@@ -2738,9 +2738,35 @@ def ext4_image(self, u_boot_config):
         test_file = os.path.join(self.test_dir, 'test_ext4l.py')
         tools.write_file(test_file, test_content)
 
+        kwargs = [('fs_image', 'ext4_image')]
         with mock.patch.object(settings, 'get', return_value='/tmp/b'):
-            path = cmdpy.get_fixture_path(test_file)
-        self.assertEqual('/tmp/b/sandbox/persistent-data/ext4l_test.img', path)
+            paths, reason = cmdpy.get_fixture_paths(test_file, kwargs)
+        self.assertEqual('/tmp/b/sandbox/persistent-data/ext4l_test.img',
+                         paths['fs_image'])
+        self.assertIsNone(reason)
+
+    def test_get_fixture_paths_fshelper(self):
+        """Test get_fixture_paths handles FsHelper pattern"""
+        test_content = b'''
+from fs_helper import FsHelper
+
+@pytest.fixture
+def pxe_image(u_boot_config):
+    fsh = FsHelper(u_boot_config, 'vfat', 4, prefix='pxe_test')
+
+def create_extlinux_conf():
+    return '/extlinux/extlinux.conf'
+'''
+        test_file = os.path.join(self.test_dir, 'test_pxe.py')
+        tools.write_file(test_file, test_content)
+
+        kwargs = [('fs_image', 'fs_img'), ('cfg_path', 'cfg_path')]
+        with mock.patch.object(settings, 'get', return_value='/tmp/b'):
+            paths, reason = cmdpy.get_fixture_paths(test_file, kwargs)
+        self.assertEqual('/tmp/b/sandbox/persistent-data/pxe_test.vfat.img',
+                         paths['fs_image'])
+        self.assertEqual('/extlinux/extlinux.conf', paths['cfg_path'])
+        self.assertIsNone(reason)
 
     def test_find_run_ut_call(self):
         """Test finding run_ut() call in method AST"""
@@ -2776,13 +2802,11 @@ class TestFoo:
                                  'test/py/tests/test_fs/test_ext4l.py')
         source = tools.read_file(test_file, binary=False)
 
-        result = cmdpy.parse_c_test_call(source, 'TestExt4l', 'test_probe')
-        self.assertIsNotNone(result[0])
-        suite, c_test, arg_key, fixture = result
-        self.assertEqual('fs', suite)
-        self.assertEqual('fs_test_ext4l_probe_norun', c_test)
-        self.assertEqual('fs_image', arg_key)
-        self.assertEqual('ext4_image', fixture)
+        info = cmdpy.parse_c_test_call(source, 'TestExt4l', 'test_probe')
+        self.assertIsNotNone(info.suite)
+        self.assertEqual('fs', info.suite)
+        self.assertEqual('fs_test_ext4l_probe_norun', info.c_test)
+        self.assertEqual([('fs_image', 'ext4_image')], info.kwargs)
 
     def test_c_test_flag_parsing(self):
         """Test -C flag is parsed correctly"""
@@ -2821,7 +2845,7 @@ class TestFoo:
 
     @mock.patch.object(cmdpy, 'get_uboot_dir')
     @mock.patch.object(cmdpy, 'get_sandbox_path')
-    @mock.patch.object(cmdpy, 'get_fixture_path')
+    @mock.patch.object(cmdpy, 'get_fixture_paths')
     @mock.patch.object(cmdpy, 'exec_cmd')
     def test_run_c_test_show_output(self, mock_exec, mock_fixture,
                                     mock_sandbox, mock_uboot_dir):
@@ -2840,10 +2864,10 @@ class TestExt4l:
 '''
         tools.write_file(test_file, test_content.encode())
 
-        # Mock fixture path to an existing file
+        # Mock fixture paths to an existing file
         fixture_path = os.path.join(self.test_dir, 'ext4l.img')
         tools.write_file(fixture_path, b'')
-        mock_fixture.return_value = fixture_path
+        mock_fixture.return_value = ({'fs_image': fixture_path}, None)
 
         mock_exec.return_value = command.CommandResult(return_code=0)
 
@@ -2860,7 +2884,7 @@ class TestExt4l:
 
     @mock.patch.object(cmdpy, 'get_uboot_dir')
     @mock.patch.object(cmdpy, 'get_sandbox_path')
-    @mock.patch.object(cmdpy, 'get_fixture_path')
+    @mock.patch.object(cmdpy, 'get_fixture_paths')
     @mock.patch.object(cmdpy, 'exec_cmd')
     def test_run_c_test_summary(self, mock_exec, mock_fixture,
                                 mock_sandbox, mock_uboot_dir):
@@ -2879,10 +2903,10 @@ class TestExt4l:
 '''
         tools.write_file(test_file, test_content.encode())
 
-        # Mock fixture path to an existing file
+        # Mock fixture paths to an existing file
         fixture_path = os.path.join(self.test_dir, 'ext4l.img')
         tools.write_file(fixture_path, b'')
-        mock_fixture.return_value = fixture_path
+        mock_fixture.return_value = ({'fs_image': fixture_path}, None)
 
         # Test with PASS result - no output shown
         mock_exec.return_value = command.CommandResult(
