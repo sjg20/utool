@@ -2704,6 +2704,28 @@ class TestPytestCTest(TestBase):
         self.assertIsNone(cls)
         self.assertIsNone(method)
 
+    def test_find_test_camel_case(self):
+        """Test finding test file with CamelCase class name"""
+        # Create test file with snake_case name
+        test_dir = os.path.join(self.test_dir, 'test/py/tests')
+        os.makedirs(test_dir, exist_ok=True)
+        test_file = os.path.join(test_dir, 'test_pxe_parser.py')
+        tools.write_file(test_file, b'# test file')
+
+        # Test CamelCase class name maps to snake_case file
+        path, cls, method = cmdpy.find_test(self.test_dir,
+                                            'TestPxeParser:test_pxe_ipappend')
+        self.assertEqual(test_file, path)
+        self.assertEqual('TestPxeParser', cls)
+        self.assertEqual('test_pxe_ipappend', method)
+
+    def test_camel_to_snake(self):
+        """Test CamelCase to snake_case conversion"""
+        self.assertEqual('pxe_parser', cmdpy.camel_to_snake('PxeParser'))
+        self.assertEqual('ext4l', cmdpy.camel_to_snake('Ext4l'))
+        self.assertEqual('my_long_name', cmdpy.camel_to_snake('MyLongName'))
+        self.assertEqual('simple', cmdpy.camel_to_snake('Simple'))
+
     def test_get_fixture_path(self):
         """Test extracting fixture path from a test file"""
         test_content = b'''

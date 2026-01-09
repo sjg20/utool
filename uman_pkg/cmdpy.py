@@ -371,12 +371,24 @@ def get_qemu_command(board, args):
     return ' '.join(cmd_parts)
 
 
+def camel_to_snake(name):
+    """Convert CamelCase to snake_case
+
+    Args:
+        name (str): CamelCase string (e.g., 'PxeParser')
+
+    Returns:
+        str: snake_case string (e.g., 'pxe_parser')
+    """
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', name).lower()
+
+
 def find_test(uboot_dir, test_spec):
     """Find the Python test file for a test spec
 
     Args:
         uboot_dir (str): U-Boot source directory
-        test_spec (str): Test spec like 'TestExt4l:test_unlink' or 'test_ext4l'
+        test_spec (str): Test spec like 'TestPxeParser:test_pxe_ipappend'
 
     Returns:
         tuple: (file_path, class_name, method_name) or (None, None, None)
@@ -385,18 +397,19 @@ def find_test(uboot_dir, test_spec):
     if not match:
         return None, None, None
 
-    base_name = match.group(1).lower()
+    base_name = match.group(1)
     method = match.group(2)
 
+    # Convert CamelCase to snake_case for file lookup
+    snake_name = camel_to_snake(base_name)
+
     # Search for test file
-    pattern = os.path.join(uboot_dir, GLOB_TEST.format(name=base_name))
+    pattern = os.path.join(uboot_dir, GLOB_TEST.format(name=snake_name))
     matches = glob.glob(pattern, recursive=True)
     if matches:
         test_file = matches[0]
-        class_name = f'Test{base_name.capitalize()}'
-        # Handle names like 'ext4l' -> 'TestExt4l'
-        if '_' not in base_name:
-            class_name = f'Test{base_name[0].upper()}{base_name[1:]}'
+        # Build class name from original base_name
+        class_name = f'Test{base_name[0].upper()}{base_name[1:]}'
         return test_file, class_name, method
 
     return None, None, None
