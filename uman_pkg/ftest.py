@@ -232,6 +232,10 @@ class TestUmanCmdline(TestBase):
 class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
     """Test build subcommand functionality"""
 
+    def setUp(self):
+        super().setUp()
+        tout.init(tout.NOTICE)
+
     def test_get_dir(self):
         """Test build directory generation"""
         with mock.patch.object(settings, 'get', return_value='/tmp/b'):
@@ -510,13 +514,13 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
             # HEAD (abc123) bad, upstream (def456) good, mid111 bad
             return current_commit[0] == 'def456'
 
-        tout.init(tout.NOTICE)
-        with mock.patch.object(command, 'run_one', mock_run_one):
-            with mock.patch.object(command, 'output_one_line',
-                                   mock_output_one_line):
-                with mock.patch.object(build, 'try_build', mock_try_build):
-                    with terminal.capture() as (out, _err):
-                        result = build.do_bisect('sandbox', '/tmp/b/sandbox')
+        with (
+            mock.patch.object(command, 'run_one', mock_run_one),
+            mock.patch.object(command, 'output_one_line', mock_output_one_line),
+            mock.patch.object(build, 'try_build', mock_try_build),
+            terminal.capture() as (out, _err),
+        ):
+            result = build.do_bisect('sandbox', '/tmp/b/sandbox')
 
         self.assertEqual(0, result)
         self.assertIn('First bad commit: mid222', out.getvalue())
