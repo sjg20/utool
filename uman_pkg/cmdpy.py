@@ -651,7 +651,7 @@ def run_c_test(args):
     # Check fs_image exists (the main fixture file)
     for arg_key, path in paths.items():
         if arg_key in ('fs_image', 'image') and not os.path.exists(path):
-            tout.error(f'Setup not done: run um py -SP {test_name}')
+            tout.error(f'Setup not done, run: um py -SP {test_name}')
             return 1
 
     # Build ut command with all kwargs
