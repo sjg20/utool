@@ -20,7 +20,7 @@ from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
 from uman_pkg import build, settings
-from uman_pkg.util import run_pytest
+from uman_pkg.util import format_duration, run_pytest, show_summary
 
 # Named tuple for test result counts
 TestCounts = namedtuple('TestCounts', ['passed', 'failed', 'skipped'])
@@ -518,22 +518,6 @@ def parse_results(output, show_results=False, col=None):
     return TestCounts(passed, failed, skipped)
 
 
-def format_duration(seconds):
-    """Format a duration in seconds as a human-readable string
-
-    Args:
-        seconds (float): Duration in seconds
-
-    Returns:
-        str: Formatted duration (e.g., "1.23s", "1m 23s")
-    """
-    if seconds < 60:
-        return f'{seconds:.2f}s'
-    minutes = int(seconds // 60)
-    secs = seconds % 60
-    return f'{minutes}m {secs:.1f}s'
-
-
 def run_tests(sandbox, specs, args, col):  # pylint: disable=R0914
     """Run sandbox tests
 
@@ -597,14 +581,7 @@ def run_tests(sandbox, specs, args, col):  # pylint: disable=R0914
                 if in_tests:
                     print(line)
     if res:
-        green = col.start(terminal.Color.GREEN)
-        red = col.start(terminal.Color.RED)
-        yellow = col.start(terminal.Color.YELLOW)
-        reset = col.stop()
-        print(f'Results: {green}{res.passed} passed{reset}, '
-              f'{red}{res.failed} failed{reset}, '
-              f'{yellow}{res.skipped} skipped{reset} in '
-              f'{format_duration(elapsed)}')
+        show_summary(res.passed, res.failed, res.skipped, elapsed)
         return result.return_code
 
     tout.warning('No results detected (use -L for older U-Boot)')

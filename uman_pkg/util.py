@@ -12,6 +12,7 @@ import subprocess
 
 # pylint: disable=import-error
 from u_boot_pylib import command
+from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
 from uman_pkg import settings
@@ -135,3 +136,39 @@ def run_pytest(test_name, board='sandbox', build_dir=None, quiet=True,
         os.chdir(orig_dir)
 
     return True
+
+
+def format_duration(seconds):
+    """Format a duration in seconds as a human-readable string
+
+    Args:
+        seconds (float): Duration in seconds
+
+    Returns:
+        str: Formatted duration (e.g., "1.23s", "1m 23s")
+    """
+    if seconds < 60:
+        return f'{seconds:.2f}s'
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    return f'{minutes}m {secs:.1f}s'
+
+
+def show_summary(passed, failed, skipped, elapsed):
+    """Show a test results summary
+
+    Args:
+        passed (int): Number of tests passed
+        failed (int): Number of tests failed
+        skipped (int): Number of tests skipped
+        elapsed (float): Time taken in seconds
+    """
+    col = terminal.Color()
+    green = col.start(terminal.Color.GREEN)
+    red = col.start(terminal.Color.RED)
+    yellow = col.start(terminal.Color.YELLOW)
+    reset = col.stop()
+    print(f'Results: {green}{passed} passed{reset}, '
+          f'{red}{failed} failed{reset}, '
+          f'{yellow}{skipped} skipped{reset} in '
+          f'{format_duration(elapsed)}')

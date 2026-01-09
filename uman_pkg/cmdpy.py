@@ -26,7 +26,7 @@ from u_boot_pylib import tout
 from uman_pkg import build as build_mod
 from uman_pkg import settings
 from uman_pkg.cmdtest import get_sandbox_path
-from uman_pkg.util import exec_cmd, get_uboot_dir
+from uman_pkg.util import exec_cmd, get_uboot_dir, show_summary
 
 # Pattern to parse test spec: TestClass:method or TestClass.method or just name
 RE_TEST_SPEC = re.compile(r'(?:Test)?(\w+?)(?:[:.](\w+))?$', re.IGNORECASE)
@@ -567,20 +567,32 @@ def run_c_test(args):
     ut_cmd = f'ut -Em {suite} {c_test} {arg_key}={fixture_path}'
     cmd = [sandbox, '-T', '-F', '-c', ut_cmd]
 
-    result = exec_cmd(cmd, args)
+    start = time.time()
+    result = exec_cmd(cmd, dry_run=args.dry_run,
+                      capture=not args.show_output)
+    elapsed = time.time() - start
+
     if not result:
         return 0
 
-    print(result.stdout, end='')
+    # Parse result and count passed/failed/skipped
+    passed = failed = skipped = 0
+    if not args.show_output:
+        match = re.search(r'Result: (PASS|FAIL|SKIP):', result.stdout)
+        if match:
+            status = match.group(1)
+            if status == 'PASS':
+                passed = 1
+            elif status == 'FAIL':
+                failed = 1
+            elif status == 'SKIP':
+                skipped = 1
 
-    # Check test actually ran (wasn't skipped)
-    match = re.search(r'Result: (PASS|FAIL|SKIP):', result.stdout)
-    if not match:
-        tout.error('Test did not produce a result - check setup')
-        return 1
-    if match.group(1) == 'SKIP':
-        tout.error('Test was skipped - check test flags')
-        return 1
+        # Show output only on failure
+        if failed and result.stdout:
+            print(result.stdout, end='')
+
+    show_summary(passed, failed, skipped, elapsed)
 
     return result.return_code
 

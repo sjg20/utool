@@ -183,7 +183,8 @@ hooks to PATH.
 - ``-b, --build``: Build U-Boot before running tests (uses um build)
 - ``-B, --board BOARD``: Board name to test (required, or set ``$b``)
 - ``-c, --show-cmd``: Show QEMU command line without running tests
-- ``-C, --c-test``: Run just the C test part (assumes setup done with -SP)
+- ``-C, --c-test``: Run just the C test part (assumes setup done with -SP);
+  use with -s to show live output
 - ``-f, --full``: Run both live-tree and flat-tree tests (default: live-tree only)
 - ``-F, --find PATTERN``: Find tests matching PATTERN and show full IDs
 - ``-g``: Run sandbox under gdbserver at localhost:1234

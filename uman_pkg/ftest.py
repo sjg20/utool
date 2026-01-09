@@ -2773,7 +2773,7 @@ class TestFoo:
         """Test run_c_test fails without test spec"""
         mock_uboot_dir.return_value = self.test_dir
         args = argparse.Namespace(test_spec=None, dry_run=False,
-                                  show_cmd=False)
+                                  show_cmd=False, show_output=False)
         with terminal.capture() as (_out, err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)
@@ -2791,11 +2791,102 @@ class TestFoo:
         tools.write_file(test_file, b'# test')
 
         args = argparse.Namespace(test_spec=['ext4l'], dry_run=False,
-                                  show_cmd=False)
+                                  show_cmd=False, show_output=False)
         with terminal.capture() as (_out, err):
             ret = cmdpy.run_c_test(args)
         self.assertEqual(1, ret)
         self.assertIn('Method name required', err.getvalue())
+
+    @mock.patch.object(cmdpy, 'get_uboot_dir')
+    @mock.patch.object(cmdpy, 'get_sandbox_path')
+    @mock.patch.object(cmdpy, 'get_fixture_path')
+    @mock.patch.object(cmdpy, 'exec_cmd')
+    def test_run_c_test_show_output(self, mock_exec, mock_fixture,
+                                    mock_sandbox, mock_uboot_dir):
+        """Test run_c_test with -s flag shows output live"""
+        mock_uboot_dir.return_value = self.test_dir
+        mock_sandbox.return_value = '/path/to/sandbox'
+
+        # Create test file with run_ut call
+        test_fs_dir = os.path.join(self.test_dir, 'test/py/tests/test_fs')
+        os.makedirs(test_fs_dir)
+        test_file = os.path.join(test_fs_dir, 'test_ext4l.py')
+        test_content = '''
+class TestExt4l:
+    def test_unlink(self):
+        ubman.run_ut('ext4l', 'fs_test_ext4l_unlink', fs_image=ext4_image)
+'''
+        tools.write_file(test_file, test_content.encode())
+
+        # Mock fixture path to an existing file
+        fixture_path = os.path.join(self.test_dir, 'ext4l.img')
+        tools.write_file(fixture_path, b'')
+        mock_fixture.return_value = fixture_path
+
+        mock_exec.return_value = command.CommandResult(return_code=0)
+
+        args = argparse.Namespace(test_spec=['TestExt4l:test_unlink'],
+                                  dry_run=False, show_cmd=False,
+                                  show_output=True)
+        ret = cmdpy.run_c_test(args)
+        self.assertEqual(0, ret)
+
+        # Check exec_cmd was called with capture=False
+        mock_exec.assert_called_once()
+        call_kwargs = mock_exec.call_args[1]
+        self.assertFalse(call_kwargs['capture'])
+
+    @mock.patch.object(cmdpy, 'get_uboot_dir')
+    @mock.patch.object(cmdpy, 'get_sandbox_path')
+    @mock.patch.object(cmdpy, 'get_fixture_path')
+    @mock.patch.object(cmdpy, 'exec_cmd')
+    def test_run_c_test_summary(self, mock_exec, mock_fixture,
+                                mock_sandbox, mock_uboot_dir):
+        """Test run_c_test shows summary and only shows output on failure"""
+        mock_uboot_dir.return_value = self.test_dir
+        mock_sandbox.return_value = '/path/to/sandbox'
+
+        # Create test file with run_ut call
+        test_fs_dir = os.path.join(self.test_dir, 'test/py/tests/test_fs')
+        os.makedirs(test_fs_dir)
+        test_file = os.path.join(test_fs_dir, 'test_ext4l.py')
+        test_content = '''
+class TestExt4l:
+    def test_unlink(self):
+        ubman.run_ut('ext4l', 'fs_test_ext4l_unlink', fs_image=ext4_image)
+'''
+        tools.write_file(test_file, test_content.encode())
+
+        # Mock fixture path to an existing file
+        fixture_path = os.path.join(self.test_dir, 'ext4l.img')
+        tools.write_file(fixture_path, b'')
+        mock_fixture.return_value = fixture_path
+
+        # Test with PASS result - no output shown
+        mock_exec.return_value = command.CommandResult(
+            return_code=0, stdout='Result: PASS: test\nTest output\n')
+
+        args = argparse.Namespace(test_spec=['TestExt4l:test_unlink'],
+                                  dry_run=False, show_cmd=False,
+                                  show_output=False)
+        with terminal.capture() as (out, _err):
+            ret = cmdpy.run_c_test(args)
+        self.assertEqual(0, ret)
+        output = out.getvalue()
+        self.assertIn('1 passed', output)
+        self.assertIn('0 failed', output)
+        self.assertNotIn('Test output', output)
+
+        # Test with FAIL result - output shown
+        mock_exec.return_value = command.CommandResult(
+            return_code=1, stdout='Result: FAIL: test\nTest output\n')
+
+        with terminal.capture() as (out, _err):
+            ret = cmdpy.run_c_test(args)
+        self.assertEqual(1, ret)
+        output = out.getvalue()
+        self.assertIn('1 failed', output)
+        self.assertIn('Test output', output)
 
 
 class TestPytestPollute(TestBase):
