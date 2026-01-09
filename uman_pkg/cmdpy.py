@@ -477,7 +477,7 @@ def parse_c_test_call(source, class_name, method_name):
                 continue
             call = find_run_ut_call(item)
             if call:
-                # Extract fixture names from method parameters (skip self, ubman)
+                # Extract fixture names from params (skip self, ubman)
                 fixtures = [arg.arg for arg in item.args.args
                             if arg.arg not in ('self', 'ubman')]
                 info = extract_run_ut_args(call)
@@ -495,8 +495,8 @@ def extract_run_ut_args(call_node):
         call_node (ast.Call): AST Call node for run_ut()
 
     Returns:
-        CTestInfo: Named tuple with suite, c_test, kwargs fields (fixtures=None),
-            or CTestInfo(None, None, None, None) on failure
+        CTestInfo: Named tuple with suite, c_test, kwargs fields
+            (fixtures=None), or CTestInfo(None, None, None, None) on failure
     """
     # Need at least 2 positional args: suite and test name
     if len(call_node.args) < 2:
@@ -547,8 +547,8 @@ def get_fixture_paths(test_file, kwargs, fixtures):
     fixture_defs = {}
     for fixture in fixtures:
         # Match: def fixture_name(...):  ...until next def or end
-        pattern = rf"def\s+{re.escape(fixture)}\s*\([^)]*\):\s*(.*?)(?=\ndef\s|\Z)"
-        match = re.search(pattern, source, re.DOTALL)
+        pat = rf"def\s+{re.escape(fixture)}\s*\([^)]*\):\s*(.*?)(?=\ndef\s|\Z)"
+        match = re.search(pat, source, re.DOTALL)
         if match:
             fixture_defs[fixture] = match.group(1)
 
@@ -1021,7 +1021,7 @@ def do_pollute(args):
     steps = math.ceil(math.log2(len(candidates))) if candidates else 0
     step = 0
 
-    tout.notice(f'Searching for polluter in {len(candidates)} candidate tests...')
+    tout.notice(f'Searching for polluter in {len(candidates)} candidates...')
     while len(candidates) > 1:
         step += 1
         mid = len(candidates) // 2
