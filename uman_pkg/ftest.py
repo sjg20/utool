@@ -976,7 +976,10 @@ class TestGitRebase(TestBase):
         """Test a real rf followed by rc to complete rebase"""
         # Start rebase with rf 2 (last 2 commits)
         args = cmdline.parse_args(['git', 'rf', '2'])
-        self.assertEqual(0, cmdgit.do_rf(args))
+        result = cmdgit.do_rf(args)
+        self.assertEqual(0, result.return_code)
+        self.assertIn('Stopped at', result.stderr)
+        self.assertIn('Commit 3', result.stderr)
 
         # Should now be in a rebase, stopped at first commit
         self.assertTrue(self.is_rebasing())
@@ -990,7 +993,9 @@ class TestGitRebase(TestBase):
 
         # Continue with rc
         args = cmdline.parse_args(['git', 'rc'])
-        self.assertEqual(0, cmdgit.do_rc(args))
+        result = cmdgit.do_rc(args)
+        self.assertEqual(0, result.return_code)
+        self.assertIn('Successfully rebased', result.stderr)
 
         # Rebase should be complete
         self.assertFalse(self.is_rebasing())
@@ -1001,7 +1006,7 @@ class TestGitRebase(TestBase):
         """Test rf to start, rn to continue to next, then rc to finish"""
         # Start rebase with rf 3 (last 3 commits)
         args = cmdline.parse_args(['git', 'rf', '3'])
-        self.assertEqual(0, cmdgit.do_rf(args))
+        self.assertEqual(0, cmdgit.do_rf(args).return_code)
 
         # Should be stopped at Commit 2
         self.assertTrue(self.is_rebasing())
@@ -1010,7 +1015,7 @@ class TestGitRebase(TestBase):
         # Use rn to continue to next commit (also set to edit)
         args = cmdline.parse_args(['git', 'rn'])
         with terminal.capture():
-            self.assertEqual(0, cmdgit.do_rn(args))
+            self.assertEqual(0, cmdgit.do_rn(args).return_code)
 
         # Should be stopped at Commit 3
         self.assertTrue(self.is_rebasing())
@@ -1018,9 +1023,37 @@ class TestGitRebase(TestBase):
 
         # Use rc to continue without editing (should finish rebase)
         args = cmdline.parse_args(['git', 'rc'])
-        self.assertEqual(0, cmdgit.do_rc(args))
+        self.assertEqual(0, cmdgit.do_rc(args).return_code)
 
         # Should be complete
+        self.assertFalse(self.is_rebasing())
+        self.assertEqual('Commit 4', self.get_head_subject())
+
+    def test_real_rn_with_skip(self):
+        """Test rn 2 to skip ahead and edit the 2nd remaining commit"""
+        # Start rebase with rf (all 4 commits)
+        args = cmdline.parse_args(['git', 'rf'])
+        self.assertEqual(0, cmdgit.do_rf(args).return_code)
+
+        # Should be stopped at Commit 1
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 1', self.get_head_subject())
+
+        # Use rn 2 to set the 2nd remaining commit to edit
+        # Todo has: Commit 2, Commit 3, Commit 4
+        # rn 2 sets Commit 3 to edit and continues
+        args = cmdline.parse_args(['git', 'rn', '2'])
+        with terminal.capture():
+            self.assertEqual(0, cmdgit.do_rn(args).return_code)
+
+        # Should be stopped at Commit 3 (skipped Commit 2)
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 3', self.get_head_subject())
+
+        # Use rc to finish
+        args = cmdline.parse_args(['git', 'rc'])
+        self.assertEqual(0, cmdgit.do_rc(args).return_code)
+
         self.assertFalse(self.is_rebasing())
         self.assertEqual('Commit 4', self.get_head_subject())
 
@@ -1048,7 +1081,7 @@ class TestGitRebase(TestBase):
 
         # Skip the conflicting commit with rs
         args = cmdline.parse_args(['git', 'rs'])
-        self.assertEqual(0, cmdgit.do_rs(args))
+        self.assertEqual(0, cmdgit.do_rs(args).return_code)
 
         # Commits 2-4 should apply cleanly, rebase completes
         self.assertFalse(self.is_rebasing())
@@ -1058,7 +1091,7 @@ class TestGitRebase(TestBase):
         """Test rp 2 stops at the second commit"""
         # Start rebase with rp 2 (stop at patch 2)
         args = cmdline.parse_args(['git', 'rp', '2'])
-        self.assertEqual(0, cmdgit.do_rp(args))
+        self.assertEqual(0, cmdgit.do_rp(args).return_code)
 
         # Should be stopped at Commit 2 (the second patch from upstream)
         self.assertTrue(self.is_rebasing())
@@ -1066,7 +1099,7 @@ class TestGitRebase(TestBase):
 
         # Complete the rebase with rc
         args = cmdline.parse_args(['git', 'rc'])
-        self.assertEqual(0, cmdgit.do_rc(args))
+        self.assertEqual(0, cmdgit.do_rc(args).return_code)
 
         # Rebase should complete with Commit 4 at HEAD
         self.assertFalse(self.is_rebasing())
@@ -1076,7 +1109,7 @@ class TestGitRebase(TestBase):
         """Test resolving conflicts with rc, rn, and rs"""
         # Start rebase with rf - stops at Commit 1
         args = cmdline.parse_args(['git', 'rf'])
-        self.assertEqual(0, cmdgit.do_rf(args))
+        self.assertEqual(0, cmdgit.do_rf(args).return_code)
         self.assertTrue(self.is_rebasing())
         self.assertEqual('Commit 1', self.get_head_subject())
 
@@ -1093,15 +1126,17 @@ class TestGitRebase(TestBase):
         self.assertEqual('AA file2.txt\n',
                          command.output('git', 'status', '--porcelain'))
 
-        # Resolve file2.txt and use rn - rn inserts break, stops at Commit 2
+        # Resolve file2.txt and use rn 2 - the 2 is ignored since we have
+        # staged changes; rn inserts break and stops at Commit 2
         tools.write_file('file2.txt', 'resolved 2', binary=False)
         command.output('git', 'add', 'file2.txt')
-        args = cmdline.parse_args(['git', 'rn'])
+        args = cmdline.parse_args(['git', 'rn', '2'])
         with terminal.capture():
             cmdgit.do_rn(args)
         self.assertTrue(self.is_rebasing())
         self.assertEqual('Commit 2', self.get_head_subject())
-        self.assertEqual('resolved 2', tools.read_file('file2.txt', binary=False))
+        self.assertEqual('resolved 2', tools.read_file('file2.txt',
+                                                       binary=False))
 
         # rn to continue - Commit 3 conflicts on file3.txt
         args = cmdline.parse_args(['git', 'rn'])
@@ -1128,7 +1163,7 @@ class TestGitRebase(TestBase):
 
         # Skip Commit 4 with rs
         args = cmdline.parse_args(['git', 'rs'])
-        self.assertEqual(0, cmdgit.do_rs(args))
+        self.assertEqual(0, cmdgit.do_rs(args).return_code)
 
         # Rebase complete - Commit 4 was skipped so Commit 3 is at HEAD
         self.assertFalse(self.is_rebasing())
@@ -1146,7 +1181,7 @@ class TestGitRebase(TestBase):
         """Test rn fails when there are unresolved conflicts"""
         # Start rebase with rf - stops at Commit 1
         args = cmdline.parse_args(['git', 'rf'])
-        self.assertEqual(0, cmdgit.do_rf(args))
+        self.assertEqual(0, cmdgit.do_rf(args).return_code)
 
         # Create file2.txt which conflicts with Commit 2
         tools.write_file('file2.txt', 'created during rebase\n', binary=False)

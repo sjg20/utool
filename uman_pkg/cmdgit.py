@@ -87,7 +87,6 @@ def do_rb(args):
 
     return git('rebase', '-i', target)
 
-
 def do_rf(args):
     """Start interactive rebase with first commit set to edit
 
@@ -111,7 +110,6 @@ def do_rf(args):
     env['GIT_SEQUENCE_EDITOR'] = "sed -i '1s/^pick/edit/'"
 
     return git('rebase', '-i', target, env=env)
-
 
 def do_rp(args):
     """Rebase to upstream, stop at patch N for editing
@@ -137,7 +135,6 @@ def do_rp(args):
     env['GIT_SEQUENCE_EDITOR'] = f"sed -i '{args.arg}s/^pick/edit/'"
 
     return git('rebase', '-i', target, env=env)
-
 
 def has_conflicts():
     """Check if there are unresolved conflicts
@@ -209,7 +206,6 @@ def do_rn(args):
         with open(todo_file, 'w', encoding='utf-8') as outf:
             outf.writelines(lines)
         return git('rebase', '--continue')
-
     with open(todo_file, 'r', encoding='utf-8') as inf:
         lines = inf.readlines()
 
@@ -237,7 +233,6 @@ def do_rn(args):
 
     return git('rebase', '--continue')
 
-
 def do_rc(args):
     """Continue the current rebase
 
@@ -250,7 +245,6 @@ def do_rc(args):
     del args  # unused
     return git('rebase', '--continue')
 
-
 def do_rs(args):
     """Skip the current commit in rebase
 
@@ -262,7 +256,6 @@ def do_rs(args):
     """
     del args  # unused
     return git('rebase', '--skip')
-
 
 ACTIONS = {
     'rb': do_rb,
@@ -285,7 +278,11 @@ def run(args):
     """
     func = ACTIONS.get(args.action)
     if func:
-        return func(args)
+        result = func(args)
+        # Functions may return int or CommandResult
+        if hasattr(result, 'return_code'):
+            return result.return_code
+        return result
 
     tout.error(f'Unknown action: {args.action}')
     return 1

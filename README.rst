@@ -20,6 +20,9 @@ Subcommands
 ``config`` (alias: ``cfg``)
     Examine U-Boot .config files
 
+``git`` (alias: ``g``)
+    Git rebase helpers for interactive rebasing
+
 ``selftest`` (alias: ``st``)
     Run uman's own test suite
 
@@ -138,6 +141,88 @@ The tool can create GitLab merge requests with automated pipeline creation::
 run), not fine-grained selection of specific boards or test specifications.
 For precise targeting like ``-p coreboot`` or ``-t "test_ofplatdata"``, use
 regular CI pushes instead of merge requests.
+
+Git Subcommand
+--------------
+
+The ``git`` command (alias ``g``) provides helpers for interactive rebasing,
+making it easier to step through commits during development.
+
+**Actions**:
+
+- ``rb``: Start interactive rebase to upstream (or HEAD~N)
+- ``rf``: Start interactive rebase with first commit set to 'edit'
+- ``rp N``: Start interactive rebase with patch N set to 'edit'
+- ``rn [N]``: Continue rebase to next commit (see below for details)
+- ``rc``: Continue rebase (git rebase --continue)
+- ``rs``: Skip current commit (git rebase --skip)
+
+The ``rn`` command behaves differently depending on context:
+
+- At an edit point: sets the next (or Nth) commit to 'edit' and continues
+- After resolving a conflict: continues and stops at the current commit
+- With unresolved conflicts: errors out (resolve conflicts first)
+
+**Examples**::
+
+    # Start interactive rebase to upstream
+    uman git rb
+
+    # Rebase last 5 commits interactively
+    uman git rb 5
+
+    # Rebase to upstream, stop at first commit for editing
+    uman git rf
+
+    # Rebase last 3 commits, stop at first
+    uman git rf 3
+
+    # Rebase to upstream, stop at patch 2 for editing
+    uman git rp 2
+
+    # Continue rebase, setting next commit to edit
+    uman git rn
+
+    # Skip 2 commits, set the 3rd to edit
+    uman git rn 3
+
+    # Continue rebase (shortcut for git rebase --continue)
+    uman git rc
+
+    # Skip current commit (shortcut for git rebase --skip)
+    uman git rs
+
+**Workflow Example**:
+
+To edit commit HEAD~2 (the third commit from HEAD)::
+
+    uman git rf 3       # Rebase last 3 commits, stops at HEAD~2
+    # ... make changes ...
+    git add <files> && git commit --amend --no-edit
+    uman git rn         # Continue to next commit (HEAD~1) and edit
+    # ... or just: uman git rc
+
+The number in ``rf N`` is "how many commits to include in rebase", not "which
+commit to edit". So ``rf 3`` includes HEAD~2, HEAD~1, HEAD in the rebase,
+stopping at HEAD~2 (the first/oldest in the range).
+
+**Conflict Workflow**:
+
+When a rebase hits a conflict::
+
+    uman git rf 3       # Rebase last 3 commits, stops at HEAD~2
+    # ... make changes that cause a conflict with the next commit ...
+    git add <files> && git commit --amend --no-edit
+    uman git rc         # Continue - hits conflict
+    # ... resolve conflict ...
+    git add <files>
+    uman git rn         # Continue and stop at this commit
+    # ... verify the resolution ...
+    uman git rn         # Continue to next commit and edit
+
+Using ``rn`` after resolving a conflict stops at the current commit, giving you
+a chance to verify the resolution before moving on.
+
 Pytest Subcommand
 -----------------
 

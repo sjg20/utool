@@ -162,18 +162,17 @@ def git_output(*args):
 
 
 def git(*args, env=None):
-    """Run a git command interactively
+    """Run a git command, capturing output
 
     Args:
         *args: Arguments to pass to git (e.g., 'rebase', '-i', 'HEAD~3')
         env (dict): Optional environment variables
 
     Returns:
-        int: Return code from git command
+        CommandResult: Result with return_code, stdout, stderr
     """
-    result = command.run_one('git', *args, capture=False, env=env,
-                             raise_on_error=False)
-    return result.return_code
+    return command.run_one('git', *args, capture=True, capture_stderr=True,
+                           env=env, raise_on_error=False)
 
 
 def format_duration(seconds):
