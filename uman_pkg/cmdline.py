@@ -14,6 +14,7 @@ import sys
 # Aliases for subcommands
 ALIASES = {
     'config': ['cfg'],
+    'git': ['g'],
     'selftest': ['st'],
     'pytest': ['py'],
     'build': ['b'],
@@ -254,6 +255,21 @@ def add_test_subparser(subparsers):
     return test
 
 
+def add_git_subparser(subparsers):
+    """Add the 'git' subparser for rebase helpers"""
+    git = subparsers.add_parser(
+        'git', aliases=['g'],
+        help='Git rebase helpers')
+    git.add_argument(
+        'action', choices=['rb', 'rf', 'rp', 'rn', 'rc', 'rs'],
+        help='Action: rb=rebase, rf=rebase-first, rp=rebase-patch, '
+             'rn=rebase-next, rc=continue, rs=skip')
+    git.add_argument(
+        'arg', nargs='?', type=int,
+        help='Commit count (for rb/rf) or patch number (for rp/rn)')
+    return git
+
+
 def add_config_subparser(subparsers):
     """Add the 'config' subparser"""
     cfg = subparsers.add_parser(
@@ -297,6 +313,7 @@ def setup_parser():
     add_build_subparser(subparsers)
     add_ci_subparser(subparsers)
     add_config_subparser(subparsers)
+    add_git_subparser(subparsers)
     add_selftest_subparser(subparsers)
     add_pytest_subparser(subparsers)
     add_setup_subparser(subparsers)

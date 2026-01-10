@@ -146,6 +146,36 @@ def run_pytest(test_name, board='sandbox', build_dir=None, quiet=True,
     return True
 
 
+def git_output(*args):
+    """Run a git command and return its output
+
+    Args:
+        *args: Arguments to pass to git (e.g., 'status', '-sb')
+
+    Returns:
+        str: Command output (stdout), stripped of trailing whitespace
+
+    Raises:
+        command.CommandExc: If the command fails
+    """
+    return command.output('git', *args).strip()
+
+
+def git(*args, env=None):
+    """Run a git command interactively
+
+    Args:
+        *args: Arguments to pass to git (e.g., 'rebase', '-i', 'HEAD~3')
+        env (dict): Optional environment variables
+
+    Returns:
+        int: Return code from git command
+    """
+    result = command.run_one('git', *args, capture=False, env=env,
+                             raise_on_error=False)
+    return result.return_code
+
+
 def format_duration(seconds):
     """Format a duration in seconds as a human-readable string
 

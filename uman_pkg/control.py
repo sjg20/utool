@@ -22,6 +22,7 @@ from u_boot_pylib import tout
 from uman_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
 from uman_pkg import build
 from uman_pkg import cmdconfig
+from uman_pkg import cmdgit
 from uman_pkg.cmdpy import do_pytest
 from uman_pkg.cmdtest import do_test
 from uman_pkg import settings
@@ -308,6 +309,9 @@ def run_command(args):  # pylint: disable=R0911
 
     if args.cmd == 'config':
         return cmdconfig.run(args)
+
+    if args.cmd == 'git':
+        return cmdgit.run(args)
 
     if args.cmd == 'pytest':
         return do_pytest(args)

@@ -21,8 +21,8 @@ from u_boot_pylib import tools
 from u_boot_pylib import tout
 import gitlab
 
-from uman_pkg import (build, cmdconfig, cmdline, cmdpy, cmdtest, control,
-                      gitlab_parser, settings, setup, util)
+from uman_pkg import (build, cmdconfig, cmdgit, cmdline, cmdpy, cmdtest,
+                      control, gitlab_parser, settings, setup, util)
 
 # Capture stdout and stderr for silent command execution
 CAPTURE = {'capture': True, 'capture_stderr': True}
@@ -726,6 +726,129 @@ CONFIG_DM_TEST=y
         self.assertIn('sandbox_defconfig', cap[0])
         self.assertIn('make', cap[1])
         self.assertIn('savedefconfig', cap[1])
+
+
+class TestGitSubcommand(TestBase):
+    """Test git subcommand functionality"""
+
+    def test_git_subcommand_parsing(self):
+        """Test git subcommand argument parsing"""
+        args = cmdline.parse_args(['git', 'rf'])
+        self.assertEqual('git', args.cmd)
+        self.assertEqual('rf', args.action)
+        self.assertIsNone(args.arg)
+
+    def test_git_subcommand_with_arg(self):
+        """Test git subcommand with numeric argument"""
+        args = cmdline.parse_args(['git', 'rf', '3'])
+        self.assertEqual('git', args.cmd)
+        self.assertEqual('rf', args.action)
+        self.assertEqual(3, args.arg)
+
+    def test_git_alias(self):
+        """Test 'g' alias for git"""
+        args = cmdline.parse_args(['g', 'rc'])
+        self.assertEqual('git', args.cmd)
+        self.assertEqual('rc', args.action)
+
+    def test_git_all_actions(self):
+        """Test all git actions are valid"""
+        for action in ['rb', 'rf', 'rp', 'rn', 'rc', 'rs']:
+            args = cmdline.parse_args(['git', action])
+            self.assertEqual(action, args.action)
+
+    def test_get_upstream(self):
+        """Test get_upstream returns upstream branch"""
+        def mock_git_output(*args):
+            if args[0] == 'name-rev' and args[1] == '@{upstream}':
+                return 'origin/main'
+            return ''
+
+        with mock.patch('uman_pkg.cmdgit.git_output', mock_git_output):
+            upstream = cmdgit.get_upstream()
+        self.assertEqual('origin/main', upstream)
+
+    def test_get_rebase_dir_not_rebasing(self):
+        """Test get_rebase_dir returns None when not rebasing"""
+        def mock_git_output(*_args):
+            return '/nonexistent/.git/rebase-merge'
+
+        with mock.patch('uman_pkg.cmdgit.git_output', mock_git_output):
+            rebase_dir = cmdgit.get_rebase_dir()
+        self.assertIsNone(rebase_dir)
+
+    def test_do_rc(self):
+        """Test do_rc runs git rebase --continue"""
+        cap = []
+
+        def mock_git(*args, env=None):
+            del env
+            cap.append(args)
+            return 0
+
+        args = cmdline.parse_args(['git', 'rc'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            result = cmdgit.do_rc(args)
+        self.assertEqual(0, result)
+        self.assertEqual(('rebase', '--continue'), cap[0])
+
+    def test_do_rs(self):
+        """Test do_rs runs git rebase --skip"""
+        cap = []
+
+        def mock_git(*args, env=None):
+            del env
+            cap.append(args)
+            return 0
+
+        args = cmdline.parse_args(['git', 'rs'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            result = cmdgit.do_rs(args)
+        self.assertEqual(0, result)
+        self.assertEqual(('rebase', '--skip'), cap[0])
+
+    def test_do_rf_with_upstream(self):
+        """Test do_rf rebases to upstream with first commit as edit"""
+        cap = []
+        cap_env = []
+
+        def mock_git(*args, env=None):
+            cap.append(args)
+            cap_env.append(env)
+            return 0
+
+        args = cmdline.parse_args(['git', 'rf'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            with mock.patch.object(cmdgit, 'get_upstream',
+                                   return_value='origin/main'):
+                result = cmdgit.do_rf(args)
+        self.assertEqual(0, result)
+        self.assertEqual(('rebase', '-i', 'origin/main'), cap[0])
+        self.assertIn('GIT_SEQUENCE_EDITOR', cap_env[0])
+        self.assertIn("1s/^pick/edit/", cap_env[0]['GIT_SEQUENCE_EDITOR'])
+
+    def test_do_rf_with_count(self):
+        """Test do_rf with commit count"""
+        cap = []
+
+        def mock_git(*args, env=None):
+            del env
+            cap.append(args)
+            return 0
+
+        args = cmdline.parse_args(['git', 'rf', '5'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            result = cmdgit.do_rf(args)
+        self.assertEqual(0, result)
+        self.assertEqual(('rebase', '-i', 'HEAD~5'), cap[0])
+
+    def test_do_rp_requires_arg(self):
+        """Test do_rp requires patch number"""
+        args = cmdline.parse_args(['git', 'rp'])
+        with terminal.capture() as (_, err):
+            result = cmdgit.do_rp(args)
+        self.assertEqual(1, result)
+        self.assertIn('Patch number required', err.getvalue())
 
 
 class TestUmanCIVars(TestBase):
