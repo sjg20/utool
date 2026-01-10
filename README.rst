@@ -150,9 +150,11 @@ making it easier to step through commits during development.
 
 **Actions**:
 
-- ``rb``: Start interactive rebase to upstream (or HEAD~N)
-- ``rf``: Start interactive rebase with first commit set to 'edit'
-- ``rp N``: Start interactive rebase with patch N set to 'edit'
+- ``gr [N]``: Open interactive rebase editor (to upstream or HEAD~N)
+- ``ra``: Abort the current rebase (stashes changes, shows recovery info)
+- ``rb``: Rebase from beginning - stops at first commit for editing
+- ``rf N``: Rebase last N commits, stopping at first for editing
+- ``rp N``: Rebase to upstream, stop at patch N for editing (0 = first)
 - ``rn [N]``: Continue rebase to next commit (see below for details)
 - ``rc``: Continue rebase (git rebase --continue)
 - ``rs``: Skip current commit (git rebase --skip)
@@ -165,20 +167,23 @@ The ``rn`` command behaves differently depending on context:
 
 **Examples**::
 
-    # Start interactive rebase to upstream
-    uman git rb
+    # Open interactive rebase editor (to upstream)
+    uman git gr
 
-    # Rebase last 5 commits interactively
-    uman git rb 5
+    # Rebase last 5 commits interactively (opens editor)
+    uman git gr 5
 
     # Rebase to upstream, stop at first commit for editing
-    uman git rf
+    uman git rb
 
     # Rebase last 3 commits, stop at first
     uman git rf 3
 
     # Rebase to upstream, stop at patch 2 for editing
     uman git rp 2
+
+    # Rebase to upstream, stop at first commit (same as rb)
+    uman git rp 0
 
     # Continue rebase, setting next commit to edit
     uman git rn

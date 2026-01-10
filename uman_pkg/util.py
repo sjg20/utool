@@ -161,18 +161,20 @@ def git_output(*args):
     return command.output('git', *args).strip()
 
 
-def git(*args, env=None):
+def git(*args, env=None, dry_run=False):
     """Run a git command, capturing output
 
     Args:
         *args: Arguments to pass to git (e.g., 'rebase', '-i', 'HEAD~3')
         env (dict): Optional environment variables
+        dry_run (bool): If True, just show command without running
 
     Returns:
-        CommandResult: Result with return_code, stdout, stderr
+        CommandResult or None: Result with return_code, stdout, stderr,
+            or None if dry_run
     """
-    return command.run_one('git', *args, capture=True, capture_stderr=True,
-                           env=env, raise_on_error=False)
+    cmd = ['git'] + list(args)
+    return exec_cmd(cmd, dry_run=dry_run, env=env, capture=True)
 
 
 def format_duration(seconds):

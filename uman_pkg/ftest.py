@@ -731,6 +731,10 @@ CONFIG_DM_TEST=y
 class TestGitSubcommand(TestBase):
     """Test git subcommand functionality"""
 
+    def setUp(self):
+        super().setUp()
+        tout.init(tout.NOTICE)
+
     def test_git_subcommand_parsing(self):
         """Test git subcommand argument parsing"""
         args = cmdline.parse_args(['git', 'rf'])
@@ -753,7 +757,9 @@ class TestGitSubcommand(TestBase):
 
     def test_git_all_actions(self):
         """Test all git actions are valid"""
-        for action in ['rb', 'rf', 'rp', 'rn', 'rc', 'rs']:
+        actions = ['et', 'gr', 'pm', 'ra', 'rb', 're', 'rf', 'rp', 'rn', 'rc',
+                   'rs', 'us']
+        for action in actions:
             args = cmdline.parse_args(['git', action])
             self.assertEqual(action, args.action)
 
@@ -777,6 +783,72 @@ class TestGitSubcommand(TestBase):
             rebase_dir = cmdgit.get_rebase_dir()
         self.assertIsNone(rebase_dir)
 
+    def test_get_rebase_position_not_rebasing(self):
+        """Test get_rebase_position returns empty string when not rebasing"""
+        def mock_git_output(*_args):
+            return '/nonexistent/.git/rebase-merge'
+
+        with mock.patch('uman_pkg.cmdgit.git_output', mock_git_output):
+            pos = cmdgit.get_rebase_position()
+        self.assertEqual('', pos)
+
+    def test_seq_edit_env_break(self):
+        """Test seq_edit_env creates break command"""
+        env = cmdgit.seq_edit_env('break')
+        self.assertIn('GIT_SEQUENCE_EDITOR', env)
+        self.assertEqual('sed -i "1i break"', env['GIT_SEQUENCE_EDITOR'])
+
+    def test_seq_edit_env_edit(self):
+        """Test seq_edit_env creates edit command"""
+        env = cmdgit.seq_edit_env('edit')
+        self.assertEqual('sed -i "1s/^pick/edit/"', env['GIT_SEQUENCE_EDITOR'])
+
+    def test_seq_edit_env_edit_line(self):
+        """Test seq_edit_env with specific line number"""
+        env = cmdgit.seq_edit_env('edit', 3)
+        self.assertEqual('sed -i "3s/^pick/edit/"', env['GIT_SEQUENCE_EDITOR'])
+
+    def test_show_rebase_status_success(self):
+        """Test show_rebase_status parses success message"""
+        with terminal.capture() as (out, _):
+            cmdgit.show_rebase_status(
+                'Successfully rebased and updated refs/heads/main')
+        self.assertEqual(
+            'Successfully rebased and updated refs/heads/main\n',
+            out.getvalue())
+
+    def test_show_rebase_status_stopped(self):
+        """Test show_rebase_status parses stopped message"""
+        with mock.patch.object(cmdgit, 'get_rebase_position', return_value=''):
+            with terminal.capture() as (out, _):
+                cmdgit.show_rebase_status(
+                    'Stopped at abc1234... Fix the bug')
+        self.assertEqual(
+            'Rebasing: stopped at abc1234... Fix the bug\n', out.getvalue())
+
+    def test_show_rebase_status_conflict(self):
+        """Test show_rebase_status parses conflict message"""
+        with mock.patch.object(cmdgit, 'get_rebase_position',
+                               return_value='3/5'):
+            with terminal.capture() as (out, _):
+                cmdgit.show_rebase_status(
+                    'Could not apply abc1234... Fix bug', return_code=1)
+        self.assertEqual(
+            'Rebasing 3/5: conflict in abc1234... Fix bug\n', out.getvalue())
+
+    def test_has_unstaged_changes_none(self):
+        """Test has_unstaged_changes returns False when no changes"""
+        with mock.patch('uman_pkg.cmdgit.git_output', return_value=''):
+            self.assertFalse(cmdgit.has_unstaged_changes())
+
+    def test_has_unstaged_changes_present(self):
+        """Test has_unstaged_changes returns True when changes exist"""
+        # git diff --quiet exits with 1 when there are changes
+        exc = command.CommandExc('diff shows changes',
+                                 command.CommandResult(return_code=1))
+        with mock.patch('uman_pkg.cmdgit.git_output', side_effect=exc):
+            self.assertTrue(cmdgit.has_unstaged_changes())
+
     def test_do_rc(self):
         """Test do_rc runs git rebase --continue"""
         cap = []
@@ -784,13 +856,24 @@ class TestGitSubcommand(TestBase):
         def mock_git(*args, env=None):
             del env
             cap.append(args)
-            return 0
+            return mock.Mock(return_code=0, stdout='', stderr='')
 
         args = cmdline.parse_args(['git', 'rc'])
         with mock.patch('uman_pkg.cmdgit.git', mock_git):
-            result = cmdgit.do_rc(args)
-        self.assertEqual(0, result)
+            with mock.patch.object(cmdgit, 'get_rebase_dir',
+                                   return_value='/tmp/rebase'):
+                result = cmdgit.do_rc(args)
+        self.assertEqual(0, result.return_code)
         self.assertEqual(('rebase', '--continue'), cap[0])
+
+    def test_do_rc_not_rebasing(self):
+        """Test do_rc prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 'rc'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_rc(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
 
     def test_do_rs(self):
         """Test do_rs runs git rebase --skip"""
@@ -799,32 +882,277 @@ class TestGitSubcommand(TestBase):
         def mock_git(*args, env=None):
             del env
             cap.append(args)
-            return 0
+            return mock.Mock(return_code=0, stdout='', stderr='')
 
         args = cmdline.parse_args(['git', 'rs'])
         with mock.patch('uman_pkg.cmdgit.git', mock_git):
-            result = cmdgit.do_rs(args)
-        self.assertEqual(0, result)
+            with mock.patch.object(cmdgit, 'get_rebase_dir',
+                                   return_value='/tmp/rebase'):
+                result = cmdgit.do_rs(args)
+        self.assertEqual(0, result.return_code)
         self.assertEqual(('rebase', '--skip'), cap[0])
 
-    def test_do_rf_with_upstream(self):
-        """Test do_rf rebases to upstream with first commit as edit"""
+    def test_do_rs_not_rebasing(self):
+        """Test do_rs prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 'rs'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_rs(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
+
+    def test_do_ra(self):
+        """Test do_ra runs git rebase --abort"""
+        cap = []
+
+        def mock_git(*args, env=None):
+            del env
+            cap.append(args)
+            return mock.Mock(return_code=0, stdout='', stderr='')
+
+        def mock_git_output(*args):
+            if args[0] == 'status':
+                return ''  # No uncommitted changes
+            if args[0] == 'rev-parse':
+                return 'abc123'
+            return ''
+
+        args = cmdline.parse_args(['git', 'ra'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            with mock.patch('uman_pkg.cmdgit.git_output', mock_git_output):
+                with mock.patch.object(cmdgit, 'get_rebase_dir',
+                                       return_value='/tmp/rebase'):
+                    with terminal.capture() as (out, err):
+                        result = cmdgit.do_ra(args)
+        self.assertEqual(0, result.return_code)
+        self.assertEqual(('rebase', '--abort'), cap[0])
+        self.assertEqual(
+            'No uncommitted changes\n'
+            'Current HEAD: abc123 (use "git reset --hard abc123" to recover)\n'
+            'Rebase aborted\n', out.getvalue())
+        self.assertFalse(err.getvalue())
+
+    def test_do_ra_not_rebasing(self):
+        """Test do_ra prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 'ra'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_ra(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
+
+    def test_do_ra_with_changes(self):
+        """Test do_ra stashes uncommitted changes before aborting"""
+        cap = []
+
+        def mock_git(*args, env=None):
+            del env
+            cap.append(args)
+            return mock.Mock(return_code=0, stdout='', stderr='')
+
+        def mock_git_output(*args):
+            if args[0] == 'status':
+                return 'M  file1.txt\nA  file2.txt'
+            if args[0] == 'rev-parse':
+                return 'abc123'
+            return ''
+
+        args = cmdline.parse_args(['git', 'ra'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            with mock.patch('uman_pkg.cmdgit.git_output', mock_git_output):
+                with mock.patch.object(cmdgit, 'get_rebase_dir',
+                                       return_value='/tmp/rebase'):
+                    with terminal.capture() as (out, err):
+                        result = cmdgit.do_ra(args)
+        self.assertEqual(0, result.return_code)
+        # Check stash was called with named stash including commit hash
+        self.assertEqual(('stash', 'push', '-m', 'uman-abort-abc123'), cap[0])
+        self.assertEqual(
+            'Stashed as "uman-abort-abc123" (use "git stash pop" to recover)\n'
+            'Current HEAD: abc123 (use "git reset --hard abc123" to recover)\n'
+            'Rebase aborted\n', out.getvalue())
+        self.assertFalse(err.getvalue())
+
+    def test_do_gr(self):
+        """Test do_gr opens interactive rebase editor"""
+        args = cmdline.parse_args(['git', 'gr'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            with mock.patch.object(cmdgit, 'get_upstream',
+                                   return_value='origin/main'):
+                result = cmdgit.do_gr(args)
+        self.assertEqual(0, result)
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args
+        self.assertEqual(('git', 'rebase', '-i', 'origin/main'), call_args[0])
+        self.assertFalse(call_args[1]['capture'])
+
+    def test_do_gr_with_count(self):
+        """Test do_gr N rebases last N commits"""
+        args = cmdline.parse_args(['git', 'gr', '3'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_gr(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args
+        self.assertEqual(('git', 'rebase', '-i', 'HEAD~3'), call_args[0])
+        self.assertFalse(call_args[1]['capture'])
+
+    def test_do_et(self):
+        """Test do_et runs git rebase --edit-todo"""
+        args = cmdline.parse_args(['git', 'et'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            with mock.patch.object(cmdgit, 'get_rebase_dir',
+                                   return_value='/tmp/rebase'):
+                result = cmdgit.do_et(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args
+        self.assertEqual(('git', 'rebase', '--edit-todo'), call_args[0])
+
+    def test_do_et_not_rebasing(self):
+        """Test do_et prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 'et'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_et(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
+
+    def test_do_re(self):
+        """Test do_re amends current commit"""
+        args = cmdline.parse_args(['git', 're'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            with mock.patch.object(cmdgit, 'get_rebase_dir',
+                                   return_value='/tmp/rebase'):
+                with mock.patch.object(cmdgit, 'has_staged_changes',
+                                       return_value=True):
+                    with terminal.capture() as (out, _):
+                        result = cmdgit.do_re(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args
+        self.assertEqual(
+            ('git', 'commit', '--amend', '--no-edit'), call_args[0])
+        self.assertEqual('Commit amended\n', out.getvalue())
+
+    def test_do_re_not_rebasing(self):
+        """Test do_re prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 're'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_re(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
+
+    def test_do_re_no_staged_changes(self):
+        """Test do_re prints error when no staged changes"""
+        args = cmdline.parse_args(['git', 're'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir',
+                               return_value='/tmp/rebase'):
+            with mock.patch.object(cmdgit, 'has_staged_changes',
+                                   return_value=False):
+                with terminal.capture() as (_, err):
+                    result = cmdgit.do_re(args)
+        self.assertEqual(1, result)
+        self.assertEqual('No staged changes to amend\n', err.getvalue())
+
+    def test_do_us(self):
+        """Test do_us sets upstream branch"""
+        cap = []
+
+        def mock_git(*args, env=None):
+            del env
+            cap.append(args)
+            return mock.Mock(return_code=0, stdout='', stderr='')
+
+        args = cmdline.parse_args(['git', 'us'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            with mock.patch('uman_pkg.cmdgit.git_output',
+                            return_value='my-branch'):
+                with terminal.capture() as (out, _):
+                    result = cmdgit.do_us(args)
+        self.assertEqual(0, result)
+        self.assertEqual(
+            ('branch', '--set-upstream-to', 'm/master', 'my-branch'), cap[0])
+        self.assertEqual(
+            'Set upstream of my-branch to m/master\n', out.getvalue())
+
+    def test_do_pm(self):
+        """Test do_pm applies patch from rebase directory"""
+        args = cmdline.parse_args(['git', 'pm'])
+        patch_content = b'--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n'
+
+        with mock.patch.object(cmdgit, 'get_rebase_dir',
+                               return_value=self.test_dir):
+            # Create patch file
+            patch_file = os.path.join(self.test_dir, 'patch')
+            tools.write_file(patch_file, patch_content)
+            with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+                mock_run.return_value = mock.Mock(return_code=0)
+                result = cmdgit.do_pm(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args
+        self.assertEqual(('patch', '-p1', '--merge'), call_args[0])
+
+    def test_do_pm_not_rebasing(self):
+        """Test do_pm prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 'pm'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_pm(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
+
+    def test_do_pm_no_patch_file(self):
+        """Test do_pm prints error when patch file not found"""
+        args = cmdline.parse_args(['git', 'pm'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir',
+                               return_value=self.test_dir):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_pm(args)
+        self.assertEqual(1, result)
+        self.assertEqual(
+            'No patch file found in rebase directory\n', err.getvalue())
+
+    def test_do_rb(self):
+        """Test do_rb rebases to upstream, stopping before first commit"""
         cap = []
         cap_env = []
 
         def mock_git(*args, env=None):
             cap.append(args)
             cap_env.append(env)
-            return 0
+            return mock.Mock(return_code=0, stdout='', stderr='')
+
+        args = cmdline.parse_args(['git', 'rb'])
+        with mock.patch('uman_pkg.cmdgit.git', mock_git):
+            with mock.patch.object(cmdgit, 'get_upstream',
+                                   return_value='origin/main'):
+                result = cmdgit.do_rb(args)
+        self.assertEqual(0, result.return_code)
+        self.assertEqual(('rebase', '-i', 'origin/main'), cap[0])
+        self.assertIn('GIT_SEQUENCE_EDITOR', cap_env[0])
+        # rb inserts a break before first commit to stop at upstream
+        self.assertIn("1i break", cap_env[0]['GIT_SEQUENCE_EDITOR'])
+
+    def test_do_rf_no_arg(self):
+        """Test do_rf without arg uses upstream"""
+        cap = []
+        cap_env = []
+
+        def mock_git(*args, env=None):
+            cap.append(args)
+            cap_env.append(env)
+            return mock.Mock(return_code=0, stdout='', stderr='')
 
         args = cmdline.parse_args(['git', 'rf'])
         with mock.patch('uman_pkg.cmdgit.git', mock_git):
             with mock.patch.object(cmdgit, 'get_upstream',
                                    return_value='origin/main'):
                 result = cmdgit.do_rf(args)
-        self.assertEqual(0, result)
+        self.assertEqual(0, result.return_code)
         self.assertEqual(('rebase', '-i', 'origin/main'), cap[0])
-        self.assertIn('GIT_SEQUENCE_EDITOR', cap_env[0])
         self.assertIn("1s/^pick/edit/", cap_env[0]['GIT_SEQUENCE_EDITOR'])
 
     def test_do_rf_with_count(self):
@@ -834,12 +1162,12 @@ class TestGitSubcommand(TestBase):
         def mock_git(*args, env=None):
             del env
             cap.append(args)
-            return 0
+            return mock.Mock(return_code=0, stdout='', stderr='')
 
         args = cmdline.parse_args(['git', 'rf', '5'])
         with mock.patch('uman_pkg.cmdgit.git', mock_git):
             result = cmdgit.do_rf(args)
-        self.assertEqual(0, result)
+        self.assertEqual(0, result.return_code)
         self.assertEqual(('rebase', '-i', 'HEAD~5'), cap[0])
 
     def test_do_rp_requires_arg(self):
@@ -901,59 +1229,29 @@ class TestGitRebase(TestBase):
         """Get the subject of HEAD commit"""
         return command.output('git', 'log', '-1', '--format=%s').strip()
 
-    def test_rb_to_upstream(self):
-        """Test rb starts interactive rebase to upstream"""
-        # rb without args should start interactive rebase to upstream
-        # We need to auto-complete by setting editor to do nothing
-        env = os.environ.copy()
-        env['GIT_SEQUENCE_EDITOR'] = 'true'  # Just accept todo as-is
-
+    def test_rb_stops_at_upstream(self):
+        """Test rb rebases to upstream and stops before first commit"""
         args = cmdline.parse_args(['git', 'rb'])
-        with mock.patch.dict(os.environ, env):
-            with mock.patch('uman_pkg.cmdgit.git') as mock_git:
-                mock_git.return_value = 0
-                result = cmdgit.do_rb(args)
-
-        self.assertEqual(0, result)
-        mock_git.assert_called_once()
-        call_args = mock_git.call_args
-        self.assertEqual(('rebase', '-i', 'upstream'), call_args[0])
-
-    def test_rb_with_count(self):
-        """Test rb N rebases last N commits"""
-        args = cmdline.parse_args(['git', 'rb', '2'])
         with mock.patch('uman_pkg.cmdgit.git') as mock_git:
-            mock_git.return_value = 0
+            mock_git.return_value = mock.Mock(return_code=0, stdout='', stderr='')
             result = cmdgit.do_rb(args)
 
-        self.assertEqual(0, result)
-        mock_git.assert_called_once()
-        call_args = mock_git.call_args
-        self.assertEqual(('rebase', '-i', 'HEAD~2'), call_args[0])
-
-    def test_rf_stops_at_first(self):
-        """Test rf starts rebase and stops at first commit"""
-        args = cmdline.parse_args(['git', 'rf'])
-        with mock.patch('uman_pkg.cmdgit.git') as mock_git:
-            mock_git.return_value = 0
-            result = cmdgit.do_rf(args)
-
-        self.assertEqual(0, result)
+        self.assertEqual(0, result.return_code)
         mock_git.assert_called_once()
         call_args = mock_git.call_args
         self.assertEqual(('rebase', '-i', 'upstream'), call_args[0])
-        # Check that GIT_SEQUENCE_EDITOR sets first line to edit
+        # Check that GIT_SEQUENCE_EDITOR inserts break before first commit
         env = call_args[1]['env']
-        self.assertIn("1s/^pick/edit/", env['GIT_SEQUENCE_EDITOR'])
+        self.assertIn("1i break", env['GIT_SEQUENCE_EDITOR'])
 
     def test_rf_with_count(self):
         """Test rf N rebases last N commits, stopping at first"""
         args = cmdline.parse_args(['git', 'rf', '3'])
         with mock.patch('uman_pkg.cmdgit.git') as mock_git:
-            mock_git.return_value = 0
+            mock_git.return_value = mock.Mock(return_code=0, stdout='', stderr='')
             result = cmdgit.do_rf(args)
 
-        self.assertEqual(0, result)
+        self.assertEqual(0, result.return_code)
         call_args = mock_git.call_args
         self.assertEqual(('rebase', '-i', 'HEAD~3'), call_args[0])
         env = call_args[1]['env']
@@ -963,10 +1261,10 @@ class TestGitRebase(TestBase):
         """Test rp N stops at patch N"""
         args = cmdline.parse_args(['git', 'rp', '2'])
         with mock.patch('uman_pkg.cmdgit.git') as mock_git:
-            mock_git.return_value = 0
+            mock_git.return_value = mock.Mock(return_code=0, stdout='', stderr='')
             result = cmdgit.do_rp(args)
 
-        self.assertEqual(0, result)
+        self.assertEqual(0, result.return_code)
         call_args = mock_git.call_args
         self.assertEqual(('rebase', '-i', 'upstream'), call_args[0])
         env = call_args[1]['env']
@@ -976,10 +1274,20 @@ class TestGitRebase(TestBase):
         """Test a real rf followed by rc to complete rebase"""
         # Start rebase with rf 2 (last 2 commits)
         args = cmdline.parse_args(['git', 'rf', '2'])
-        result = cmdgit.do_rf(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rf(args)
         self.assertEqual(0, result.return_code)
-        self.assertIn('Stopped at', result.stderr)
-        self.assertIn('Commit 3', result.stderr)
+        self.assertFalse(result.stdout)
+        self.assertRegex(
+            result.stderr,
+            r'Rebasing \(1/2\)\r\r\x1b\[KStopped at [0-9a-f]+\.\.\.  Commit 3\n'
+            r'You can amend the commit now, with\n\n'
+            r'  git commit --amend \n\n'
+            r'Once you are satisfied with your changes, run\n\n'
+            r'  git rebase --continue\n')
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 3\n')
+        self.assertFalse(err.getvalue())
 
         # Should now be in a rebase, stopped at first commit
         self.assertTrue(self.is_rebasing())
@@ -993,9 +1301,17 @@ class TestGitRebase(TestBase):
 
         # Continue with rc
         args = cmdline.parse_args(['git', 'rc'])
-        result = cmdgit.do_rc(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rc(args)
         self.assertEqual(0, result.return_code)
-        self.assertIn('Successfully rebased', result.stderr)
+        self.assertFalse(result.stdout)
+        self.assertRegex(
+            result.stderr,
+            r'Rebasing \(2/2\)\r\r\x1b\[K'
+            r'Successfully rebased and updated refs/heads/master\.\n')
+        self.assertRegex(out.getvalue(),
+                         r'Successfully rebased and updated refs/heads/\w+\n')
+        self.assertFalse(err.getvalue())
 
         # Rebase should be complete
         self.assertFalse(self.is_rebasing())
@@ -1006,7 +1322,13 @@ class TestGitRebase(TestBase):
         """Test rf to start, rn to continue to next, then rc to finish"""
         # Start rebase with rf 3 (last 3 commits)
         args = cmdline.parse_args(['git', 'rf', '3'])
-        self.assertEqual(0, cmdgit.do_rf(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rf(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 2\n')
+        self.assertFalse(err.getvalue())
 
         # Should be stopped at Commit 2
         self.assertTrue(self.is_rebasing())
@@ -1014,8 +1336,13 @@ class TestGitRebase(TestBase):
 
         # Use rn to continue to next commit (also set to edit)
         args = cmdline.parse_args(['git', 'rn'])
-        with terminal.capture():
-            self.assertEqual(0, cmdgit.do_rn(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rn(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 3\n')
+        self.assertFalse(err.getvalue())
 
         # Should be stopped at Commit 3
         self.assertTrue(self.is_rebasing())
@@ -1023,7 +1350,13 @@ class TestGitRebase(TestBase):
 
         # Use rc to continue without editing (should finish rebase)
         args = cmdline.parse_args(['git', 'rc'])
-        self.assertEqual(0, cmdgit.do_rc(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rc(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Successfully rebased and updated refs/heads/\w+\n')
+        self.assertFalse(err.getvalue())
 
         # Should be complete
         self.assertFalse(self.is_rebasing())
@@ -1031,9 +1364,15 @@ class TestGitRebase(TestBase):
 
     def test_real_rn_with_skip(self):
         """Test rn 2 to skip ahead and edit the 2nd remaining commit"""
-        # Start rebase with rf (all 4 commits)
-        args = cmdline.parse_args(['git', 'rf'])
-        self.assertEqual(0, cmdgit.do_rf(args).return_code)
+        # Start rebase with rp 1 (stop at first commit)
+        args = cmdline.parse_args(['git', 'rp', '1'])
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rp(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 1\n')
+        self.assertFalse(err.getvalue())
 
         # Should be stopped at Commit 1
         self.assertTrue(self.is_rebasing())
@@ -1043,8 +1382,13 @@ class TestGitRebase(TestBase):
         # Todo has: Commit 2, Commit 3, Commit 4
         # rn 2 sets Commit 3 to edit and continues
         args = cmdline.parse_args(['git', 'rn', '2'])
-        with terminal.capture():
-            self.assertEqual(0, cmdgit.do_rn(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rn(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 3\n')
+        self.assertFalse(err.getvalue())
 
         # Should be stopped at Commit 3 (skipped Commit 2)
         self.assertTrue(self.is_rebasing())
@@ -1052,7 +1396,13 @@ class TestGitRebase(TestBase):
 
         # Use rc to finish
         args = cmdline.parse_args(['git', 'rc'])
-        self.assertEqual(0, cmdgit.do_rc(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rc(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Successfully rebased and updated refs/heads/\w+\n')
+        self.assertFalse(err.getvalue())
 
         self.assertFalse(self.is_rebasing())
         self.assertEqual('Commit 4', self.get_head_subject())
@@ -1070,9 +1420,15 @@ class TestGitRebase(TestBase):
         command.output('git', 'checkout', '-')
         command.output('git', 'branch', '--set-upstream-to=side')
 
-        # Start rebase with rf - will stop at Commit 1 with conflict
-        args = cmdline.parse_args(['git', 'rf'])
-        cmdgit.do_rf(args)
+        # Start rebase with rp 1 - will stop at Commit 1 with conflict
+        args = cmdline.parse_args(['git', 'rp', '1'])
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rp(args)
+        # rp 1 fails due to conflict, shows conflict message
+        self.assertNotEqual(0, result.return_code)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: conflict in [0-9a-f]+\.\.\. Commit 1\n')
+        self.assertFalse(err.getvalue())
 
         # Should be in rebase with a conflict (AA = add/add conflict)
         self.assertTrue(self.is_rebasing())
@@ -1081,7 +1437,13 @@ class TestGitRebase(TestBase):
 
         # Skip the conflicting commit with rs
         args = cmdline.parse_args(['git', 'rs'])
-        self.assertEqual(0, cmdgit.do_rs(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rs(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Successfully rebased and updated refs/heads/\w+\n')
+        self.assertFalse(err.getvalue())
 
         # Commits 2-4 should apply cleanly, rebase completes
         self.assertFalse(self.is_rebasing())
@@ -1091,7 +1453,13 @@ class TestGitRebase(TestBase):
         """Test rp 2 stops at the second commit"""
         # Start rebase with rp 2 (stop at patch 2)
         args = cmdline.parse_args(['git', 'rp', '2'])
-        self.assertEqual(0, cmdgit.do_rp(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rp(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 2\n')
+        self.assertFalse(err.getvalue())
 
         # Should be stopped at Commit 2 (the second patch from upstream)
         self.assertTrue(self.is_rebasing())
@@ -1099,7 +1467,13 @@ class TestGitRebase(TestBase):
 
         # Complete the rebase with rc
         args = cmdline.parse_args(['git', 'rc'])
-        self.assertEqual(0, cmdgit.do_rc(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rc(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Successfully rebased and updated refs/heads/\w+\n')
+        self.assertFalse(err.getvalue())
 
         # Rebase should complete with Commit 4 at HEAD
         self.assertFalse(self.is_rebasing())
@@ -1107,9 +1481,15 @@ class TestGitRebase(TestBase):
 
     def test_conflict_resolution_workflow(self):
         """Test resolving conflicts with rc, rn, and rs"""
-        # Start rebase with rf - stops at Commit 1
-        args = cmdline.parse_args(['git', 'rf'])
-        self.assertEqual(0, cmdgit.do_rf(args).return_code)
+        # Start rebase with rp 1 - stops at Commit 1
+        args = cmdline.parse_args(['git', 'rp', '1'])
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rp(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: stopped at [0-9a-f]+\.\.\. Commit 1\n')
+        self.assertFalse(err.getvalue())
         self.assertTrue(self.is_rebasing())
         self.assertEqual('Commit 1', self.get_head_subject())
 
@@ -1122,7 +1502,12 @@ class TestGitRebase(TestBase):
 
         # rc - Commit 2 conflicts on file2.txt
         args = cmdline.parse_args(['git', 'rc'])
-        cmdgit.do_rc(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rc(args)
+        self.assertNotEqual(0, result.return_code)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: conflict in [0-9a-f]+\.\.\. Commit 2\n')
+        self.assertFalse(err.getvalue())
         self.assertEqual('AA file2.txt\n',
                          command.output('git', 'status', '--porcelain'))
 
@@ -1131,8 +1516,14 @@ class TestGitRebase(TestBase):
         tools.write_file('file2.txt', 'resolved 2', binary=False)
         command.output('git', 'add', 'file2.txt')
         args = cmdline.parse_args(['git', 'rn', '2'])
-        with terminal.capture():
-            cmdgit.do_rn(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rn(args)
+        self.assertEqual(0, result.return_code)
+        # After conflict resolution, git outputs the commit info to stdout
+        self.assertIn('Commit 2', result.stdout)
+        # Break doesn't produce "Stopped at" message, no output expected
+        self.assertFalse(out.getvalue())
+        self.assertFalse(err.getvalue())
         self.assertTrue(self.is_rebasing())
         self.assertEqual('Commit 2', self.get_head_subject())
         self.assertEqual('resolved 2', tools.read_file('file2.txt',
@@ -1140,8 +1531,12 @@ class TestGitRebase(TestBase):
 
         # rn to continue - Commit 3 conflicts on file3.txt
         args = cmdline.parse_args(['git', 'rn'])
-        with terminal.capture():
-            cmdgit.do_rn(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rn(args)
+        self.assertNotEqual(0, result.return_code)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: conflict in [0-9a-f]+\.\.\. Commit 3\n')
+        self.assertFalse(err.getvalue())
         self.assertEqual('AA file3.txt\n',
                          command.output('git', 'status', '--porcelain'))
 
@@ -1149,21 +1544,37 @@ class TestGitRebase(TestBase):
         tools.write_file('file3.txt', 'resolved 3', binary=False)
         command.output('git', 'add', 'file3.txt')
         args = cmdline.parse_args(['git', 'rn'])
-        with terminal.capture():
-            cmdgit.do_rn(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rn(args)
+        self.assertEqual(0, result.return_code)
+        # After conflict resolution, git outputs the commit info to stdout
+        self.assertIn('Commit 3', result.stdout)
+        # Break doesn't produce "Stopped at" message, no output expected
+        self.assertFalse(out.getvalue())
+        self.assertFalse(err.getvalue())
         self.assertTrue(self.is_rebasing())
         self.assertEqual('Commit 3', self.get_head_subject())
 
         # rn to continue - Commit 4 conflicts on file4.txt
         args = cmdline.parse_args(['git', 'rn'])
-        with terminal.capture():
-            cmdgit.do_rn(args)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rn(args)
+        self.assertNotEqual(0, result.return_code)
+        self.assertRegex(out.getvalue(),
+                         r'Rebasing \d+/\d+: conflict in [0-9a-f]+\.\.\. Commit 4\n')
+        self.assertFalse(err.getvalue())
         self.assertEqual('AA file4.txt\n',
                          command.output('git', 'status', '--porcelain'))
 
         # Skip Commit 4 with rs
         args = cmdline.parse_args(['git', 'rs'])
-        self.assertEqual(0, cmdgit.do_rs(args).return_code)
+        with terminal.capture() as (out, err):
+            result = cmdgit.do_rs(args)
+        self.assertEqual(0, result.return_code)
+        self.assertFalse(result.stdout)
+        self.assertRegex(out.getvalue(),
+                         r'Successfully rebased and updated refs/heads/\w+\n')
+        self.assertFalse(err.getvalue())
 
         # Rebase complete - Commit 4 was skipped so Commit 3 is at HEAD
         self.assertFalse(self.is_rebasing())
@@ -1179,9 +1590,9 @@ class TestGitRebase(TestBase):
 
     def test_rn_with_conflicts(self):
         """Test rn fails when there are unresolved conflicts"""
-        # Start rebase with rf - stops at Commit 1
-        args = cmdline.parse_args(['git', 'rf'])
-        self.assertEqual(0, cmdgit.do_rf(args).return_code)
+        # Start rebase with rb - stops at Commit 1
+        args = cmdline.parse_args(['git', 'rb'])
+        self.assertEqual(0, cmdgit.do_rb(args).return_code)
 
         # Create file2.txt which conflicts with Commit 2
         tools.write_file('file2.txt', 'created during rebase\n', binary=False)
