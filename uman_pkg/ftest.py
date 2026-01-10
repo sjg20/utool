@@ -851,6 +851,322 @@ class TestGitSubcommand(TestBase):
         self.assertIn('Patch number required', err.getvalue())
 
 
+class TestGitRebase(TestBase):
+    """Integration tests for git rebase subcommands using real git repos"""
+
+    def setUp(self):
+        """Create a test git repository with commits"""
+        super().setUp()
+        tout.init(tout.NOTICE)
+        self.orig_dir = os.getcwd()
+        os.chdir(self.test_dir)
+
+        # Configure git for the test repo
+        command.output('git', 'init')
+        command.output('git', 'config', 'user.email', 'test@test.com')
+        command.output('git', 'config', 'user.name', 'Test User')
+
+        # Create initial commit on main branch
+        tools.write_file('file.txt', 'initial\n', binary=False)
+        command.output('git', 'add', 'file.txt')
+        command.output('git', 'commit', '-m', 'Initial commit')
+
+        # Create 'upstream' branch as a tracking point
+        command.output('git', 'branch', 'upstream')
+
+        # Create feature commits (each modifying a different file to avoid
+        # conflicts during rebase)
+        for i in range(1, 5):
+            tools.write_file(f'file{i}.txt', f'content {i}\n', binary=False)
+            command.output('git', 'add', f'file{i}.txt')
+            command.output('git', 'commit', '-m', f'Commit {i}')
+
+        # Set upstream tracking
+        command.output('git', 'branch', '--set-upstream-to=upstream')
+
+    def tearDown(self):
+        """Return to original directory and clean up"""
+        os.chdir(self.orig_dir)
+        super().tearDown()
+
+    def git_run(self, *args):
+        """Run git command, ignoring errors (for cleanup)"""
+        command.run_one('git', *args, raise_on_error=False, **CAPTURE)
+
+    def is_rebasing(self):
+        """Check if a rebase is in progress"""
+        return cmdgit.get_rebase_dir() is not None
+
+    def get_head_subject(self):
+        """Get the subject of HEAD commit"""
+        return command.output('git', 'log', '-1', '--format=%s').strip()
+
+    def test_rb_to_upstream(self):
+        """Test rb starts interactive rebase to upstream"""
+        # rb without args should start interactive rebase to upstream
+        # We need to auto-complete by setting editor to do nothing
+        env = os.environ.copy()
+        env['GIT_SEQUENCE_EDITOR'] = 'true'  # Just accept todo as-is
+
+        args = cmdline.parse_args(['git', 'rb'])
+        with mock.patch.dict(os.environ, env):
+            with mock.patch('uman_pkg.cmdgit.git') as mock_git:
+                mock_git.return_value = 0
+                result = cmdgit.do_rb(args)
+
+        self.assertEqual(0, result)
+        mock_git.assert_called_once()
+        call_args = mock_git.call_args
+        self.assertEqual(('rebase', '-i', 'upstream'), call_args[0])
+
+    def test_rb_with_count(self):
+        """Test rb N rebases last N commits"""
+        args = cmdline.parse_args(['git', 'rb', '2'])
+        with mock.patch('uman_pkg.cmdgit.git') as mock_git:
+            mock_git.return_value = 0
+            result = cmdgit.do_rb(args)
+
+        self.assertEqual(0, result)
+        mock_git.assert_called_once()
+        call_args = mock_git.call_args
+        self.assertEqual(('rebase', '-i', 'HEAD~2'), call_args[0])
+
+    def test_rf_stops_at_first(self):
+        """Test rf starts rebase and stops at first commit"""
+        args = cmdline.parse_args(['git', 'rf'])
+        with mock.patch('uman_pkg.cmdgit.git') as mock_git:
+            mock_git.return_value = 0
+            result = cmdgit.do_rf(args)
+
+        self.assertEqual(0, result)
+        mock_git.assert_called_once()
+        call_args = mock_git.call_args
+        self.assertEqual(('rebase', '-i', 'upstream'), call_args[0])
+        # Check that GIT_SEQUENCE_EDITOR sets first line to edit
+        env = call_args[1]['env']
+        self.assertIn("1s/^pick/edit/", env['GIT_SEQUENCE_EDITOR'])
+
+    def test_rf_with_count(self):
+        """Test rf N rebases last N commits, stopping at first"""
+        args = cmdline.parse_args(['git', 'rf', '3'])
+        with mock.patch('uman_pkg.cmdgit.git') as mock_git:
+            mock_git.return_value = 0
+            result = cmdgit.do_rf(args)
+
+        self.assertEqual(0, result)
+        call_args = mock_git.call_args
+        self.assertEqual(('rebase', '-i', 'HEAD~3'), call_args[0])
+        env = call_args[1]['env']
+        self.assertIn("1s/^pick/edit/", env['GIT_SEQUENCE_EDITOR'])
+
+    def test_rp_stops_at_patch_n(self):
+        """Test rp N stops at patch N"""
+        args = cmdline.parse_args(['git', 'rp', '2'])
+        with mock.patch('uman_pkg.cmdgit.git') as mock_git:
+            mock_git.return_value = 0
+            result = cmdgit.do_rp(args)
+
+        self.assertEqual(0, result)
+        call_args = mock_git.call_args
+        self.assertEqual(('rebase', '-i', 'upstream'), call_args[0])
+        env = call_args[1]['env']
+        self.assertIn("2s/^pick/edit/", env['GIT_SEQUENCE_EDITOR'])
+
+    def test_real_rf_and_rc(self):
+        """Test a real rf followed by rc to complete rebase"""
+        # Start rebase with rf 2 (last 2 commits)
+        args = cmdline.parse_args(['git', 'rf', '2'])
+        self.assertEqual(0, cmdgit.do_rf(args))
+
+        # Should now be in a rebase, stopped at first commit
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 3', self.get_head_subject())
+
+        # Amend the commit (modify its own file to avoid conflicts)
+        content = tools.read_file('file3.txt', binary=False)
+        tools.write_file('file3.txt', content + 'amended\n', binary=False)
+        command.output('git', 'add', 'file3.txt')
+        command.output('git', 'commit', '--amend', '--no-edit')
+
+        # Continue with rc
+        args = cmdline.parse_args(['git', 'rc'])
+        self.assertEqual(0, cmdgit.do_rc(args))
+
+        # Rebase should be complete
+        self.assertFalse(self.is_rebasing())
+        # The amended content should be in the file
+        self.assertIn('amended', tools.read_file('file3.txt', binary=False))
+
+    def test_real_rf_rn_rc(self):
+        """Test rf to start, rn to continue to next, then rc to finish"""
+        # Start rebase with rf 3 (last 3 commits)
+        args = cmdline.parse_args(['git', 'rf', '3'])
+        self.assertEqual(0, cmdgit.do_rf(args))
+
+        # Should be stopped at Commit 2
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 2', self.get_head_subject())
+
+        # Use rn to continue to next commit (also set to edit)
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture():
+            self.assertEqual(0, cmdgit.do_rn(args))
+
+        # Should be stopped at Commit 3
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 3', self.get_head_subject())
+
+        # Use rc to continue without editing (should finish rebase)
+        args = cmdline.parse_args(['git', 'rc'])
+        self.assertEqual(0, cmdgit.do_rc(args))
+
+        # Should be complete
+        self.assertFalse(self.is_rebasing())
+        self.assertEqual('Commit 4', self.get_head_subject())
+
+    def test_real_rs_skip_conflict(self):
+        """Test rs to skip a conflicting commit"""
+        # Create a conflicting situation: side branch creates file1.txt
+        # (which Commit 1 also creates)
+        command.output('git', 'checkout', '-b', 'side', 'upstream')
+        tools.write_file('file1.txt', 'side branch file1\n', binary=False)
+        command.output('git', 'add', 'file1.txt')
+        command.output('git', 'commit', '-m', 'Side commit')
+
+        # Go back to main and rebase onto side (Commit 1 will conflict)
+        command.output('git', 'checkout', '-')
+        command.output('git', 'branch', '--set-upstream-to=side')
+
+        # Start rebase with rf - will stop at Commit 1 with conflict
+        args = cmdline.parse_args(['git', 'rf'])
+        cmdgit.do_rf(args)
+
+        # Should be in rebase with a conflict (AA = add/add conflict)
+        self.assertTrue(self.is_rebasing())
+        status = command.output('git', 'status', '--porcelain')
+        self.assertIn('AA', status)  # file1.txt has add/add conflict
+
+        # Skip the conflicting commit with rs
+        args = cmdline.parse_args(['git', 'rs'])
+        self.assertEqual(0, cmdgit.do_rs(args))
+
+        # Commits 2-4 should apply cleanly, rebase completes
+        self.assertFalse(self.is_rebasing())
+        self.assertEqual('Commit 4', self.get_head_subject())
+
+    def test_real_rp_stops_at_second(self):
+        """Test rp 2 stops at the second commit"""
+        # Start rebase with rp 2 (stop at patch 2)
+        args = cmdline.parse_args(['git', 'rp', '2'])
+        self.assertEqual(0, cmdgit.do_rp(args))
+
+        # Should be stopped at Commit 2 (the second patch from upstream)
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 2', self.get_head_subject())
+
+        # Complete the rebase with rc
+        args = cmdline.parse_args(['git', 'rc'])
+        self.assertEqual(0, cmdgit.do_rc(args))
+
+        # Rebase should complete with Commit 4 at HEAD
+        self.assertFalse(self.is_rebasing())
+        self.assertEqual('Commit 4', self.get_head_subject())
+
+    def test_conflict_resolution_workflow(self):
+        """Test resolving conflicts with rc, rn, and rs"""
+        # Start rebase with rf - stops at Commit 1
+        args = cmdline.parse_args(['git', 'rf'])
+        self.assertEqual(0, cmdgit.do_rf(args))
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 1', self.get_head_subject())
+
+        # Create files that Commits 2-4 will also create - causes conflicts
+        for i in range(2, 5):
+            tools.write_file(f'file{i}.txt', 'created during rebase\n',
+                             binary=False)
+        command.output('git', 'add', 'file2.txt', 'file3.txt', 'file4.txt')
+        command.output('git', 'commit', '--amend', '--no-edit')
+
+        # rc - Commit 2 conflicts on file2.txt
+        args = cmdline.parse_args(['git', 'rc'])
+        cmdgit.do_rc(args)
+        self.assertEqual('AA file2.txt\n',
+                         command.output('git', 'status', '--porcelain'))
+
+        # Resolve file2.txt and use rn - rn inserts break, stops at Commit 2
+        tools.write_file('file2.txt', 'resolved 2', binary=False)
+        command.output('git', 'add', 'file2.txt')
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture():
+            cmdgit.do_rn(args)
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 2', self.get_head_subject())
+        self.assertEqual('resolved 2', tools.read_file('file2.txt', binary=False))
+
+        # rn to continue - Commit 3 conflicts on file3.txt
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture():
+            cmdgit.do_rn(args)
+        self.assertEqual('AA file3.txt\n',
+                         command.output('git', 'status', '--porcelain'))
+
+        # Resolve file3.txt and use rn - rn inserts break, stops at Commit 3
+        tools.write_file('file3.txt', 'resolved 3', binary=False)
+        command.output('git', 'add', 'file3.txt')
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture():
+            cmdgit.do_rn(args)
+        self.assertTrue(self.is_rebasing())
+        self.assertEqual('Commit 3', self.get_head_subject())
+
+        # rn to continue - Commit 4 conflicts on file4.txt
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture():
+            cmdgit.do_rn(args)
+        self.assertEqual('AA file4.txt\n',
+                         command.output('git', 'status', '--porcelain'))
+
+        # Skip Commit 4 with rs
+        args = cmdline.parse_args(['git', 'rs'])
+        self.assertEqual(0, cmdgit.do_rs(args))
+
+        # Rebase complete - Commit 4 was skipped so Commit 3 is at HEAD
+        self.assertFalse(self.is_rebasing())
+        self.assertEqual('Commit 3', self.get_head_subject())
+
+    def test_rn_not_rebasing(self):
+        """Test rn fails when not in a rebase"""
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture() as (_, err):
+            result = cmdgit.do_rn(args)
+        self.assertEqual(1, result)
+        self.assertIn('Not in the middle of a git rebase', err.getvalue())
+
+    def test_rn_with_conflicts(self):
+        """Test rn fails when there are unresolved conflicts"""
+        # Start rebase with rf - stops at Commit 1
+        args = cmdline.parse_args(['git', 'rf'])
+        self.assertEqual(0, cmdgit.do_rf(args))
+
+        # Create file2.txt which conflicts with Commit 2
+        tools.write_file('file2.txt', 'created during rebase\n', binary=False)
+        command.output('git', 'add', 'file2.txt')
+        command.output('git', 'commit', '--amend', '--no-edit')
+
+        # rc - Commit 2 conflicts on file2.txt
+        args = cmdline.parse_args(['git', 'rc'])
+        cmdgit.do_rc(args)
+        self.assertEqual('AA file2.txt\n',
+                         command.output('git', 'status', '--porcelain'))
+
+        # rn should fail with conflicts present
+        args = cmdline.parse_args(['git', 'rn'])
+        with terminal.capture() as (_, err):
+            result = cmdgit.do_rn(args)
+        self.assertEqual(1, result)
+        self.assertIn('Resolve conflicts first', err.getvalue())
+
+
 class TestUmanCIVars(TestBase):
     """Test CI variable building logic"""
 
