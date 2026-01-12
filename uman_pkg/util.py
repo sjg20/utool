@@ -72,10 +72,14 @@ def exec_cmd(cmd, dry_run=False, env=None, capture=True):
         CommandResult or None: Result if run, None if dry-run
     """
     if dry_run:
-        tout.notice(shlex.join(cmd))
+        # Build command with env vars that differ from current environment
+        env_prefix = ''
         if env:
-            for key, value in env.items():
-                tout.notice(f"  {key}={value}")
+            env_parts = [f"{k}={shlex.quote(v)}" for k, v in env.items()
+                         if os.environ.get(k) != v]
+            if env_parts:
+                env_prefix = ' '.join(env_parts) + ' '
+        tout.notice(f"{env_prefix}{shlex.join(cmd)}")
         return None
 
     tout.info(f"Running: {shlex.join(cmd)}")
