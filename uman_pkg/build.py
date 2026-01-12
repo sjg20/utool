@@ -54,7 +54,7 @@ def get_cross_tool(board, tool):
     Returns:
         str: Cross-compiled tool name (e.g. 'arm-linux-gnueabi-objdump')
     """
-    prefix = command.output_one_line('buildman', '-A', '--boards', board)
+    prefix = buildman_output('-A', '--boards', board)
     return f'{prefix}{tool}'
 
 
@@ -113,8 +113,55 @@ def get_dir(board):
     return os.path.join(base_dir, board)
 
 
-def get_cmd(args, board, build_dir):
-    """Build the buildman command line
+def get_buildman():
+    """Get the path to buildman
+
+    Uses UBOOT_TOOLS env var if set, otherwise falls back to PATH.
+
+    Returns:
+        str: Path to buildman executable
+    """
+    uboot_tools = os.environ.get('UBOOT_TOOLS')
+    if uboot_tools:
+        return os.path.join(os.path.expanduser(uboot_tools),
+                           'buildman', 'buildman')
+    return 'buildman'
+
+
+def buildman(*args, env=None, dry_run=False, capture=True):
+    """Run buildman with arguments
+
+    Args:
+        *args: Arguments to pass to buildman
+        env (dict): Optional environment variables
+        dry_run (bool): If True, just show command without running
+        capture (bool): Whether to capture output (default True)
+
+    Returns:
+        CommandResult or None: Result with return_code, stdout, stderr,
+            or None if dry_run
+    """
+    cmd = [get_buildman()] + list(args)
+    return exec_cmd(cmd, dry_run=dry_run, env=env, capture=capture)
+
+
+def buildman_output(*args):
+    """Run buildman and return its output
+
+    Args:
+        *args: Arguments to pass to buildman
+
+    Returns:
+        str: Command output (stdout), stripped of trailing whitespace
+
+    Raises:
+        command.CommandExc: If the command fails
+    """
+    return command.output(get_buildman(), *args).strip()
+
+
+def get_buildman_args(args, board, build_dir):
+    """Build the buildman arguments
 
     Args:
         args (argparse.Namespace): Arguments from cmdline
@@ -122,24 +169,24 @@ def get_cmd(args, board, build_dir):
         build_dir (str): Path to build directory
 
     Returns:
-        list: Command and arguments for buildman
+        list: Arguments for buildman (not including buildman itself)
     """
     if args.in_tree:
-        cmd = ['buildman', '-i', '--boards', board]
+        bm_args = ['-i', '--boards', board]
     else:
-        cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
+        bm_args = ['-I', '-w', '--boards', board, '-o', build_dir]
     if not args.lto:
-        cmd.insert(1, '-L')
+        bm_args.insert(0, '-L')
     if args.target:
-        cmd.extend(['--target', args.target])
+        bm_args.extend(['--target', args.target])
     if args.jobs:
-        cmd.extend(['-j', str(args.jobs)])
+        bm_args.extend(['-j', str(args.jobs)])
     if args.force_reconfig:
-        cmd.append('-C')
+        bm_args.append('-C')
     if args.adjust_cfg:
         for cfg in args.adjust_cfg:
-            cmd.extend(['-a', cfg])
-    return cmd
+            bm_args.extend(['-a', cfg])
+    return bm_args
 
 
 def build_board(board, dry_run=False, lto=False):
@@ -159,10 +206,10 @@ def build_board(board, dry_run=False, lto=False):
     build_dir = get_dir(board)
     tout.info(f'Building {board}...')
 
-    cmd = ['buildman', '-I', '-w', '--boards', board, '-o', build_dir]
+    args = ['-I', '-w', '--boards', board, '-o', build_dir]
     if not lto:
-        cmd.insert(1, '-L')
-    result = exec_cmd(cmd, dry_run, capture=False)
+        args.insert(0, '-L')
+    result = buildman(*args, dry_run=dry_run, capture=False)
 
     if result is None:  # dry-run
         return True
@@ -185,9 +232,8 @@ def try_build(board, build_dir):
     Returns:
         bool: True if build succeeded, False otherwise
     """
-    cmd = ['buildman', '-I', '-w', '-L', '-W', '-C', '--boards', board,
-           '-o', build_dir]
-    result = command.run_pipe([cmd], capture=True, raise_on_error=False)
+    result = buildman('-I', '-w', '-L', '-W', '-C', '--boards', board,
+                      '-o', build_dir)
     return result.return_code == 0
 
 
@@ -321,7 +367,7 @@ def run(args):
     tout.info(f'Building U-Boot for board: {board}')
     tout.info(f'Output directory: {build_dir}')
 
-    cmd = get_cmd(args, board, build_dir)
+    bm_args = get_buildman_args(args, board, build_dir)
 
     env = None
     if args.trace or args.gprof:
@@ -331,7 +377,7 @@ def run(args):
         if args.gprof:
             env['GPROF'] = '1'
 
-    result = exec_cmd(cmd, args.dry_run, env=env, capture=False)
+    result = buildman(*bm_args, env=env, dry_run=args.dry_run, capture=False)
 
     if result is None:  # dry-run
         if args.objdump:
