@@ -473,6 +473,21 @@ Settings are stored in ``~/.uman`` (created on first run)::
     # U-Boot test hooks directory
     test_hooks = /vid/software/devel/ubtest/u-boot-test-hooks
 
+Environment Variables
+~~~~~~~~~~~~~~~~~~~~~
+
+``UBOOT_TOOLS``
+    Path to U-Boot tools directory containing Python libraries (u_boot_pylib,
+    patman, buildman, etc.). This is used for importing Python modules.
+    Default: ``~/u/tools``
+
+``USRC``
+    Path to U-Boot source tree to work in. If not set, uman expects to be run
+    from within a U-Boot source tree.
+
+These are separate: ``UBOOT_TOOLS`` specifies where to find Python imports,
+while ``USRC`` specifies the U-Boot source tree to build/test.
+
 Self-testing
 ------------
 

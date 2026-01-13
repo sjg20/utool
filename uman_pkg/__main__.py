@@ -12,7 +12,11 @@ import sys
 our_path = os.path.dirname(os.path.realpath(__file__))
 parent_path = os.path.dirname(our_path)
 sys.path.append(parent_path)
-sys.path.append(os.path.expanduser('~/u/tools'))
+
+# Get U-Boot tools path from UBOOT_TOOLS env var (default: ~/u/tools)
+# This is separate from USRC which specifies the U-Boot source to work in
+uboot_tools = os.path.expanduser(os.environ.get('UBOOT_TOOLS', '~/u/tools'))
+sys.path.append(uboot_tools)
 
 # pylint: disable=import-error,wrong-import-position
 from u_boot_pylib import test_util
@@ -43,7 +47,7 @@ def run_uman():
              ftest.TestUmanCIVars, ftest.TestUmanCI,
              ftest.TestUmanControl, ftest.TestGitLabParser,
              ftest.TestUmanMergeRequest, ftest.TestSettings,
-             ftest.TestSetupSubcommand])
+             ftest.TestSetupSubcommand, ftest.TestMain])
         sys.exit(0 if result.wasSuccessful() else 1)
 
     # Run the appropriate command

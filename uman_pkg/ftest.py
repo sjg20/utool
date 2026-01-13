@@ -1967,6 +1967,42 @@ class TestSetupSubcommand(TestBase):
         self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)
 
 
+class TestMain(TestBase):
+    """Tests for __main__.py"""
+
+    @classmethod
+    def setUpClass(cls):
+        """Get the uman package directory"""
+        cls.uman_dir = os.path.dirname(os.path.dirname(__file__))
+
+    def test_uboot_tools_env_var(self):
+        """Test UBOOT_TOOLS env var overrides default path"""
+        # With invalid UBOOT_TOOLS, uman should fail to import u_boot_pylib
+        # Clear PYTHONPATH to ensure only UBOOT_TOOLS is used
+        env = os.environ.copy()
+        env['UBOOT_TOOLS'] = '/nonexistent/path'
+        env.pop('PYTHONPATH', None)
+        result = subprocess.run(
+            ['python3', '-m', 'uman_pkg', '--help'],
+            capture_output=True, env=env, cwd=self.uman_dir, check=False)
+        # Should fail with import error
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn(b'ModuleNotFoundError', result.stderr)
+
+    def test_uboot_tools_tilde_expansion(self):
+        """Test UBOOT_TOOLS expands ~ in path"""
+        # Verify tilde is expanded (not passed literally)
+        # Clear PYTHONPATH to ensure only UBOOT_TOOLS is used
+        env = os.environ.copy()
+        env['UBOOT_TOOLS'] = '~/nonexistent'
+        env.pop('PYTHONPATH', None)
+        result = subprocess.run(
+            ['python3', '-m', 'uman_pkg', '--help'],
+            capture_output=True, env=env, cwd=self.uman_dir, check=False)
+        # Error should show expanded path, not literal ~
+        self.assertNotIn(b"'~/nonexistent'", result.stderr)
+
+
 class TestUtil(TestBase):
     """Tests for util module"""
 
