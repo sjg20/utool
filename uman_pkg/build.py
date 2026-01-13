@@ -136,6 +136,9 @@ def get_cmd(args, board, build_dir):
         cmd.extend(['-j', str(args.jobs)])
     if args.force_reconfig:
         cmd.append('-C')
+    if args.adjust_cfg:
+        for cfg in args.adjust_cfg:
+            cmd.extend(['-a', cfg])
     return cmd
 
 

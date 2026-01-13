@@ -394,6 +394,25 @@ class TestBuildSubcommand(TestBase):  # pylint: disable=R0904
         cmd = build.get_cmd(args, 'sandbox', '/tmp/b/sandbox')
         self.assertIn('-C', cmd)
 
+    def test_build_adjust_cfg_option(self):
+        """Test -a/--adjust-cfg option"""
+        args = cmdline.parse_args(['build', 'sandbox', '-a', 'FOO=y'])
+        self.assertEqual(['FOO=y'], args.adjust_cfg)
+
+        # Multiple arguments
+        args = cmdline.parse_args(['build', 'sandbox', '-a', 'FOO=y', '-a', 'BAR=n'])
+        self.assertEqual(['FOO=y', 'BAR=n'], args.adjust_cfg)
+
+    def test_get_cmd_adjust_cfg(self):
+        """Test that -a arguments are passed to buildman"""
+        args = cmdline.parse_args(
+            ['build', 'sandbox', '-a', 'FOO=y', '-a', 'BAR=n'])
+        cmd = build.get_cmd(args, 'sandbox', '/tmp/b/sandbox')
+        # Each -a should produce a separate -a in the buildman command
+        self.assertEqual(2, cmd.count('-a'))
+        self.assertIn('FOO=y', cmd)
+        self.assertIn('BAR=n', cmd)
+
     def test_build_in_tree_flag(self):
         """Test -I/--in-tree flag uses -i for buildman"""
         args = cmdline.parse_args(['build', 'sandbox', '-I'])

@@ -389,8 +389,12 @@ The ``build`` command (alias ``b``) builds U-Boot for a specified board::
     # Bisect to find first commit that breaks the build
     uman build sandbox --bisect
 
+    # Build with verbose make output
+    uman build sandbox -a V=1
+
 **Options**:
 
+- ``-a, --make-arg ARG``: Pass argument to make (can use multiple times)
 - ``-f, --force-reconfig``: Force reconfiguration
 - ``-F, --fresh``: Delete build directory first
 - ``--bisect``: Bisect to find first commit that breaks the build (assumes

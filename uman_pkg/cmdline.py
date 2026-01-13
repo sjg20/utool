@@ -171,6 +171,9 @@ def add_build_subparser(subparsers):
     bld.add_argument(
         'board', nargs='?', metavar='BOARD',
         help='Board name to build')
+    bld.add_argument('-a', '--adjust-cfg', action='append', metavar='CFG',
+                     dest='adjust_cfg',
+                     help='Adjust Kconfig setting (can use multiple times)')
     bld.add_argument('-f', '--force-reconfig', action='store_true',
                      help='Force reconfiguration')
     bld.add_argument('-F', '--fresh', action='store_true',
