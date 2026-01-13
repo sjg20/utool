@@ -10,24 +10,25 @@ the features of uman.
 
 import sys
 
-import gitlab
-
 # pylint: disable=import-error
-from patman import patchstream
 from u_boot_pylib import command
-from u_boot_pylib import gitutil
 from u_boot_pylib import terminal
 from u_boot_pylib import tout
 
-from uman_pkg.gitlab_parser import GitLabCIParser  # pylint: disable=wrong-import-position
-from uman_pkg import build
-from uman_pkg import cmdconfig
-from uman_pkg import cmdgit
-from uman_pkg.cmdpy import do_pytest
-from uman_pkg.cmdtest import do_test
 from uman_pkg import settings
-from uman_pkg.setup import do_setup
 from uman_pkg.util import exec_cmd
+
+# Heavy imports are done lazily in the functions that need them:
+# - gitlab: do_merge_request()
+# - patman.patchstream: extract_mr_info()
+# - u_boot_pylib.gitutil: extract_mr_info(), do_merge_request(), do_ci()
+# - uman_pkg.gitlab_parser: validate_ci_args()
+# - uman_pkg.build: run_command() for 'build'
+# - uman_pkg.cmdconfig: run_command() for 'config'
+# - uman_pkg.cmdgit: run_command() for 'git'
+# - uman_pkg.cmdpy: run_command() for 'pytest'
+# - uman_pkg.cmdtest: run_command() for 'test'
+# - uman_pkg.setup: run_command() for 'setup'
 
 
 def build_ci_vars(args):
@@ -247,6 +248,9 @@ def validate_ci_args(args):
     Returns:
         int: Exit code (0 for success, non-zero for failure, None to continue)
     """
+    # pylint: disable=import-outside-toplevel
+    from uman_pkg.gitlab_parser import GitLabCIParser
+
     # Parse GitLab CI file once for validation and help requests
     parser = GitLabCIParser()
 
@@ -283,6 +287,8 @@ def run_command(args):  # pylint: disable=R0911
     Returns:
         int: Exit code (0 for success, non-zero for failure)
     """
+    # pylint: disable=import-outside-toplevel
+
     # Set verbosity level
     tout.init(tout.INFO if args.verbose else tout.NOTICE)
 
@@ -295,6 +301,7 @@ def run_command(args):  # pylint: disable=R0911
     tout.info(f'Running command: {args.cmd}')
 
     if args.cmd == 'build':
+        from uman_pkg import build
         return build.run(args)
 
     if args.cmd == 'ci':
@@ -308,18 +315,23 @@ def run_command(args):  # pylint: disable=R0911
         return do_ci(args)
 
     if args.cmd == 'config':
+        from uman_pkg import cmdconfig
         return cmdconfig.run(args)
 
     if args.cmd == 'git':
+        from uman_pkg import cmdgit
         return cmdgit.run(args)
 
     if args.cmd == 'pytest':
+        from uman_pkg.cmdpy import do_pytest
         return do_pytest(args)
 
     if args.cmd == 'setup':
+        from uman_pkg.setup import do_setup
         return do_setup(args)
 
     if args.cmd == 'test':
+        from uman_pkg.cmdtest import do_test
         return do_test(args)
 
     tout.error(f'Unknown command: {args.cmd}')
@@ -337,6 +349,10 @@ def extract_mr_info(branch, args):
         tuple: (title_str, description_str, commit_tags) or
             (None, None, None) if error
     """
+    # pylint: disable=import-outside-toplevel
+    from patman import patchstream
+    from u_boot_pylib import gitutil
+
     start = 0
     end = 0
 
@@ -391,7 +407,10 @@ def do_merge_request(args):  # pylint: disable=too-many-locals
     Returns:
         int: Exit code
     """
+    # pylint: disable=import-outside-toplevel
+    import gitlab
     from pickman import gitlab_api
+    from u_boot_pylib import gitutil
 
     tout.info('Creating merge request from patch series...')
 

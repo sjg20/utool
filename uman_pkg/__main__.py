@@ -19,10 +19,8 @@ uboot_tools = os.path.expanduser(os.environ.get('UBOOT_TOOLS', '~/u/tools'))
 sys.path.append(uboot_tools)
 
 # pylint: disable=import-error,wrong-import-position
-from u_boot_pylib import test_util
 from uman_pkg import cmdline
 from uman_pkg import control
-from uman_pkg import ftest
 
 
 def run_uman():
@@ -38,6 +36,10 @@ def run_uman():
 
     # Run self-tests if requested
     if args.cmd == 'selftest':
+        # pylint: disable=import-outside-toplevel
+        from u_boot_pylib import test_util
+        from uman_pkg import ftest
+
         to_run = (args.testname if hasattr(args, 'testname') and
                   args.testname not in [None, 'selftest'] else None)
         result = test_util.run_test_suites(

@@ -2608,14 +2608,14 @@ class TestUmanMergeRequest(TestBase):
         self.assertEqual(args.dest, 'develop')
 
     @mock.patch('pickman.gitlab_api', create=True)
-    @mock.patch('uman_pkg.control.gitlab')
+    @mock.patch('gitlab.Gitlab')
     @mock.patch('uman_pkg.control.extract_mr_info')
-    @mock.patch('uman_pkg.control.gitutil')
-    def test_merge_request_gitlab_error(self, mock_gitutil, mock_extract,
-                                        mock_gitlab, mock_api):
+    @mock.patch('u_boot_pylib.gitutil.get_branch')
+    def test_merge_request_gitlab_error(self, mock_get_branch, mock_extract,
+                                        mock_gitlab_cls, mock_api):
         """Test that GitLab errors cause failure"""
         # Set up mocks
-        mock_gitutil.get_branch.return_value = 'test-branch'
+        mock_get_branch.return_value = 'test-branch'
         mock_extract.return_value = ('Test Title', 'Test Description', '')
         mock_api.get_remote_url.return_value = \
             'https://gitlab.com/user/repo.git'
@@ -2623,47 +2623,46 @@ class TestUmanMergeRequest(TestBase):
         mock_api.get_token.return_value = 'fake-token'
 
         # Make GitLab raise an error - use real exception class
-        mock_gitlab.GitlabError = gitlab.GitlabError
-        mock_gitlab.Gitlab.return_value.projects.get.side_effect = \
+        mock_gitlab_cls.return_value.projects.get.side_effect = \
             gitlab.GitlabError('Connection failed')
 
         args = make_args(merge=True)
         with terminal.capture():
             result = control.do_merge_request(args)
 
-        self.assertEqual(result, 1)
+        self.assertEqual(1, result)
 
     @mock.patch('pickman.gitlab_api', create=True)
-    @mock.patch('uman_pkg.control.gitlab')
+    @mock.patch('gitlab.Gitlab')
     @mock.patch('uman_pkg.control.extract_mr_info')
-    @mock.patch('uman_pkg.control.gitutil')
+    @mock.patch('u_boot_pylib.gitutil.get_branch')
     @mock.patch('uman_pkg.control.git_push_branch')
-    def test_merge_request_update_existing(self, _mock_push, mock_gitutil,
-                                           mock_extract, mock_gitlab, mock_api):
+    def test_merge_request_update_existing(self, _mock_push, mock_get_branch,
+                                           mock_extract, mock_gitlab_cls,
+                                           mock_api):
         """Test updating an existing merge request"""
         # Set up mocks
-        mock_gitutil.get_branch.return_value = 'test-branch'
+        mock_get_branch.return_value = 'test-branch'
         mock_extract.return_value = ('New Title', 'New Description', '')
         mock_api.get_remote_url.return_value = \
             'https://gitlab.com/user/repo.git'
         mock_api.parse_url.return_value = ('gitlab.com', 'user/repo')
         mock_api.get_token.return_value = 'fake-token'
-        mock_gitlab.GitlabError = gitlab.GitlabError
 
         # Mock existing MR
         mock_mr = mock.MagicMock()
         mock_mr.web_url = 'https://gitlab.com/user/repo/-/merge_requests/1'
         mock_project = mock.MagicMock()
         mock_project.mergerequests.list.return_value = [mock_mr]
-        mock_gitlab.Gitlab.return_value.projects.get.return_value = mock_project
+        mock_gitlab_cls.return_value.projects.get.return_value = mock_project
 
         args = make_args(merge=True)
         with terminal.capture():
             result = control.do_merge_request(args)
 
-        self.assertEqual(result, 0)
-        self.assertEqual(mock_mr.title, 'New Title')
-        self.assertEqual(mock_mr.description, 'New Description')
+        self.assertEqual(0, result)
+        self.assertEqual('New Title', mock_mr.title)
+        self.assertEqual('New Description', mock_mr.description)
         mock_mr.save.assert_called_once()
 
 
