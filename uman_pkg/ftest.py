@@ -755,6 +755,24 @@ class TestGitSubcommand(TestBase):
         self.assertEqual('git', args.cmd)
         self.assertEqual('rc', args.action)
 
+    def test_git_symlink_invocation(self):
+        """Test invoking via symlink automatically runs git subcommand"""
+        # Simulate invoking as 'rf' symlink with argument
+        args = cmdline.parse_args(['3'], prog_name='/usr/local/bin/rf')
+        self.assertEqual('git', args.cmd)
+        self.assertEqual('rf', args.action)
+        self.assertEqual(3, args.arg)
+
+        # Simulate invoking as 'rebase-diff' symlink
+        args = cmdline.parse_args([], prog_name='rebase-diff')
+        self.assertEqual('git', args.cmd)
+        self.assertEqual('rebase-diff', args.action)
+
+        # Normal invocation should not trigger symlink detection
+        args = cmdline.parse_args(['git', 'rc'], prog_name='uman')
+        self.assertEqual('git', args.cmd)
+        self.assertEqual('rc', args.action)
+
     def test_git_all_actions(self):
         """Test all git actions are valid"""
         actions = ['et', 'gr', 'pm', 'ra', 'rb', 'rd', 're', 'rf', 'rp', 'rn',

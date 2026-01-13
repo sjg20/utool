@@ -8,8 +8,32 @@ Creates the argument parser and uses it to parse the arguments passed in
 """
 
 import argparse
+import os
 import sys
 
+
+def get_git_actions():
+    """Get git actions from cmdgit module
+
+    Returns:
+        list: List of GitAction namedtuples
+    """
+    # pylint: disable=import-outside-toplevel
+    from uman_pkg.cmdgit import GIT_ACTIONS
+    return GIT_ACTIONS
+
+
+def get_git_action_names():
+    """Get set of all git action names (short and long)
+
+    Returns:
+        set: All valid action names for symlink detection
+    """
+    names = set()
+    for action in get_git_actions():
+        names.add(action.short)
+        names.add(action.long)
+    return names
 
 # Aliases for subcommands
 ALIASES = {
@@ -260,28 +284,20 @@ def add_git_subparser(subparsers):
     git = subparsers.add_parser(
         'git', aliases=['g'],
         help='Git rebase helpers')
-    # Short names and their full equivalents
+
+    # Build choices and help from GIT_ACTIONS
+    actions = get_git_actions()
+    choices = []
+    help_parts = []
+    for action in actions:
+        choices.extend([action.short, action.long])
+        help_parts.append(f'{action.short}/{action.long}')
+
     git.add_argument(
         'action',
-        choices=['et', 'edit-todo',
-                 'gr', 'git-rebase',
-                 'pm', 'patch-merge',
-                 'ra', 'rebase-abort',
-                 'rb', 'rebase-beginning',
-                 'rc', 'rebase-continue',
-                 'rd', 'rebase-diff',
-                 're', 'rebase-edit',
-                 'rf', 'rebase-first',
-                 'rn', 'rebase-next',
-                 'rp', 'rebase-patch',
-                 'rs', 'rebase-skip',
-                 'us', 'set-upstream'],
+        choices=choices,
         metavar='ACTION',
-        help='Action: et/edit-todo, gr/git-rebase, pm/patch-merge, '
-             'ra/rebase-abort, rb/rebase-beginning, rc/rebase-continue, '
-             'rd/rebase-diff, re/rebase-edit, rf/rebase-first, '
-             'rn/rebase-next, rp/rebase-patch, rs/rebase-skip, '
-             'us/set-upstream')
+        help=f"Action: {', '.join(help_parts)}")
     git.add_argument(
         'arg', nargs='?', type=int,
         help='Commit count (for gr/rf) or patch number (for rp/rn)')
@@ -340,19 +356,28 @@ def setup_parser():
     return parser
 
 
-def parse_args(argv=None):
+def parse_args(argv=None, prog_name=None):
     """Parse command line arguments from sys.argv[]
 
     Args:
         argv (str or None): Arguments to process, or None to use sys.argv[1:]
+        prog_name (str or None): Program name for symlink detection, or None
+            to use sys.argv[0]
 
     Returns:
         argparse.Namespace: Parsed arguments
     """
     parser = setup_parser()
 
-    if not argv:
+    if argv is None:
         argv = sys.argv[1:]
+
+    # Check if invoked via symlink matching a git action name
+    if prog_name is None:
+        prog_name = sys.argv[0] if sys.argv else ''
+    invoked_as = os.path.basename(prog_name)
+    if invoked_as in get_git_action_names():
+        argv = ['git', invoked_as] + list(argv)
 
     # Handle '--' separator for extra pytest arguments
     extra_args = []
