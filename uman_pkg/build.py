@@ -338,10 +338,19 @@ def run(args):
         return 0
 
     if result.return_code != 0:
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-        tout.info('Build failed')
-        return result.return_code
+        # Buildman returns 101 for warnings even if build succeeded
+        if result.return_code == 101:
+            elf_path = os.path.join(build_dir, 'u-boot')
+            if os.path.exists(elf_path):
+                tout.warning('Build succeeded with warnings')
+            else:
+                tout.info('Build failed')
+                return result.return_code
+        else:
+            if result.stderr:
+                print(result.stderr, file=sys.stderr)
+            tout.info('Build failed')
+            return result.return_code
 
     if args.objdump:
         count = run_objdump(build_dir, board, args)
