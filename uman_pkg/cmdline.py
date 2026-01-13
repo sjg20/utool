@@ -260,14 +260,28 @@ def add_git_subparser(subparsers):
     git = subparsers.add_parser(
         'git', aliases=['g'],
         help='Git rebase helpers')
+    # Short names and their full equivalents
     git.add_argument(
         'action',
-        choices=['et', 'gr', 'pm', 'ra', 'rb', 'rd', 're', 'rf', 'rp', 'rn',
-                 'rc', 'rs', 'us'],
-        help='Action: et=edit-todo, gr=rebase (editor), pm=patch-merge, '
-             'ra=abort, rb=rebase-beginning, rd=diff-next, re=amend, '
-             'rf=rebase-first, rp=rebase-patch, rn=rebase-next, '
-             'rc=continue, rs=skip, us=set-upstream')
+        choices=['et', 'edit-todo',
+                 'gr', 'git-rebase',
+                 'pm', 'patch-merge',
+                 'ra', 'rebase-abort',
+                 'rb', 'rebase-beginning',
+                 'rc', 'rebase-continue',
+                 'rd', 'rebase-diff',
+                 're', 'rebase-edit',
+                 'rf', 'rebase-first',
+                 'rn', 'rebase-next',
+                 'rp', 'rebase-patch',
+                 'rs', 'rebase-skip',
+                 'us', 'set-upstream'],
+        metavar='ACTION',
+        help='Action: et/edit-todo, gr/git-rebase, pm/patch-merge, '
+             'ra/rebase-abort, rb/rebase-beginning, rc/rebase-continue, '
+             'rd/rebase-diff, re/rebase-edit, rf/rebase-first, '
+             'rn/rebase-next, rp/rebase-patch, rs/rebase-skip, '
+             'us/set-upstream')
     git.add_argument(
         'arg', nargs='?', type=int,
         help='Commit count (for gr/rf) or patch number (for rp/rn)')

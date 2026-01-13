@@ -8,6 +8,7 @@ This module handles the 'git' subcommand which provides interactive rebase
 helpers similar to the rf/rn bash aliases.
 """
 
+from collections import namedtuple
 import os
 import re
 
@@ -396,6 +397,8 @@ def do_rs(args):
 def do_re(args):
     """Amend the current commit during rebase (rebase edit)
 
+    Opens the editor to amend the commit message.
+
     Args:
         args (argparse.Namespace): Arguments from cmdline (unused)
 
@@ -407,17 +410,8 @@ def do_re(args):
         tout.error('Not in the middle of a rebase')
         return 1
 
-    # Check if there are staged changes to amend
-    if not has_staged_changes():
-        tout.error('No staged changes to amend')
-        return 1
-
-    result = command.run_one('git', 'commit', '--amend', '--no-edit',
-                             capture=True, raise_on_error=False)
-    if result.return_code == 0:
-        tout.notice('Commit amended')
-    else:
-        tout.error(result.stderr.strip() if result.stderr else 'Amend failed')
+    result = command.run_one('git', 'commit', '--amend', capture=False,
+                             raise_on_error=False)
     return result.return_code
 
 
@@ -584,27 +578,34 @@ def do_rd(args):
         tout.error(f'No commit found at position {target}')
         return 1
 
-    # Show diff against that commit
-    result = command.run_one('git', 'diff', commit_hash, capture=False,
+    # Show diff against that commit using difftool
+    result = command.run_one('git', 'difftool', commit_hash, capture=False,
                              raise_on_error=False)
     return result.return_code
 
 
-ACTIONS = {
-    'et': do_et,
-    'gr': do_gr,
-    'pm': do_pm,
-    'ra': do_ra,
-    'rb': do_rb,
-    'rd': do_rd,
-    're': do_re,
-    'rf': do_rf,
-    'rp': do_rp,
-    'rn': do_rn,
-    'rc': do_rc,
-    'rs': do_rs,
-    'us': do_us,
-}
+# Git action definition: short name, long name, description, function
+GitAction = namedtuple('GitAction', ['short', 'long', 'name', 'func'])
+
+GIT_ACTIONS = [
+    GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
+    GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
+    GitAction('pm', 'patch-merge', 'Apply patch from rebase-apply', do_pm),
+    GitAction('ra', 'rebase-abort', 'Abort the current rebase', do_ra),
+    GitAction('rb', 'rebase-beginning', 'Rebase from beginning', do_rb),
+    GitAction('rc', 'rebase-continue', 'Continue the current rebase', do_rc),
+    GitAction('rd', 'rebase-diff', 'Show diff against next commit', do_rd),
+    GitAction('re', 'rebase-edit', 'Amend current commit in rebase', do_re),
+    GitAction('rf', 'rebase-first', 'Start rebase, edit first commit', do_rf),
+    GitAction('rn', 'rebase-next', 'Continue rebase, edit next commit', do_rn),
+    GitAction('rp', 'rebase-patch', 'Stop at patch N for editing', do_rp),
+    GitAction('rs', 'rebase-skip', 'Skip current commit in rebase', do_rs),
+    GitAction('us', 'set-upstream', 'Set upstream branch', do_us),
+]
+
+# Build lookup dicts from the action list
+ACTIONS = {a.short: a.func for a in GIT_ACTIONS}
+ACTION_ALIASES = {a.long: a.short for a in GIT_ACTIONS}
 
 
 def run(args):
@@ -616,7 +617,10 @@ def run(args):
     Returns:
         int: Exit code (0 for success, non-zero for failure)
     """
-    func = ACTIONS.get(args.action)
+    # Resolve alias to short name
+    action = ACTION_ALIASES.get(args.action, args.action)
+
+    func = ACTIONS.get(action)
     if func:
         result = func(args)
         # Functions may return int or CommandResult

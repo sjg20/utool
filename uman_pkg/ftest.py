@@ -763,10 +763,34 @@ class TestGitSubcommand(TestBase):
             args = cmdline.parse_args(['git', action])
             self.assertEqual(action, args.action)
 
+    def test_git_full_command_names(self):
+        """Test full command names are resolved to short names"""
+        full_names = {
+            'edit-todo': 'et',
+            'git-rebase': 'gr',
+            'patch-merge': 'pm',
+            'rebase-abort': 'ra',
+            'rebase-beginning': 'rb',
+            'rebase-diff': 'rd',
+            'rebase-edit': 're',
+            'rebase-first': 'rf',
+            'rebase-patch': 'rp',
+            'rebase-next': 'rn',
+            'rebase-continue': 'rc',
+            'rebase-skip': 'rs',
+            'set-upstream': 'us',
+        }
+        for full_name, short_name in full_names.items():
+            args = cmdline.parse_args(['git', full_name])
+            self.assertEqual(full_name, args.action)
+            # Verify alias resolution
+            resolved = cmdgit.ACTION_ALIASES.get(full_name)
+            self.assertEqual(short_name, resolved)
+
     def test_get_upstream(self):
         """Test get_upstream returns upstream branch"""
         def mock_git_output(*args):
-            if args[0] == 'name-rev' and args[1] == '@{upstream}':
+            if args[0] == 'rev-parse' and args[2] == '@{upstream}':
                 return 'origin/main'
             return ''
 
@@ -853,8 +877,8 @@ class TestGitSubcommand(TestBase):
         """Test do_rc runs git rebase --continue"""
         cap = []
 
-        def mock_git(*args, env=None):
-            del env
+        def mock_git(*args, env=None, dry_run=None):
+            del env, dry_run
             cap.append(args)
             return mock.Mock(return_code=0, stdout='', stderr='')
 
@@ -879,8 +903,8 @@ class TestGitSubcommand(TestBase):
         """Test do_rs runs git rebase --skip"""
         cap = []
 
-        def mock_git(*args, env=None):
-            del env
+        def mock_git(*args, env=None, dry_run=None):
+            del env, dry_run
             cap.append(args)
             return mock.Mock(return_code=0, stdout='', stderr='')
 
@@ -905,8 +929,8 @@ class TestGitSubcommand(TestBase):
         """Test do_ra runs git rebase --abort"""
         cap = []
 
-        def mock_git(*args, env=None):
-            del env
+        def mock_git(*args, env=None, dry_run=None):
+            del env, dry_run
             cap.append(args)
             return mock.Mock(return_code=0, stdout='', stderr='')
 
@@ -945,8 +969,8 @@ class TestGitSubcommand(TestBase):
         """Test do_ra stashes uncommitted changes before aborting"""
         cap = []
 
-        def mock_git(*args, env=None):
-            del env
+        def mock_git(*args, env=None, dry_run=None):
+            del env, dry_run
             cap.append(args)
             return mock.Mock(return_code=0, stdout='', stderr='')
 
@@ -1020,21 +1044,16 @@ class TestGitSubcommand(TestBase):
         self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
 
     def test_do_re(self):
-        """Test do_re amends current commit"""
+        """Test do_re runs git commit --amend"""
         args = cmdline.parse_args(['git', 're'])
         with mock.patch('u_boot_pylib.command.run_one') as mock_run:
             mock_run.return_value = mock.Mock(return_code=0)
             with mock.patch.object(cmdgit, 'get_rebase_dir',
                                    return_value='/tmp/rebase'):
-                with mock.patch.object(cmdgit, 'has_staged_changes',
-                                       return_value=True):
-                    with terminal.capture() as (out, _):
-                        result = cmdgit.do_re(args)
+                result = cmdgit.do_re(args)
         self.assertEqual(0, result)
         call_args = mock_run.call_args
-        self.assertEqual(
-            ('git', 'commit', '--amend', '--no-edit'), call_args[0])
-        self.assertEqual('Commit amended\n', out.getvalue())
+        self.assertEqual(('git', 'commit', '--amend'), call_args[0])
 
     def test_do_re_not_rebasing(self):
         """Test do_re prints error when not rebasing"""
@@ -1045,24 +1064,12 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(1, result)
         self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
 
-    def test_do_re_no_staged_changes(self):
-        """Test do_re prints error when no staged changes"""
-        args = cmdline.parse_args(['git', 're'])
-        with mock.patch.object(cmdgit, 'get_rebase_dir',
-                               return_value='/tmp/rebase'):
-            with mock.patch.object(cmdgit, 'has_staged_changes',
-                                   return_value=False):
-                with terminal.capture() as (_, err):
-                    result = cmdgit.do_re(args)
-        self.assertEqual(1, result)
-        self.assertEqual('No staged changes to amend\n', err.getvalue())
-
     def test_do_us(self):
         """Test do_us sets upstream branch"""
         cap = []
 
-        def mock_git(*args, env=None):
-            del env
+        def mock_git(*args, env=None, dry_run=None):
+            del env, dry_run
             cap.append(args)
             return mock.Mock(return_code=0, stdout='', stderr='')
 
@@ -1129,7 +1136,7 @@ class TestGitSubcommand(TestBase):
                 result = cmdgit.do_rd(args)
         self.assertEqual(0, result)
         call_args = mock_run.call_args
-        self.assertEqual(('git', 'diff', 'abc1234'), call_args[0])
+        self.assertEqual(('git', 'difftool', 'abc1234'), call_args[0])
 
     def test_do_rd_with_arg(self):
         """Test do_rd N shows diff against nth commit"""
@@ -1145,7 +1152,7 @@ class TestGitSubcommand(TestBase):
                 result = cmdgit.do_rd(args)
         self.assertEqual(0, result)
         call_args = mock_run.call_args
-        self.assertEqual(('git', 'diff', 'def5678'), call_args[0])
+        self.assertEqual(('git', 'difftool', 'def5678'), call_args[0])
 
     def test_do_rd_not_rebasing(self):
         """Test do_rd prints error when not rebasing"""
@@ -1175,7 +1182,8 @@ class TestGitSubcommand(TestBase):
         cap = []
         cap_env = []
 
-        def mock_git(*args, env=None):
+        def mock_git(*args, env=None, dry_run=None):
+            del dry_run
             cap.append(args)
             cap_env.append(env)
             return mock.Mock(return_code=0, stdout='', stderr='')
@@ -1196,7 +1204,8 @@ class TestGitSubcommand(TestBase):
         cap = []
         cap_env = []
 
-        def mock_git(*args, env=None):
+        def mock_git(*args, env=None, dry_run=None):
+            del dry_run
             cap.append(args)
             cap_env.append(env)
             return mock.Mock(return_code=0, stdout='', stderr='')
@@ -1214,8 +1223,8 @@ class TestGitSubcommand(TestBase):
         """Test do_rf with commit count"""
         cap = []
 
-        def mock_git(*args, env=None):
-            del env
+        def mock_git(*args, env=None, dry_run=None):
+            del env, dry_run
             cap.append(args)
             return mock.Mock(return_code=0, stdout='', stderr='')
 
