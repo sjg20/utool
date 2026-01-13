@@ -2951,6 +2951,43 @@ class TestSetupSubcommand(TestBase):
         self.assertIn('qemu-system-ppc', setup.QEMU_PACKAGES)
         self.assertIn('qemu-system-x86', setup.QEMU_PACKAGES)
 
+    def test_setup_aliases_dry_run(self):
+        """Test setup_aliases in dry-run mode"""
+        args = argparse.Namespace(dry_run=True, force=False, alias_dir=None)
+        with terminal.capture() as (out, _):
+            res = setup.setup_aliases(args)
+        self.assertEqual(0, res)
+        self.assertIn('Would create symlinks', out.getvalue())
+
+    def test_setup_aliases_creates_symlinks(self):
+        """Test setup_aliases creates symlinks in specified directory"""
+        alias_dir = os.path.join(self.test_dir, 'aliases')
+        args = argparse.Namespace(dry_run=False, force=False,
+                                  alias_dir=alias_dir)
+        with terminal.capture() as (out, _):
+            res = setup.setup_aliases(args)
+        self.assertEqual(0, res)
+        self.assertIn('Created symlinks', out.getvalue())
+        # Check symlinks were created
+        for name in ['rf', 'rc', 'rd']:
+            link_path = os.path.join(alias_dir, name)
+            self.assertTrue(os.path.islink(link_path))
+
+    def test_setup_aliases_skips_existing(self):
+        """Test setup_aliases skips existing files"""
+        alias_dir = os.path.join(self.test_dir, 'aliases')
+        os.makedirs(alias_dir)
+        # Create an existing file
+        tools.write_file(os.path.join(alias_dir, 'rf'), b'existing')
+
+        args = argparse.Namespace(dry_run=False, force=False,
+                                  alias_dir=alias_dir)
+        with terminal.capture() as (out, _):
+            res = setup.setup_aliases(args)
+        self.assertEqual(0, res)
+        self.assertIn('Skipped', out.getvalue())
+        self.assertIn('rf', out.getvalue())
+
 
 class TestMain(TestBase):
     """Tests for __main__.py"""

@@ -148,17 +148,21 @@ Git Subcommand
 The ``git`` command (alias ``g``) provides helpers for interactive rebasing,
 making it easier to step through commits during development.
 
-**Actions**:
+**Actions** (short name / full name):
 
-- ``gr [N]``: Open interactive rebase editor (to upstream or HEAD~N)
-- ``ra``: Abort the current rebase (stashes changes, shows recovery info)
-- ``rb``: Rebase from beginning - stops at first commit for editing
-- ``rf N``: Rebase last N commits, stopping at first for editing
-- ``rd [N]``: Show diff against the Nth next commit (default: 1)
-- ``rp N``: Rebase to upstream, stop at patch N for editing (0 = first)
-- ``rn [N]``: Continue rebase to next commit (see below for details)
-- ``rc``: Continue rebase (git rebase --continue)
-- ``rs``: Skip current commit (git rebase --skip)
+- ``et`` / ``edit-todo``: Edit the rebase todo list
+- ``gr`` / ``git-rebase`` [N]: Open interactive rebase editor (to upstream or HEAD~N)
+- ``pm`` / ``patch-merge``: Apply patch from rebase-apply directory
+- ``ra`` / ``rebase-abort``: Abort the current rebase (stashes changes, shows recovery info)
+- ``rb`` / ``rebase-beginning``: Rebase from beginning - stops at first commit for editing
+- ``rc`` / ``rebase-continue``: Continue rebase (git rebase --continue)
+- ``rd`` / ``rebase-diff`` [N]: Show diff against the Nth next commit (default: 1)
+- ``re`` / ``rebase-edit``: Amend the current commit (opens editor)
+- ``rf`` / ``rebase-first`` [N]: Rebase last N commits, stopping at first for editing
+- ``rn`` / ``rebase-next`` [N]: Continue rebase to next commit (see below for details)
+- ``rp`` / ``rebase-patch`` N: Rebase to upstream, stop at patch N for editing (0 = first)
+- ``rs`` / ``rebase-skip``: Skip current commit (git rebase --skip)
+- ``us`` / ``set-upstream``: Set upstream branch to m/master
 
 The ``rn`` command behaves differently depending on context:
 
@@ -234,6 +238,24 @@ When a rebase hits a conflict::
 
 Using ``rn`` after resolving a conflict stops at the current commit, giving you
 a chance to verify the resolution before moving on.
+
+.. _Symlink Invocation:
+
+**Symlink Invocation**:
+
+You can create symlinks to uman using git action names. When invoked via a
+symlink, uman automatically runs the corresponding git subcommand::
+
+    # Create symlinks
+    ln -s /path/to/uman ~/bin/rf
+    ln -s /path/to/uman ~/bin/rebase-diff
+
+    # Now these are equivalent:
+    rf 3                    # same as: uman git rf 3
+    rebase-diff             # same as: uman git rebase-diff
+
+This works with both short names (``rf``, ``rd``, ``rc``) and full names
+(``rebase-first``, ``rebase-diff``, ``rebase-continue``).
 
 Pytest Subcommand
 -----------------
@@ -524,16 +546,25 @@ various architectures::
     uman setup tfa
     uman setup xtensa
 
+    # Create git action symlinks in ~/bin
+    uman setup aliases
+
+    # Create symlinks in a custom directory
+    uman setup aliases -d ~/.local/bin
+
     # Force reinstall
     uman setup opensbi -f
 
 **Options**:
 
+- ``-d, --alias-dir DIR``: Directory for alias symlinks (default: ~/bin)
 - ``-f, --force``: Force rebuild even if already built
 - ``-l, --list``: List available components
 
 **Components**:
 
+- ``aliases``: Create symlinks for git action commands (rf, rc, rd, etc.) in a
+  directory. See `Symlink Invocation`_ above.
 - ``qemu``: Install QEMU packages for all architectures (arm, riscv, x86, ppc,
   xtensa). Uses ``apt-get`` with sudo.
 - ``opensbi``: Download pre-built OpenSBI firmware for RISC-V (both 32-bit and

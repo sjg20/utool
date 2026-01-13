@@ -21,11 +21,78 @@ from uman_pkg import settings
 
 # Available components for setup command
 SETUP_COMPONENTS = {
+    'aliases': 'Create symlinks for git action commands',
     'qemu': 'QEMU emulators for all architectures',
     'opensbi': 'OpenSBI firmware for RISC-V',
     'tfa': 'ARM Trusted Firmware for QEMU SBSA',
     'xtensa': 'Xtensa dc233c toolchain',
 }
+
+# Git action names for symlink creation (short names only, to avoid clutter)
+GIT_ALIASES = ['et', 'gr', 'pm', 'ra', 'rb', 'rc', 'rd', 're', 'rf', 'rn', 'rp',
+               'rs', 'us']
+
+def setup_aliases(args):
+    """Create symlinks for git action commands
+
+    Args:
+        args (argparse.Namespace): Command line arguments
+            args.alias_dir: Directory to create symlinks in
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure)
+    """
+    alias_dir = getattr(args, 'alias_dir', None)
+    if not alias_dir:
+        alias_dir = os.path.expanduser('~/bin')
+        tout.notice(f'Using default directory: {alias_dir}')
+
+    alias_dir = os.path.expanduser(alias_dir)
+
+    # Find uman executable
+    uman_path = shutil.which('um') or shutil.which('uman')
+    if not uman_path:
+        # Try to find it relative to this file
+        this_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        uman_path = os.path.join(this_dir, 'um')
+        if not os.path.exists(uman_path):
+            tout.error('Cannot find uman executable')
+            return 1
+
+    uman_path = os.path.abspath(uman_path)
+
+    if args.dry_run:
+        tout.notice(f'Would create symlinks in {alias_dir} -> {uman_path}')
+        for name in GIT_ALIASES:
+            tout.notice(f'  {name}')
+        return 0
+
+    # Create directory if needed
+    os.makedirs(alias_dir, exist_ok=True)
+
+    created = []
+    skipped = []
+    for name in GIT_ALIASES:
+        link_path = os.path.join(alias_dir, name)
+        if os.path.exists(link_path) or os.path.islink(link_path):
+            if args.force:
+                os.remove(link_path)
+            else:
+                skipped.append(name)
+                continue
+        os.symlink(uman_path, link_path)
+        created.append(name)
+
+    if created:
+        tout.notice(f'Created symlinks: {" ".join(created)}')
+    if skipped:
+        tout.notice(f'Skipped (already exist): {" ".join(skipped)}')
+        if not args.force:
+            tout.notice('Use --force to overwrite')
+
+    tout.notice(f'Symlinks in {alias_dir} point to {uman_path}')
+    return 0
+
 
 # QEMU packages needed for testing
 QEMU_PACKAGES = {
@@ -328,6 +395,7 @@ def do_setup(args):
 
     # Dispatch table for component setup functions
     setup_funcs = {
+        'aliases': lambda: setup_aliases(args),
         'qemu': lambda: setup_qemu(args),
         'opensbi': lambda: setup_opensbi(blobs_dir, args),
         'tfa': lambda: setup_tfa(blobs_dir, args),

@@ -233,6 +233,9 @@ def add_setup_subparser(subparsers):
         'component', type=str, nargs='?', default=None,
         help="Component to build (e.g. 'opensbi'), or omit to build all")
     setup.add_argument(
+        '-d', '--alias-dir', metavar='DIR',
+        help='Directory for aliases symlinks (default: ~/bin)')
+    setup.add_argument(
         '-f', '--force', action='store_true',
         help='Force rebuild even if already built')
     setup.add_argument(
