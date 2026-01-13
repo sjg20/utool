@@ -262,12 +262,12 @@ def add_git_subparser(subparsers):
         help='Git rebase helpers')
     git.add_argument(
         'action',
-        choices=['et', 'gr', 'pm', 'ra', 'rb', 're', 'rf', 'rp', 'rn', 'rc',
-                 'rs', 'us'],
+        choices=['et', 'gr', 'pm', 'ra', 'rb', 'rd', 're', 'rf', 'rp', 'rn',
+                 'rc', 'rs', 'us'],
         help='Action: et=edit-todo, gr=rebase (editor), pm=patch-merge, '
-             'ra=abort, rb=rebase-beginning, re=amend, rf=rebase-first, '
-             'rp=rebase-patch, rn=rebase-next, rc=continue, rs=skip, '
-             'us=set-upstream')
+             'ra=abort, rb=rebase-beginning, rd=diff-next, re=amend, '
+             'rf=rebase-first, rp=rebase-patch, rn=rebase-next, '
+             'rc=continue, rs=skip, us=set-upstream')
     git.add_argument(
         'arg', nargs='?', type=int,
         help='Commit count (for gr/rf) or patch number (for rp/rn)')

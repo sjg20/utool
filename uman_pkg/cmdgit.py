@@ -542,12 +542,61 @@ def do_pm(args):
     return result.return_code
 
 
+def do_rd(args):
+    """Show diff against the nth next commit in the rebase
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Which commit to diff against (default 1 = next commit)
+
+    Returns:
+        int: Exit code from git diff
+    """
+    rebase_dir = get_rebase_dir()
+    if not rebase_dir:
+        tout.error('Not in the middle of a rebase')
+        return 1
+
+    todo_file = os.path.join(rebase_dir, 'git-rebase-todo')
+    if not os.path.exists(todo_file):
+        tout.error('Rebase todo file not found')
+        return 1
+
+    with open(todo_file, 'r', encoding='utf-8') as inf:
+        lines = inf.readlines()
+
+    # Find the nth non-comment, non-empty line
+    target = args.arg or 1
+    count = 0
+    commit_hash = None
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('#'):
+            count += 1
+            if count == target:
+                # Line format: "pick abc1234 commit message"
+                parts = line.split()
+                if len(parts) >= 2:
+                    commit_hash = parts[1]
+                break
+
+    if not commit_hash:
+        tout.error(f'No commit found at position {target}')
+        return 1
+
+    # Show diff against that commit
+    result = command.run_one('git', 'diff', commit_hash, capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
 ACTIONS = {
     'et': do_et,
     'gr': do_gr,
     'pm': do_pm,
     'ra': do_ra,
     'rb': do_rb,
+    'rd': do_rd,
     're': do_re,
     'rf': do_rf,
     'rp': do_rp,

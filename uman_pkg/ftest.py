@@ -757,8 +757,8 @@ class TestGitSubcommand(TestBase):
 
     def test_git_all_actions(self):
         """Test all git actions are valid"""
-        actions = ['et', 'gr', 'pm', 'ra', 'rb', 're', 'rf', 'rp', 'rn', 'rc',
-                   'rs', 'us']
+        actions = ['et', 'gr', 'pm', 'ra', 'rb', 'rd', 're', 'rf', 'rp', 'rn',
+                   'rc', 'rs', 'us']
         for action in actions:
             args = cmdline.parse_args(['git', action])
             self.assertEqual(action, args.action)
@@ -1114,6 +1114,61 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(1, result)
         self.assertEqual(
             'No patch file found in rebase directory\n', err.getvalue())
+
+    def test_do_rd(self):
+        """Test do_rd shows diff against next commit in rebase"""
+        args = cmdline.parse_args(['git', 'rd'])
+        todo_content = b'pick abc1234 First commit\npick def5678 Second commit\n'
+
+        with mock.patch.object(cmdgit, 'get_rebase_dir',
+                               return_value=self.test_dir):
+            todo_file = os.path.join(self.test_dir, 'git-rebase-todo')
+            tools.write_file(todo_file, todo_content)
+            with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+                mock_run.return_value = mock.Mock(return_code=0)
+                result = cmdgit.do_rd(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args
+        self.assertEqual(('git', 'diff', 'abc1234'), call_args[0])
+
+    def test_do_rd_with_arg(self):
+        """Test do_rd N shows diff against nth commit"""
+        args = cmdline.parse_args(['git', 'rd', '2'])
+        todo_content = b'pick abc1234 First commit\npick def5678 Second commit\n'
+
+        with mock.patch.object(cmdgit, 'get_rebase_dir',
+                               return_value=self.test_dir):
+            todo_file = os.path.join(self.test_dir, 'git-rebase-todo')
+            tools.write_file(todo_file, todo_content)
+            with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+                mock_run.return_value = mock.Mock(return_code=0)
+                result = cmdgit.do_rd(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args
+        self.assertEqual(('git', 'diff', 'def5678'), call_args[0])
+
+    def test_do_rd_not_rebasing(self):
+        """Test do_rd prints error when not rebasing"""
+        args = cmdline.parse_args(['git', 'rd'])
+        with mock.patch.object(cmdgit, 'get_rebase_dir', return_value=None):
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_rd(args)
+        self.assertEqual(1, result)
+        self.assertEqual('Not in the middle of a rebase\n', err.getvalue())
+
+    def test_do_rd_no_commit(self):
+        """Test do_rd prints error when commit not found"""
+        args = cmdline.parse_args(['git', 'rd', '5'])
+        todo_content = b'pick abc1234 First commit\n'
+
+        with mock.patch.object(cmdgit, 'get_rebase_dir',
+                               return_value=self.test_dir):
+            todo_file = os.path.join(self.test_dir, 'git-rebase-todo')
+            tools.write_file(todo_file, todo_content)
+            with terminal.capture() as (_, err):
+                result = cmdgit.do_rd(args)
+        self.assertEqual(1, result)
+        self.assertEqual('No commit found at position 5\n', err.getvalue())
 
     def test_do_rb(self):
         """Test do_rb rebases to upstream, stopping before first commit"""

@@ -154,6 +154,7 @@ making it easier to step through commits during development.
 - ``ra``: Abort the current rebase (stashes changes, shows recovery info)
 - ``rb``: Rebase from beginning - stops at first commit for editing
 - ``rf N``: Rebase last N commits, stopping at first for editing
+- ``rd [N]``: Show diff against the Nth next commit (default: 1)
 - ``rp N``: Rebase to upstream, stop at patch N for editing (0 = first)
 - ``rn [N]``: Continue rebase to next commit (see below for details)
 - ``rc``: Continue rebase (git rebase --continue)
@@ -190,6 +191,12 @@ The ``rn`` command behaves differently depending on context:
 
     # Skip 2 commits, set the 3rd to edit
     uman git rn 3
+
+    # Show diff against the next commit in the rebase
+    uman git rd
+
+    # Show diff against the 2nd next commit
+    uman git rd 2
 
     # Continue rebase (shortcut for git rebase --continue)
     uman git rc
