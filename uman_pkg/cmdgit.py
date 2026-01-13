@@ -584,12 +584,40 @@ def do_rd(args):
     return result.return_code
 
 
+def do_ol(args):
+    """Show oneline log of commits in current branch
+
+    Shows commits from upstream to HEAD in oneline format with decoration.
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Number of commits to show, or None for all from upstream
+
+    Returns:
+        int: Exit code from git log
+    """
+    if args.arg:
+        # Show last N commits
+        cmd = ['git', 'log', '--oneline', '--decorate', f'-{args.arg}']
+    else:
+        # Show commits from upstream to HEAD
+        upstream = get_upstream()
+        if not upstream:
+            tout.error('Cannot determine upstream branch')
+            return 1
+        cmd = ['git', 'log', '--oneline', '--decorate', f'{upstream}..']
+
+    result = command.run_one(*cmd, capture=False, raise_on_error=False)
+    return result.return_code
+
+
 # Git action definition: short name, long name, description, function
 GitAction = namedtuple('GitAction', ['short', 'long', 'name', 'func'])
 
 GIT_ACTIONS = [
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
+    GitAction('ol', 'oneline-log', 'Show oneline log of commits', do_ol),
     GitAction('pm', 'patch-merge', 'Apply patch from rebase-apply', do_pm),
     GitAction('ra', 'rebase-abort', 'Abort the current rebase', do_ra),
     GitAction('rb', 'rebase-beginning', 'Rebase from beginning', do_rb),

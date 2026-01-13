@@ -152,6 +152,7 @@ making it easier to step through commits during development.
 
 - ``et`` / ``edit-todo``: Edit the rebase todo list
 - ``gr`` / ``git-rebase`` [N]: Open interactive rebase editor (to upstream or HEAD~N)
+- ``ol`` / ``oneline-log`` [N]: Show oneline log (from upstream, or last N commits)
 - ``pm`` / ``patch-merge``: Apply patch from rebase-apply directory
 - ``ra`` / ``rebase-abort``: Abort the current rebase (stashes changes, shows recovery info)
 - ``rb`` / ``rebase-beginning``: Rebase from beginning - stops at first commit for editing
@@ -177,6 +178,12 @@ The ``rn`` command behaves differently depending on context:
 
     # Rebase last 5 commits interactively (opens editor)
     uman git gr 5
+
+    # Show commits in current branch (from upstream to HEAD)
+    uman git ol
+
+    # Show last 10 commits
+    uman git ol 10
 
     # Rebase to upstream, stop at first commit for editing
     uman git rb

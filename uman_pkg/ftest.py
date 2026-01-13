@@ -775,8 +775,8 @@ class TestGitSubcommand(TestBase):
 
     def test_git_all_actions(self):
         """Test all git actions are valid"""
-        actions = ['et', 'gr', 'pm', 'ra', 'rb', 'rd', 're', 'rf', 'rp', 'rn',
-                   'rc', 'rs', 'us']
+        actions = ['et', 'gr', 'ol', 'pm', 'ra', 'rb', 'rd', 're', 'rf', 'rp',
+                   'rn', 'rc', 'rs', 'us']
         for action in actions:
             args = cmdline.parse_args(['git', action])
             self.assertEqual(action, args.action)
@@ -786,6 +786,7 @@ class TestGitSubcommand(TestBase):
         full_names = {
             'edit-todo': 'et',
             'git-rebase': 'gr',
+            'oneline-log': 'ol',
             'patch-merge': 'pm',
             'rebase-abort': 'ra',
             'rebase-beginning': 'rb',
@@ -1102,6 +1103,31 @@ class TestGitSubcommand(TestBase):
             ('branch', '--set-upstream-to', 'm/master', 'my-branch'), cap[0])
         self.assertEqual(
             'Set upstream of my-branch to m/master\n', out.getvalue())
+
+    def test_do_ol(self):
+        """Test do_ol shows oneline log"""
+        args = cmdline.parse_args(['git', 'ol'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            with mock.patch.object(cmdgit, 'get_upstream',
+                                   return_value='origin/main'):
+                result = cmdgit.do_ol(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(
+            ('git', 'log', '--oneline', '--decorate', 'origin/main..'),
+            call_args)
+
+    def test_do_ol_with_count(self):
+        """Test do_ol N shows last N commits"""
+        args = cmdline.parse_args(['git', 'ol', '5'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_ol(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(
+            ('git', 'log', '--oneline', '--decorate', '-5'), call_args)
 
     def test_do_pm(self):
         """Test do_pm applies patch from rebase directory"""

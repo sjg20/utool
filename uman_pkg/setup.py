@@ -29,8 +29,8 @@ SETUP_COMPONENTS = {
 }
 
 # Git action names for symlink creation (short names only, to avoid clutter)
-GIT_ALIASES = ['et', 'gr', 'pm', 'ra', 'rb', 'rc', 'rd', 're', 'rf', 'rn', 'rp',
-               'rs', 'us']
+GIT_ALIASES = ['et', 'gr', 'ol', 'pm', 'ra', 'rb', 'rc', 'rd', 're', 'rf', 'rn',
+               'rp', 'rs', 'us']
 
 def setup_aliases(args):
     """Create symlinks for git action commands
