@@ -781,6 +781,25 @@ def do_gci(args):
     return search_log(args.arg, 'ci/master')
 
 
+def do_eg(args):
+    """Search errno.h for error codes
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Pattern to search for
+
+    Returns:
+        int: Exit code
+    """
+    if not args.arg:
+        tout.error('Pattern required: um git eg <pattern>')
+        return 1
+
+    result = command.run_one('grep', args.arg, 'include/linux/errno.h',
+                             capture=False, raise_on_error=False)
+    return result.return_code
+
+
 def do_sd(args):
     """Show a commit using difftool
 
@@ -1013,6 +1032,7 @@ GIT_ACTIONS = [
     GitAction('co', 'checkout', 'Checkout (switch branches/restore)', do_co),
     GitAction('db', 'diff-branch', 'Diff commit files against upstream', do_db),
     GitAction('dh', 'diff-head', 'Show diff of top commit', do_dh),
+    GitAction('eg', 'errno-grep', 'Search errno.h for error codes', do_eg),
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('g', 'status', 'Show short status', do_g),
     GitAction('fci', 'find-ci', 'Check commits against ci/master', do_fci),

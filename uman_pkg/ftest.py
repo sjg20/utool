@@ -1275,6 +1275,25 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(1, result)
         self.assertIn('Pattern required', err.getvalue())
 
+    def test_do_eg(self):
+        """Test do_eg greps errno.h"""
+        args = cmdline.parse_args(['git', 'eg', 'ENOENT'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_eg(args)
+        self.assertEqual(0, result)
+        mock_run.assert_called_with(
+            'grep', 'ENOENT', 'include/linux/errno.h',
+            capture=False, raise_on_error=False)
+
+    def test_do_eg_no_pattern(self):
+        """Test do_eg requires pattern"""
+        args = cmdline.parse_args(['git', 'eg'])
+        with terminal.capture() as (_, err):
+            result = cmdgit.do_eg(args)
+        self.assertEqual(1, result)
+        self.assertIn('Pattern required', err.getvalue())
+
     def test_do_cs(self):
         """Test do_cs runs git show"""
         args = cmdline.parse_args(['git', 'cs'])
