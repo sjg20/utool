@@ -1264,6 +1264,26 @@ class TestGitSubcommand(TestBase):
         call_args = mock_run.call_args[0]
         self.assertEqual(('git', 'status', '-sb'), call_args)
 
+    def test_do_db(self):
+        """Test do_db diffs commit files against upstream"""
+        args = cmdline.parse_args(['git', 'db'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.side_effect = [
+                '1\t0\tfile1.c\n2\t1\tfile2.h',  # numstat output
+            ]
+            with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+                mock_run.return_value = mock.Mock(return_code=0)
+                with mock.patch.object(cmdgit, 'get_upstream',
+                                       return_value='origin/main'):
+                    with terminal.capture():
+                        result = cmdgit.do_db(args)
+        self.assertEqual(0, result)
+        # Check difftool was called with the files
+        call_args = mock_run.call_args[0]
+        self.assertEqual(
+            ('git', 'difftool', 'origin/main', '--', 'file1.c', 'file2.h'),
+            call_args)
+
     def test_do_dh(self):
         """Test do_dh runs git difftool HEAD~"""
         args = cmdline.parse_args(['git', 'dh'])

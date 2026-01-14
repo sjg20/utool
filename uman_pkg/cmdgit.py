@@ -715,6 +715,57 @@ def do_fci(args):
     return grep_branch(branch, count, 'ci/master')
 
 
+def do_db(_args):
+    """Diff current commit against a branch
+
+    Shows the changes in this commit, then runs difftool against a branch
+    for only the files changed in this commit.
+
+    Returns:
+        int: Exit code
+    """
+    # Get files changed in current commit
+    try:
+        numstat = git_output('log', '--numstat', '--pretty=format:', '-n1')
+    except command.CommandExc as exc:
+        tout.error(f'Cannot get commit changes: {exc}')
+        return 1
+
+    files = []
+    for line in numstat.splitlines():
+        if line.strip():
+            parts = line.split()
+            if len(parts) >= 3:
+                files.append(parts[2])
+
+    if not files:
+        tout.error('No files changed in current commit')
+        return 1
+
+    # Show current commit summary
+    print('Changes in this commit:')
+    print()
+    result = command.run_one('git', 'log', '--stat', '--oneline', '-n1',
+                             capture=False, raise_on_error=False)
+    if result.return_code:
+        return result.return_code
+
+    print()
+    print('Performing diff against branch for changed files only')
+    print(' '.join(files))
+
+    # Get target branch
+    upstream = get_upstream()
+    if not upstream:
+        tout.error('Cannot determine upstream branch')
+        return 1
+
+    # Run difftool for those files
+    result = command.run_one('git', 'difftool', upstream, '--', *files,
+                             capture=False, raise_on_error=False)
+    return result.return_code
+
+
 def do_am(_args):
     """Amend the current commit
 
@@ -878,6 +929,7 @@ GIT_ACTIONS = [
     GitAction('ams', 'amend-signoff', 'Amend with signoff', do_ams),
     GitAction('au', 'add-update', 'Add changed files to staging', do_au),
     GitAction('co', 'checkout', 'Checkout (switch branches/restore)', do_co),
+    GitAction('db', 'diff-branch', 'Diff commit files against upstream', do_db),
     GitAction('dh', 'diff-head', 'Show diff of top commit', do_dh),
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('g', 'status', 'Show short status', do_g),

@@ -154,6 +154,7 @@ making it easier to step through commits during development.
 - ``ams`` / ``amend-signoff``: Amend the current commit with signoff
 - ``au`` / ``add-update``: Add all changed files to staging (git add -u)
 - ``co`` / ``checkout``: Checkout (switch branches or restore files)
+- ``db`` / ``diff-branch``: Diff current commit files against upstream
 - ``dh`` / ``diff-head``: Show diff of top commit using difftool (git difftool HEAD~)
 - ``et`` / ``edit-todo``: Edit the rebase todo list
 - ``fci`` / ``find-ci`` [N]: Check if commits are in ci/master (default 20)
