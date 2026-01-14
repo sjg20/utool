@@ -644,6 +644,61 @@ def do_au(_args):
     return result.return_code
 
 
+def do_gd(_args):
+    """Show changes using difftool
+
+    Returns:
+        int: Exit code from git difftool
+    """
+    result = command.run_one('git', 'difftool', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_gdc(_args):
+    """Show staged changes using difftool
+
+    Returns:
+        int: Exit code from git difftool --cached
+    """
+    result = command.run_one('git', 'difftool', '--cached', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_cs(_args):
+    """Show the current commit
+
+    Returns:
+        int: Exit code from git show
+    """
+    result = command.run_one('git', 'show', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_sc(_args):
+    """Show the current commit with stats
+
+    Returns:
+        int: Exit code from git show --stat
+    """
+    result = command.run_one('git', 'show', '--stat', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_g(_args):
+    """Show short status
+
+    Returns:
+        int: Exit code from git status -sb
+    """
+    result = command.run_one('git', 'status', '-sb', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
 # Git action definition: short name, long name, description, function
 GitAction = namedtuple('GitAction', ['short', 'long', 'name', 'func'])
 
@@ -652,7 +707,11 @@ GIT_ACTIONS = [
     GitAction('ams', 'amend-signoff', 'Amend with signoff', do_ams),
     GitAction('au', 'add-update', 'Add changed files to staging', do_au),
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
+    GitAction('g', 'status', 'Show short status', do_g),
+    GitAction('gd', 'difftool', 'Show changes using difftool', do_gd),
+    GitAction('gdc', 'difftool-cached', 'Show staged changes', do_gdc),
     GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
+    GitAction('cs', 'commit-show', 'Show the current commit', do_cs),
     GitAction('ol', 'oneline-log', 'Show oneline log of commits', do_ol),
     GitAction('pm', 'patch-merge', 'Apply patch from rebase-apply', do_pm),
     GitAction('ra', 'rebase-abort', 'Abort the current rebase', do_ra),
@@ -664,6 +723,7 @@ GIT_ACTIONS = [
     GitAction('rn', 'rebase-next', 'Continue rebase, edit next commit', do_rn),
     GitAction('rp', 'rebase-patch', 'Stop at patch N for editing', do_rp),
     GitAction('rs', 'rebase-skip', 'Skip current commit in rebase', do_rs),
+    GitAction('sc', 'show-commit', 'Show commit with stats', do_sc),
     GitAction('us', 'set-upstream', 'Set upstream branch', do_us),
 ]
 

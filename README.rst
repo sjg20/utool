@@ -154,7 +154,11 @@ making it easier to step through commits during development.
 - ``ams`` / ``amend-signoff``: Amend the current commit with signoff
 - ``au`` / ``add-update``: Add all changed files to staging (git add -u)
 - ``et`` / ``edit-todo``: Edit the rebase todo list
+- ``g`` / ``status``: Show short status (git status -sb) [1]_
+- ``gd`` / ``difftool``: Show changes using difftool
+- ``gdc`` / ``difftool-cached``: Show staged changes using difftool
 - ``gr`` / ``git-rebase`` [N]: Open interactive rebase editor (to upstream or HEAD~N)
+- ``cs`` / ``commit-show``: Show the current commit
 - ``ol`` / ``oneline-log`` [N]: Show oneline log (from upstream, or last N commits)
 - ``pm`` / ``patch-merge``: Apply patch from rebase-apply directory
 - ``ra`` / ``rebase-abort``: Abort the current rebase (stashes changes, shows recovery info)
@@ -166,7 +170,11 @@ making it easier to step through commits during development.
 - ``rn`` / ``rebase-next`` [N]: Continue rebase to next commit (see below for details)
 - ``rp`` / ``rebase-patch`` N: Rebase to upstream, stop at patch N for editing (0 = first)
 - ``rs`` / ``rebase-skip``: Skip current commit (git rebase --skip)
+- ``sc`` / ``show-commit``: Show the current commit with stats
 - ``us`` / ``set-upstream``: Set upstream branch to m/master
+
+.. [1] Note: ``g`` is also an alias for the ``git`` subcommand, so ``um g``
+   means ``um git``. To run the status action, use ``um git g`` or ``um g g``.
 
 The ``rn`` command behaves differently depending on context:
 
