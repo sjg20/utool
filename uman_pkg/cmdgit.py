@@ -611,10 +611,46 @@ def do_ol(args):
     return result.return_code
 
 
+def do_am(_args):
+    """Amend the current commit
+
+    Returns:
+        int: Exit code from git commit --amend
+    """
+    result = command.run_one('git', 'commit', '--amend', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_ams(_args):
+    """Amend the current commit with signoff
+
+    Returns:
+        int: Exit code from git commit --amend --signoff
+    """
+    result = command.run_one('git', 'commit', '--amend', '--signoff',
+                             capture=False, raise_on_error=False)
+    return result.return_code
+
+
+def do_au(_args):
+    """Add all changed files to staging
+
+    Returns:
+        int: Exit code from git add -u
+    """
+    result = command.run_one('git', 'add', '-u', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
 # Git action definition: short name, long name, description, function
 GitAction = namedtuple('GitAction', ['short', 'long', 'name', 'func'])
 
 GIT_ACTIONS = [
+    GitAction('am', 'amend', 'Amend the current commit', do_am),
+    GitAction('ams', 'amend-signoff', 'Amend with signoff', do_ams),
+    GitAction('au', 'add-update', 'Add changed files to staging', do_au),
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
     GitAction('ol', 'oneline-log', 'Show oneline log of commits', do_ol),

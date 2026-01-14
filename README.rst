@@ -150,6 +150,9 @@ making it easier to step through commits during development.
 
 **Actions** (short name / full name):
 
+- ``am`` / ``amend``: Amend the current commit (git commit --amend)
+- ``ams`` / ``amend-signoff``: Amend the current commit with signoff
+- ``au`` / ``add-update``: Add all changed files to staging (git add -u)
 - ``et`` / ``edit-todo``: Edit the rebase todo list
 - ``gr`` / ``git-rebase`` [N]: Open interactive rebase editor (to upstream or HEAD~N)
 - ``ol`` / ``oneline-log`` [N]: Show oneline log (from upstream, or last N commits)

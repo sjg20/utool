@@ -1129,6 +1129,36 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(
             ('git', 'log', '--oneline', '--decorate', '-5'), call_args)
 
+    def test_do_am(self):
+        """Test do_am runs git commit --amend"""
+        args = cmdline.parse_args(['git', 'am'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_am(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'commit', '--amend'), call_args)
+
+    def test_do_ams(self):
+        """Test do_ams runs git commit --amend --signoff"""
+        args = cmdline.parse_args(['git', 'ams'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_ams(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'commit', '--amend', '--signoff'), call_args)
+
+    def test_do_au(self):
+        """Test do_au runs git add -u"""
+        args = cmdline.parse_args(['git', 'au'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_au(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'add', '-u'), call_args)
+
     def test_do_pm(self):
         """Test do_pm applies patch from rebase directory"""
         args = cmdline.parse_args(['git', 'pm'])
