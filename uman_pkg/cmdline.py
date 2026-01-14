@@ -302,8 +302,8 @@ def add_git_subparser(subparsers):
         metavar='ACTION',
         help=f"Action: {', '.join(help_parts)}")
     git.add_argument(
-        'arg', nargs='?', type=int,
-        help='Commit count (for gr/rf) or patch number (for rp/rn)')
+        'arg', nargs='?',
+        help='Commit count (for gr/rf), patch number (for rp/rn), or ref (for sd)')
     return git
 
 

@@ -178,6 +178,7 @@ making it easier to step through commits during development.
 - ``rp`` / ``rebase-patch`` N: Rebase to upstream, stop at patch N for editing (0 = first)
 - ``rs`` / ``rebase-skip``: Skip current commit (git rebase --skip)
 - ``sc`` / ``show-commit``: Show the current commit with stats
+- ``sd`` / ``show-diff`` [REF]: Show a commit using difftool (default HEAD)
 - ``sl`` / ``stat-log`` [N]: Show log with stats (from upstream, or last N commits)
 - ``st`` / ``stash``: Stash changes (git stash)
 - ``us`` / ``set-upstream``: Set upstream branch to m/master

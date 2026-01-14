@@ -231,10 +231,11 @@ def do_rp(args):
         tout.error('Cannot determine upstream branch')
         return 1
 
-    if args.arg == 0:
+    patch_num = int(args.arg)
+    if patch_num == 0:
         env = seq_edit_env('break')
     else:
-        env = seq_edit_env('edit', args.arg)
+        env = seq_edit_env('edit', patch_num)
 
     result = git('rebase', '-i', target, env=env, dry_run=args.dry_run)
     if result is None:
@@ -338,7 +339,7 @@ def do_rn(args):
         lines = inf.readlines()
 
     # Find non-comment lines
-    skip_count = args.arg or 1
+    skip_count = int(args.arg) if args.arg else 1
     non_comment_indices = []
     for i, line in enumerate(lines):
         if line.strip() and not line.startswith('#'):
@@ -560,7 +561,7 @@ def do_rd(args):
         lines = inf.readlines()
 
     # Find the nth non-comment, non-empty line
-    target = args.arg or 1
+    target = int(args.arg) if args.arg else 1
     count = 0
     commit_hash = None
     for line in lines:
@@ -713,6 +714,22 @@ def do_fci(args):
         tout.error('Cannot determine current branch')
         return 1
     return grep_branch(branch, count, 'ci/master')
+
+
+def do_sd(args):
+    """Show a commit using difftool
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Commit reference (default HEAD)
+
+    Returns:
+        int: Exit code
+    """
+    commit = args.arg or 'HEAD'
+    result = command.run_one('git', 'difftool', f'{commit}~..{commit}',
+                             capture=False, raise_on_error=False)
+    return result.return_code
 
 
 def do_db(_args):
@@ -953,6 +970,7 @@ GIT_ACTIONS = [
     GitAction('rp', 'rebase-patch', 'Stop at patch N for editing', do_rp),
     GitAction('rs', 'rebase-skip', 'Skip current commit in rebase', do_rs),
     GitAction('sc', 'show-commit', 'Show commit with stats', do_sc),
+    GitAction('sd', 'show-diff', 'Show a commit using difftool', do_sd),
     GitAction('sl', 'stat-log', 'Show log with stats from upstream', do_sl),
     GitAction('st', 'stash', 'Stash changes', do_st),
     GitAction('us', 'set-upstream', 'Set upstream branch', do_us),

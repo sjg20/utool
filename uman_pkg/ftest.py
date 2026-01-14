@@ -743,11 +743,11 @@ class TestGitSubcommand(TestBase):
         self.assertIsNone(args.arg)
 
     def test_git_subcommand_with_arg(self):
-        """Test git subcommand with numeric argument"""
+        """Test git subcommand with argument"""
         args = cmdline.parse_args(['git', 'rf', '3'])
         self.assertEqual('git', args.cmd)
         self.assertEqual('rf', args.action)
-        self.assertEqual(3, args.arg)
+        self.assertEqual('3', args.arg)
 
     def test_git_alias(self):
         """Test 'g' alias for git"""
@@ -761,7 +761,7 @@ class TestGitSubcommand(TestBase):
         args = cmdline.parse_args(['3'], prog_name='/usr/local/bin/rf')
         self.assertEqual('git', args.cmd)
         self.assertEqual('rf', args.action)
-        self.assertEqual(3, args.arg)
+        self.assertEqual('3', args.arg)
 
         # Simulate invoking as 'rebase-diff' symlink
         args = cmdline.parse_args([], prog_name='rebase-diff')
@@ -1325,6 +1325,26 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(0, result)
         call_args = mock_run.call_args[0]
         self.assertEqual(('git', 'checkout'), call_args)
+
+    def test_do_sd(self):
+        """Test do_sd shows commit using difftool"""
+        args = cmdline.parse_args(['git', 'sd'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_sd(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'difftool', 'HEAD~..HEAD'), call_args)
+
+    def test_do_sd_with_ref(self):
+        """Test do_sd with specific commit reference"""
+        args = cmdline.parse_args(['git', 'sd', 'abc123'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_sd(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'difftool', 'abc123~..abc123'), call_args)
 
     def test_do_st(self):
         """Test do_st runs git stash"""
