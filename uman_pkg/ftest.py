@@ -1234,6 +1234,47 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(0, result)
         self.assertIn('Not found: CI commit', out.getvalue())
 
+    def test_do_gm(self):
+        """Test do_gm searches us/master log"""
+        args = cmdline.parse_args(['git', 'gm', 'pattern'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.return_value = 'abc123 Found pattern here\ndef456 Other'
+            with terminal.capture() as (out, _):
+                result = cmdgit.do_gm(args)
+        self.assertEqual(0, result)
+        self.assertEqual('abc123 Found pattern here\n', out.getvalue())
+        mock_git.assert_called_with('log', '--oneline', 'us/master')
+
+    def test_do_gn(self):
+        """Test do_gn searches us/next log"""
+        args = cmdline.parse_args(['git', 'gn', 'test'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.return_value = 'abc123 Test commit\ndef456 Other'
+            with terminal.capture() as (out, _):
+                result = cmdgit.do_gn(args)
+        self.assertEqual(0, result)
+        self.assertEqual('abc123 Test commit\n', out.getvalue())
+        mock_git.assert_called_with('log', '--oneline', 'us/next')
+
+    def test_do_gci(self):
+        """Test do_gci searches ci/master log"""
+        args = cmdline.parse_args(['git', 'gci', 'fix'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.return_value = 'abc123 Fix bug\ndef456 Other'
+            with terminal.capture() as (out, _):
+                result = cmdgit.do_gci(args)
+        self.assertEqual(0, result)
+        self.assertEqual('abc123 Fix bug\n', out.getvalue())
+        mock_git.assert_called_with('log', '--oneline', 'ci/master')
+
+    def test_do_gm_no_pattern(self):
+        """Test do_gm requires pattern"""
+        args = cmdline.parse_args(['git', 'gm'])
+        with terminal.capture() as (_, err):
+            result = cmdgit.do_gm(args)
+        self.assertEqual(1, result)
+        self.assertIn('Pattern required', err.getvalue())
+
     def test_do_cs(self):
         """Test do_cs runs git show"""
         args = cmdline.parse_args(['git', 'cs'])

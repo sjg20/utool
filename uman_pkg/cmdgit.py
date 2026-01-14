@@ -716,6 +716,71 @@ def do_fci(args):
     return grep_branch(branch, count, 'ci/master')
 
 
+def search_log(pattern, upstream):
+    """Search upstream log for a pattern
+
+    Args:
+        pattern (str): Pattern to search for
+        upstream (str): Branch to search (e.g. 'us/master')
+
+    Returns:
+        int: Exit code
+    """
+    if not pattern:
+        tout.error('Pattern required: um git gm <pattern>')
+        return 1
+
+    try:
+        log = git_output('log', '--oneline', upstream)
+    except command.CommandExc as exc:
+        tout.error(f'Cannot get log for {upstream}: {exc}')
+        return 1
+
+    for line in log.splitlines():
+        if pattern.lower() in line.lower():
+            print(line)
+    return 0
+
+
+def do_gm(args):
+    """Search us/master log for a pattern
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Pattern to search for
+
+    Returns:
+        int: Exit code
+    """
+    return search_log(args.arg, 'us/master')
+
+
+def do_gn(args):
+    """Search us/next log for a pattern
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Pattern to search for
+
+    Returns:
+        int: Exit code
+    """
+    return search_log(args.arg, 'us/next')
+
+
+def do_gci(args):
+    """Search ci/master log for a pattern
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Pattern to search for
+
+    Returns:
+        int: Exit code
+    """
+    return search_log(args.arg, 'ci/master')
+
+
 def do_sd(args):
     """Show a commit using difftool
 
@@ -950,11 +1015,14 @@ GIT_ACTIONS = [
     GitAction('dh', 'diff-head', 'Show diff of top commit', do_dh),
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('g', 'status', 'Show short status', do_g),
-    GitAction('gd', 'difftool', 'Show changes using difftool', do_gd),
     GitAction('fci', 'find-ci', 'Check commits against ci/master', do_fci),
     GitAction('fm', 'find-master', 'Check commits against us/master', do_fm),
     GitAction('fn', 'find-next', 'Check commits against us/next', do_fn),
+    GitAction('gci', 'grep-ci', 'Search ci/master log for pattern', do_gci),
+    GitAction('gd', 'difftool', 'Show changes using difftool', do_gd),
     GitAction('gdc', 'difftool-cached', 'Show staged changes', do_gdc),
+    GitAction('gm', 'grep-master', 'Search us/master log for pattern', do_gm),
+    GitAction('gn', 'grep-next', 'Search us/next log for pattern', do_gn),
     GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
     GitAction('cs', 'commit-show', 'Show the current commit', do_cs),
     GitAction('ol', 'oneline-log', 'Show oneline log of commits', do_ol),

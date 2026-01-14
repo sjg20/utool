@@ -161,8 +161,11 @@ making it easier to step through commits during development.
 - ``fm`` / ``find-master`` [N]: Check if commits are in us/master (default 5)
 - ``fn`` / ``find-next`` [N]: Check if commits are in us/next (default 20)
 - ``g`` / ``status``: Show short status (git status -sb) [1]_
+- ``gci`` / ``grep-ci`` PATTERN: Search ci/master log for pattern
 - ``gd`` / ``difftool``: Show changes using difftool
 - ``gdc`` / ``difftool-cached``: Show staged changes using difftool
+- ``gm`` / ``grep-master`` PATTERN: Search us/master log for pattern
+- ``gn`` / ``grep-next`` PATTERN: Search us/next log for pattern
 - ``gr`` / ``git-rebase`` [N]: Open interactive rebase editor (to upstream or HEAD~N)
 - ``cs`` / ``commit-show``: Show the current commit
 - ``ol`` / ``oneline-log`` [N]: Show oneline log (from upstream, or last N commits)
