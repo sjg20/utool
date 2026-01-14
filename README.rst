@@ -509,14 +509,19 @@ modifying U-Boot configuration::
     # Resync defconfig from current .config
     uman config -B sandbox -s
 
+    # Compare defconfig with meld (review changes before saving)
+    uman config -B sandbox -m
+
 The sync option runs ``make <board>_defconfig``, then ``make savedefconfig``,
 shows a colored diff of changes, and copies the result back to
-``configs/<board>_defconfig``.
+``configs/<board>_defconfig``. The meld option does the same but opens meld
+for interactive comparison instead of copying.
 
 **Options**:
 
 - ``-B, --board BOARD``: Board name (required; or set ``$b``)
 - ``-g, --grep PATTERN``: Grep .config for PATTERN (regex, case-insensitive)
+- ``-m, --meld``: Compare defconfig with meld
 - ``-s, --sync``: Resync defconfig from .config
 - ``--build-dir DIR``: Override build directory
 

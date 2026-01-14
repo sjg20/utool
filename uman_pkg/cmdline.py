@@ -319,6 +319,9 @@ def add_config_subparser(subparsers):
         '-g', '--grep', metavar='PATTERN',
         help='Grep .config for PATTERN (regex, case-insensitive)')
     cfg.add_argument(
+        '-m', '--meld', action='store_true',
+        help='Compare defconfig with meld (build cfg, savedefconfig, meld)')
+    cfg.add_argument(
         '-s', '--sync', action='store_true',
         help='Resync defconfig from .config (build cfg, savedefconfig, copy)')
     cfg.add_argument(

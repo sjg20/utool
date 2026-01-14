@@ -727,6 +727,45 @@ CONFIG_DM_TEST=y
         self.assertIn('make', cap[1])
         self.assertIn('savedefconfig', cap[1])
 
+    def test_config_meld_flag(self):
+        """Test -m/--meld flag parsing"""
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-m'])
+        self.assertEqual('config', args.cmd)
+        self.assertTrue(args.meld)
+
+    def test_config_meld_runs_meld(self):
+        """Test config meld opens meld after savedefconfig"""
+        cap = []
+
+        def mock_exec_cmd(cmd, dry_run=False, env=None, capture=True):
+            del dry_run, env, capture
+            cap.append(cmd)
+            return command.CommandResult(return_code=0)
+
+        args = cmdline.parse_args(['config', '-B', 'sandbox', '-m',
+                                   '--build-dir', self.build_dir])
+        # Create defconfig in build dir
+        with open(os.path.join(self.build_dir, 'defconfig'), 'w',
+                  encoding='utf-8') as outf:
+            outf.write('CONFIG_SANDBOX=y\n')
+        # Create configs dir for destination
+        os.makedirs(os.path.join(self.test_dir, 'configs'))
+
+        with mock.patch.object(cmdconfig, 'exec_cmd', mock_exec_cmd):
+            with mock.patch.object(cmdconfig, 'get_uboot_dir',
+                                   return_value=self.test_dir):
+                with terminal.capture():
+                    ret = cmdconfig.do_sync(args, use_meld=True)
+
+        self.assertEqual(0, ret)
+        # Should have called make twice then meld
+        self.assertEqual(3, len(cap))
+        self.assertIn('make', cap[0])
+        self.assertIn('sandbox_defconfig', cap[0])
+        self.assertIn('make', cap[1])
+        self.assertIn('savedefconfig', cap[1])
+        self.assertEqual('meld', cap[2][0])
+
 
 class TestGitSubcommand(TestBase):
     """Test git subcommand functionality"""

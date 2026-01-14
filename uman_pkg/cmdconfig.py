@@ -71,14 +71,15 @@ def do_grep(args):
     return 0
 
 
-def do_sync(args):
+def do_sync(args, use_meld=False):
     """Resync the defconfig from current .config
 
-    Builds with 'cfg' target, runs savedefconfig, and copies back to
-    configs/<board>_defconfig.
+    Builds with 'cfg' target, runs savedefconfig, and either copies back to
+    configs/<board>_defconfig or opens meld for comparison.
 
     Args:
         args (argparse.Namespace): Arguments from cmdline
+        use_meld (bool): If True, open meld instead of copying
 
     Returns:
         int: Exit code (0 for success, non-zero for failure)
@@ -116,8 +117,16 @@ def do_sync(args):
             tout.error('savedefconfig failed')
             return result.return_code
 
-        # Step 3: Show diff and copy defconfig back
+        # Step 3: Show diff/meld or copy defconfig back
         src = os.path.join(build_dir, 'defconfig')
+
+        if use_meld:
+            # Open meld to compare
+            tout.info(f'Opening meld: {defconfig_path} vs {src}')
+            cmd = ['meld', defconfig_path, src]
+            result = exec_cmd(cmd, args.dry_run, capture=False)
+            return result.return_code if result else 0
+
         if not args.dry_run and os.path.exists(defconfig_path):
             # Show diff between old and new
             diff_cmd = ['diff', '-u', '--color=always', defconfig_path, src]
@@ -150,8 +159,11 @@ def run(args):
     if args.grep:
         return do_grep(args)
 
+    if args.meld:
+        return do_sync(args, use_meld=True)
+
     if args.sync:
         return do_sync(args)
 
-    tout.error('No action specified (use -g PATTERN or -s)')
+    tout.error('No action specified (use -g PATTERN, -m, or -s)')
     return 1
