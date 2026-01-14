@@ -1294,6 +1294,26 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(1, result)
         self.assertIn('Pattern required', err.getvalue())
 
+    def test_do_gb(self):
+        """Test do_gb lists branches"""
+        args = cmdline.parse_args(['git', 'gb'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_gb(args)
+        self.assertEqual(0, result)
+        mock_run.assert_called_with(
+            'git', 'branch', capture=False, raise_on_error=False)
+
+    def test_do_gba(self):
+        """Test do_gba lists all branches"""
+        args = cmdline.parse_args(['git', 'gba'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_gba(args)
+        self.assertEqual(0, result)
+        mock_run.assert_called_with(
+            'git', 'branch', '-a', capture=False, raise_on_error=False)
+
     def test_do_cs(self):
         """Test do_cs runs git show"""
         args = cmdline.parse_args(['git', 'cs'])

@@ -900,6 +900,28 @@ def do_au(_args):
     return result.return_code
 
 
+def do_gb(_args):
+    """List branches
+
+    Returns:
+        int: Exit code from git branch
+    """
+    result = command.run_one('git', 'branch', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_gba(_args):
+    """List all branches including remotes
+
+    Returns:
+        int: Exit code from git branch -a
+    """
+    result = command.run_one('git', 'branch', '-a', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
 def do_gd(_args):
     """Show changes using difftool
 
@@ -1038,6 +1060,8 @@ GIT_ACTIONS = [
     GitAction('fci', 'find-ci', 'Check commits against ci/master', do_fci),
     GitAction('fm', 'find-master', 'Check commits against us/master', do_fm),
     GitAction('fn', 'find-next', 'Check commits against us/next', do_fn),
+    GitAction('gb', 'branch', 'List branches', do_gb),
+    GitAction('gba', 'branch-all', 'List all branches including remotes', do_gba),
     GitAction('gci', 'grep-ci', 'Search ci/master log for pattern', do_gci),
     GitAction('gd', 'difftool', 'Show changes using difftool', do_gd),
     GitAction('gdc', 'difftool-cached', 'Show staged changes', do_gdc),

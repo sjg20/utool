@@ -162,6 +162,8 @@ making it easier to step through commits during development.
 - ``fm`` / ``find-master`` [N]: Check if commits are in us/master (default 5)
 - ``fn`` / ``find-next`` [N]: Check if commits are in us/next (default 20)
 - ``g`` / ``status``: Show short status (git status -sb) [1]_
+- ``gb`` / ``branch``: List branches (git branch)
+- ``gba`` / ``branch-all``: List all branches including remotes (git branch -a)
 - ``gci`` / ``grep-ci`` PATTERN: Search ci/master log for pattern
 - ``gd`` / ``difftool``: Show changes using difftool
 - ``gdc`` / ``difftool-cached``: Show staged changes using difftool
