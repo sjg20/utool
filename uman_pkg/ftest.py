@@ -1129,6 +1129,17 @@ class TestGitSubcommand(TestBase):
         self.assertEqual(
             ('git', 'log', '--oneline', '--decorate', '-5'), call_args)
 
+    def test_do_pe(self):
+        """Test do_pe shows last 10 commits"""
+        args = cmdline.parse_args(['git', 'pe'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_pe(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(
+            ('git', 'log', '--oneline', '-n10', '--decorate'), call_args)
+
     def test_do_am(self):
         """Test do_am runs git commit --amend"""
         args = cmdline.parse_args(['git', 'am'])

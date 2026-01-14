@@ -611,6 +611,17 @@ def do_ol(args):
     return result.return_code
 
 
+def do_pe(_args):
+    """Show last 10 commits in oneline format
+
+    Returns:
+        int: Exit code from git log
+    """
+    result = command.run_one('git', 'log', '--oneline', '-n10', '--decorate',
+                             capture=False, raise_on_error=False)
+    return result.return_code
+
+
 def do_am(_args):
     """Amend the current commit
 
@@ -782,6 +793,7 @@ GIT_ACTIONS = [
     GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
     GitAction('cs', 'commit-show', 'Show the current commit', do_cs),
     GitAction('ol', 'oneline-log', 'Show oneline log of commits', do_ol),
+    GitAction('pe', 'peek', 'Show last 10 commits', do_pe),
     GitAction('pm', 'patch-merge', 'Apply patch from rebase-apply', do_pm),
     GitAction('ra', 'rebase-abort', 'Abort the current rebase', do_ra),
     GitAction('rb', 'rebase-beginning', 'Rebase from beginning', do_rb),

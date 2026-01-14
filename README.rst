@@ -162,6 +162,7 @@ making it easier to step through commits during development.
 - ``gr`` / ``git-rebase`` [N]: Open interactive rebase editor (to upstream or HEAD~N)
 - ``cs`` / ``commit-show``: Show the current commit
 - ``ol`` / ``oneline-log`` [N]: Show oneline log (from upstream, or last N commits)
+- ``pe`` / ``peek``: Show last 10 commits (git log --oneline -n10 --decorate)
 - ``pm`` / ``patch-merge``: Apply patch from rebase-apply directory
 - ``ra`` / ``rebase-abort``: Abort the current rebase (stashes changes, shows recovery info)
 - ``rb`` / ``rebase-beginning``: Rebase from beginning - stops at first commit for editing
