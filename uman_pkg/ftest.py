@@ -1190,6 +1190,50 @@ class TestGitSubcommand(TestBase):
         call_args = mock_run.call_args[0]
         self.assertEqual(('git', 'difftool', '--cached'), call_args)
 
+    def test_do_fm(self):
+        """Test do_fm checks commits against us/master"""
+        args = cmdline.parse_args(['git', 'fm'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.side_effect = [
+                'main',  # current branch
+                'First commit\nSecond commit',  # branch commits
+                'abc123 First commit\ndef456 Other commit',  # upstream log
+            ]
+            with terminal.capture() as (out, _):
+                result = cmdgit.do_fm(args)
+        self.assertEqual(0, result)
+        # First commit found, second not found
+        self.assertIn('Found: First commit', out.getvalue())
+        self.assertIn('Not found: Second commit', out.getvalue())
+
+    def test_do_fn(self):
+        """Test do_fn checks commits against us/next"""
+        args = cmdline.parse_args(['git', 'fn'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.side_effect = [
+                'main',  # current branch
+                'Test commit',  # branch commits
+                'abc123 Test commit',  # upstream log
+            ]
+            with terminal.capture() as (out, _):
+                result = cmdgit.do_fn(args)
+        self.assertEqual(0, result)
+        self.assertIn('Found: Test commit', out.getvalue())
+
+    def test_do_fci(self):
+        """Test do_fci checks commits against ci/master"""
+        args = cmdline.parse_args(['git', 'fci'])
+        with mock.patch.object(cmdgit, 'git_output') as mock_git:
+            mock_git.side_effect = [
+                'main',  # current branch
+                'CI commit',  # branch commits
+                'abc123 Other stuff',  # upstream log (no match)
+            ]
+            with terminal.capture() as (out, _):
+                result = cmdgit.do_fci(args)
+        self.assertEqual(0, result)
+        self.assertIn('Not found: CI commit', out.getvalue())
+
     def test_do_cs(self):
         """Test do_cs runs git show"""
         args = cmdline.parse_args(['git', 'cs'])

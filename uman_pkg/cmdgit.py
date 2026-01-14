@@ -622,6 +622,99 @@ def do_pe(_args):
     return result.return_code
 
 
+def grep_branch(branch, count, upstream):
+    """Check if commits from a branch are present in upstream
+
+    Args:
+        branch (str): Branch to check commits from
+        count (int): Number of commits to check
+        upstream (str): Upstream branch to search in
+
+    Returns:
+        int: 0 for success
+    """
+    # Get commit subjects from the branch
+    try:
+        subjects = git_output('log', f'-n{count}', '--format=%s', branch)
+    except command.CommandExc as exc:
+        tout.error(f'Cannot get commits from {branch}: {exc}')
+        return 1
+
+    # Get upstream log to search in
+    try:
+        upstream_log = git_output('log', '--oneline', '-n25000', upstream)
+    except command.CommandExc as exc:
+        tout.error(f'Cannot get log from {upstream}: {exc}')
+        return 1
+
+    tout.notice(f'Checking {branch} against {upstream}')
+    for subject in subjects.splitlines():
+        if not subject:
+            continue
+        if subject in upstream_log:
+            print(f'\033[92mFound: {subject}\033[0m')
+        else:
+            print(f'\033[91mNot found: {subject}\033[0m')
+    return 0
+
+
+def do_fm(args):
+    """Check if commits are in us/master
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Number of commits to check (default 5)
+
+    Returns:
+        int: Exit code
+    """
+    count = int(args.arg) if args.arg else 5
+    try:
+        branch = git_output('rev-parse', '--abbrev-ref', 'HEAD')
+    except command.CommandExc:
+        tout.error('Cannot determine current branch')
+        return 1
+    return grep_branch(branch, count, 'us/master')
+
+
+def do_fn(args):
+    """Check if commits are in us/next
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Number of commits to check (default 20)
+
+    Returns:
+        int: Exit code
+    """
+    count = int(args.arg) if args.arg else 20
+    try:
+        branch = git_output('rev-parse', '--abbrev-ref', 'HEAD')
+    except command.CommandExc:
+        tout.error('Cannot determine current branch')
+        return 1
+    return grep_branch(branch, count, 'us/next')
+
+
+def do_fci(args):
+    """Check if commits are in ci/master
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Number of commits to check (default 20)
+
+    Returns:
+        int: Exit code
+    """
+    count = int(args.arg) if args.arg else 20
+    try:
+        branch = git_output('rev-parse', '--abbrev-ref', 'HEAD')
+    except command.CommandExc:
+        tout.error('Cannot determine current branch')
+        return 1
+    return grep_branch(branch, count, 'ci/master')
+
+
 def do_am(_args):
     """Amend the current commit
 
@@ -789,6 +882,9 @@ GIT_ACTIONS = [
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('g', 'status', 'Show short status', do_g),
     GitAction('gd', 'difftool', 'Show changes using difftool', do_gd),
+    GitAction('fci', 'find-ci', 'Check commits against ci/master', do_fci),
+    GitAction('fm', 'find-master', 'Check commits against us/master', do_fm),
+    GitAction('fn', 'find-next', 'Check commits against us/next', do_fn),
     GitAction('gdc', 'difftool-cached', 'Show staged changes', do_gdc),
     GitAction('gr', 'git-rebase', 'Start interactive rebase', do_gr),
     GitAction('cs', 'commit-show', 'Show the current commit', do_cs),

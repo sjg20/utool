@@ -156,6 +156,9 @@ making it easier to step through commits during development.
 - ``co`` / ``checkout``: Checkout (switch branches or restore files)
 - ``dh`` / ``diff-head``: Show diff of top commit using difftool (git difftool HEAD~)
 - ``et`` / ``edit-todo``: Edit the rebase todo list
+- ``fci`` / ``find-ci`` [N]: Check if commits are in ci/master (default 20)
+- ``fm`` / ``find-master`` [N]: Check if commits are in us/master (default 5)
+- ``fn`` / ``find-next`` [N]: Check if commits are in us/next (default 20)
 - ``g`` / ``status``: Show short status (git status -sb) [1]_
 - ``gd`` / ``difftool``: Show changes using difftool
 - ``gdc`` / ``difftool-cached``: Show staged changes using difftool
