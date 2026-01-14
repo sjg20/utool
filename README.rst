@@ -153,6 +153,8 @@ making it easier to step through commits during development.
 - ``am`` / ``amend``: Amend the current commit (git commit --amend)
 - ``ams`` / ``amend-signoff``: Amend the current commit with signoff
 - ``au`` / ``add-update``: Add all changed files to staging (git add -u)
+- ``co`` / ``checkout``: Checkout (switch branches or restore files)
+- ``dh`` / ``diff-head``: Show diff of top commit using difftool (git difftool HEAD~)
 - ``et`` / ``edit-todo``: Edit the rebase todo list
 - ``g`` / ``status``: Show short status (git status -sb) [1]_
 - ``gd`` / ``difftool``: Show changes using difftool
@@ -171,7 +173,10 @@ making it easier to step through commits during development.
 - ``rp`` / ``rebase-patch`` N: Rebase to upstream, stop at patch N for editing (0 = first)
 - ``rs`` / ``rebase-skip``: Skip current commit (git rebase --skip)
 - ``sc`` / ``show-commit``: Show the current commit with stats
+- ``sl`` / ``stat-log`` [N]: Show log with stats (from upstream, or last N commits)
+- ``st`` / ``stash``: Stash changes (git stash)
 - ``us`` / ``set-upstream``: Set upstream branch to m/master
+- ``ust`` / ``unstash``: Pop stashed changes (git stash pop)
 
 .. [1] Note: ``g`` is also an alias for the ``git`` subcommand, so ``um g``
    means ``um git``. To run the status action, use ``um git g`` or ``um g g``.

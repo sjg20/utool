@@ -1209,6 +1209,68 @@ class TestGitSubcommand(TestBase):
         call_args = mock_run.call_args[0]
         self.assertEqual(('git', 'status', '-sb'), call_args)
 
+    def test_do_dh(self):
+        """Test do_dh runs git difftool HEAD~"""
+        args = cmdline.parse_args(['git', 'dh'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_dh(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'difftool', 'HEAD~'), call_args)
+
+    def test_do_sl(self):
+        """Test do_sl runs git log --stat upstream.."""
+        args = cmdline.parse_args(['git', 'sl'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            with mock.patch.object(cmdgit, 'get_upstream',
+                                   return_value='origin/main'):
+                result = cmdgit.do_sl(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'log', '--stat', 'origin/main..'), call_args)
+
+    def test_do_sl_with_count(self):
+        """Test do_sl N runs git log --stat -N"""
+        args = cmdline.parse_args(['git', 'sl', '5'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_sl(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'log', '--stat', '-5'), call_args)
+
+    def test_do_co(self):
+        """Test do_co runs git checkout"""
+        args = cmdline.parse_args(['git', 'co'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_co(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'checkout'), call_args)
+
+    def test_do_st(self):
+        """Test do_st runs git stash"""
+        args = cmdline.parse_args(['git', 'st'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_st(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'stash'), call_args)
+
+    def test_do_ust(self):
+        """Test do_ust runs git stash pop"""
+        args = cmdline.parse_args(['git', 'ust'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_ust(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'stash', 'pop'), call_args)
+
     def test_do_pm(self):
         """Test do_pm applies patch from rebase directory"""
         args = cmdline.parse_args(['git', 'pm'])

@@ -699,6 +699,73 @@ def do_g(_args):
     return result.return_code
 
 
+def do_dh(_args):
+    """Show diff of the top commit using difftool
+
+    Returns:
+        int: Exit code from git difftool HEAD~
+    """
+    result = command.run_one('git', 'difftool', 'HEAD~', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_sl(args):
+    """Show log with stats from upstream
+
+    Args:
+        args (argparse.Namespace): Arguments from cmdline
+            args.arg: Number of commits to show, or None for all from upstream
+
+    Returns:
+        int: Exit code from git log --stat
+    """
+    if args.arg:
+        cmd = ['git', 'log', '--stat', f'-{args.arg}']
+    else:
+        upstream = get_upstream()
+        if not upstream:
+            tout.error('Cannot determine upstream branch')
+            return 1
+        cmd = ['git', 'log', '--stat', f'{upstream}..']
+
+    result = command.run_one(*cmd, capture=False, raise_on_error=False)
+    return result.return_code
+
+
+def do_co(_args):
+    """Checkout (switch branches or restore files)
+
+    Returns:
+        int: Exit code from git checkout
+    """
+    result = command.run_one('git', 'checkout', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_st(_args):
+    """Stash changes
+
+    Returns:
+        int: Exit code from git stash
+    """
+    result = command.run_one('git', 'stash', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_ust(_args):
+    """Pop stashed changes
+
+    Returns:
+        int: Exit code from git stash pop
+    """
+    result = command.run_one('git', 'stash', 'pop', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
 # Git action definition: short name, long name, description, function
 GitAction = namedtuple('GitAction', ['short', 'long', 'name', 'func'])
 
@@ -706,6 +773,8 @@ GIT_ACTIONS = [
     GitAction('am', 'amend', 'Amend the current commit', do_am),
     GitAction('ams', 'amend-signoff', 'Amend with signoff', do_ams),
     GitAction('au', 'add-update', 'Add changed files to staging', do_au),
+    GitAction('co', 'checkout', 'Checkout (switch branches/restore)', do_co),
+    GitAction('dh', 'diff-head', 'Show diff of top commit', do_dh),
     GitAction('et', 'edit-todo', 'Edit rebase todo list', do_et),
     GitAction('g', 'status', 'Show short status', do_g),
     GitAction('gd', 'difftool', 'Show changes using difftool', do_gd),
@@ -724,7 +793,10 @@ GIT_ACTIONS = [
     GitAction('rp', 'rebase-patch', 'Stop at patch N for editing', do_rp),
     GitAction('rs', 'rebase-skip', 'Skip current commit in rebase', do_rs),
     GitAction('sc', 'show-commit', 'Show commit with stats', do_sc),
+    GitAction('sl', 'stat-log', 'Show log with stats from upstream', do_sl),
+    GitAction('st', 'stash', 'Stash changes', do_st),
     GitAction('us', 'set-upstream', 'Set upstream branch', do_us),
+    GitAction('ust', 'unstash', 'Pop stashed changes', do_ust),
 ]
 
 # Build lookup dicts from the action list
