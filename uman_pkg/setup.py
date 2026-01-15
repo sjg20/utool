@@ -16,6 +16,7 @@ import tempfile
 from u_boot_pylib import command
 from u_boot_pylib import tout
 
+from uman_pkg import cmdgit
 from uman_pkg import settings
 
 
@@ -27,10 +28,6 @@ SETUP_COMPONENTS = {
     'tfa': 'ARM Trusted Firmware for QEMU SBSA',
     'xtensa': 'Xtensa dc233c toolchain',
 }
-
-# Git action names for symlink creation (short names only, to avoid clutter)
-GIT_ALIASES = ['et', 'gr', 'ol', 'pm', 'ra', 'rb', 'rc', 'rd', 're', 'rf', 'rn',
-               'rp', 'rs', 'us']
 
 def setup_aliases(args):
     """Create symlinks for git action commands
@@ -61,9 +58,11 @@ def setup_aliases(args):
 
     uman_path = os.path.abspath(uman_path)
 
+    aliases = [a.short for a in cmdgit.GIT_ACTIONS]
+
     if args.dry_run:
         tout.notice(f'Would create symlinks in {alias_dir} -> {uman_path}')
-        for name in GIT_ALIASES:
+        for name in aliases:
             tout.notice(f'  {name}')
         return 0
 
@@ -72,7 +71,7 @@ def setup_aliases(args):
 
     created = []
     skipped = []
-    for name in GIT_ALIASES:
+    for name in aliases:
         link_path = os.path.join(alias_dir, name)
         if os.path.exists(link_path) or os.path.islink(link_path):
             if args.force:
