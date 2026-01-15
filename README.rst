@@ -36,6 +36,29 @@ Install dependencies::
 
     pip install -r requirements.txt
 
+Shell Setup
+-----------
+
+Add this to your ``~/.bashrc`` (or ``~/.zshrc``) to allow uman to use shell
+variables without needing to export them::
+
+    um() { USRC="$USRC" command um ${b:+-B "$b"} "$@"; }
+
+This passes:
+
+- ``$b`` as the ``-B`` (board) option
+- ``$USRC`` as an environment variable for the U-Boot source directory
+
+Then reload your shell config::
+
+    source ~/.bashrc
+
+Now you can set these in your shell and uman will use them automatically::
+
+    b=sandbox
+    USRC=~/u
+    um build    # Uses -B sandbox and U-Boot source from ~/u
+
 Settings
 --------
 
