@@ -288,6 +288,10 @@ def add_git_subparser(subparsers):
         'git', aliases=['g'],
         help='Git rebase helpers')
 
+    git.add_argument(
+        '-a', '--aliases', action='store_true',
+        help='Output shell alias definitions for eval')
+
     # Build choices and help from GIT_ACTIONS
     actions = get_git_actions()
     choices = []
@@ -297,7 +301,7 @@ def add_git_subparser(subparsers):
         help_parts.append(f'{action.short}/{action.long}')
 
     git.add_argument(
-        'action',
+        'action', nargs='?',
         choices=choices,
         metavar='ACTION',
         help=f"Action: {', '.join(help_parts)}")

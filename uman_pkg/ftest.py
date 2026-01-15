@@ -794,6 +794,17 @@ class TestGitSubcommand(TestBase):
         self.assertEqual('git', args.cmd)
         self.assertEqual('rc', args.action)
 
+    def test_git_aliases_flag(self):
+        """Test git -a outputs shell alias definitions"""
+        args = cmdline.parse_args(['git', '-a'])
+        self.assertTrue(args.aliases)
+        with terminal.capture() as (out, _):
+            result = cmdgit.run(args)
+        self.assertEqual(0, result)
+        output = out.getvalue()
+        self.assertIn("alias am='git commit --amend'", output)
+        self.assertIn("alias st='git stash'", output)
+
     def test_git_symlink_invocation(self):
         """Test invoking via symlink automatically runs git subcommand"""
         # Simulate invoking as 'rf' symlink with argument

@@ -59,6 +59,13 @@ Now you can set these in your shell and uman will use them automatically::
     USRC=~/u
     um build    # Uses -B sandbox and U-Boot source from ~/u
 
+To add shell aliases for simple git commands (allowing argument pass-through)::
+
+    eval "$(um git -a)"
+
+This creates aliases like ``am``, ``cm``, ``gd``, etc. that map directly to git
+commands, allowing you to pass additional arguments (e.g., ``cm -m "message"``).
+
 Settings
 --------
 

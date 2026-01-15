@@ -1117,6 +1117,41 @@ GIT_ACTIONS = [
 ACTIONS = {a.short: a.func for a in GIT_ACTIONS}
 ACTION_ALIASES = {a.long: a.short for a in GIT_ACTIONS}
 
+# Simple commands that can be shell aliases (short_name -> git command)
+SIMPLE_ALIASES = {
+    'am': 'git commit --amend',
+    'ams': 'git commit --amend -s',
+    'au': 'git add -u',
+    'cm': 'git commit',
+    'cms': 'git commit -s',
+    'co': 'git checkout',
+    'cs': 'git show',
+    'dh': 'git difftool HEAD~',
+    'g': 'git status -sb',
+    'gb': 'git branch',
+    'gba': 'git branch -a',
+    'gd': 'git difftool',
+    'gdc': 'git difftool --cached',
+    'pe': 'git log --oneline -n10 --decorate',
+    'rc': 'git rebase --continue',
+    'rs': 'git rebase --skip',
+    'sc': 'git show --stat',
+    'st': 'git stash',
+    'ust': 'git stash pop',
+}
+
+
+def print_aliases():
+    """Print shell alias definitions for simple git commands
+
+    Returns:
+        int: Exit code (always 0)
+    """
+    print('# Git aliases - add to ~/.bashrc: eval "$(um git -a)"')
+    for name, cmd in sorted(SIMPLE_ALIASES.items()):
+        print(f"alias {name}='{cmd}'")
+    return 0
+
 
 def run(args):
     """Handle git subcommand
@@ -1127,6 +1162,13 @@ def run(args):
     Returns:
         int: Exit code (0 for success, non-zero for failure)
     """
+    if args.aliases:
+        return print_aliases()
+
+    if not args.action:
+        tout.error('Action required (or use -a for aliases)')
+        return 1
+
     # Resolve alias to short name
     action = ACTION_ALIASES.get(args.action, args.action)
 
