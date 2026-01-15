@@ -153,6 +153,8 @@ making it easier to step through commits during development.
 - ``am`` / ``amend``: Amend the current commit (git commit --amend)
 - ``ams`` / ``amend-signoff``: Amend the current commit with signoff
 - ``au`` / ``add-update``: Add all changed files to staging (git add -u)
+- ``cm`` / ``commit``: Commit staged changes (git commit)
+- ``cms`` / ``commit-signoff``: Commit with signoff (git commit --signoff)
 - ``co`` / ``checkout``: Checkout (switch branches or restore files)
 - ``db`` / ``diff-branch``: Diff current commit files against upstream
 - ``dh`` / ``diff-head``: Show diff of top commit using difftool (git difftool HEAD~)

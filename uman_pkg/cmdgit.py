@@ -900,6 +900,28 @@ def do_au(_args):
     return result.return_code
 
 
+def do_cm(_args):
+    """Commit staged changes
+
+    Returns:
+        int: Exit code from git commit
+    """
+    result = command.run_one('git', 'commit', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
+def do_cms(_args):
+    """Commit staged changes with signoff
+
+    Returns:
+        int: Exit code from git commit --signoff
+    """
+    result = command.run_one('git', 'commit', '--signoff', capture=False,
+                             raise_on_error=False)
+    return result.return_code
+
+
 def do_gb(_args):
     """List branches
 
@@ -1051,6 +1073,8 @@ GIT_ACTIONS = [
     GitAction('am', 'amend', 'Amend the current commit', do_am),
     GitAction('ams', 'amend-signoff', 'Amend with signoff', do_ams),
     GitAction('au', 'add-update', 'Add changed files to staging', do_au),
+    GitAction('cm', 'commit', 'Commit staged changes', do_cm),
+    GitAction('cms', 'commit-signoff', 'Commit with signoff', do_cms),
     GitAction('co', 'checkout', 'Checkout (switch branches/restore)', do_co),
     GitAction('db', 'diff-branch', 'Diff commit files against upstream', do_db),
     GitAction('dh', 'diff-head', 'Show diff of top commit', do_dh),

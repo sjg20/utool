@@ -1435,6 +1435,26 @@ class TestGitSubcommand(TestBase):
         call_args = mock_run.call_args[0]
         self.assertEqual(('git', 'log', '--stat', '-5'), call_args)
 
+    def test_do_cm(self):
+        """Test do_cm runs git commit"""
+        args = cmdline.parse_args(['git', 'cm'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_cm(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'commit'), call_args)
+
+    def test_do_cms(self):
+        """Test do_cms runs git commit --signoff"""
+        args = cmdline.parse_args(['git', 'cms'])
+        with mock.patch('u_boot_pylib.command.run_one') as mock_run:
+            mock_run.return_value = mock.Mock(return_code=0)
+            result = cmdgit.do_cms(args)
+        self.assertEqual(0, result)
+        call_args = mock_run.call_args[0]
+        self.assertEqual(('git', 'commit', '--signoff'), call_args)
+
     def test_do_co(self):
         """Test do_co runs git checkout"""
         args = cmdline.parse_args(['git', 'co'])
