@@ -68,6 +68,49 @@ class TestBase(unittest.TestCase):
             shutil.rmtree(self.test_dir)
 
 
+class GitRepoMixin:
+    """Mixin providing a real git repository for testing
+
+    Requires self.test_dir to be set (provided by TestBase).
+    Call setup_git_repo() in setUp() after super().setUp().
+    Call teardown_git_repo() in tearDown() before super().tearDown().
+    """
+
+    def setup_git_repo(self):
+        """Create a test git repository with commits"""
+        self.orig_dir = os.getcwd()
+        os.chdir(self.test_dir)
+
+        command.output('git', 'init')
+        command.output('git', 'config', 'user.email', 'test@test.com')
+        command.output('git', 'config', 'user.name', 'Test User')
+
+        # Create initial commit on main branch
+        tools.write_file('file.txt', 'initial\n', binary=False)
+        command.output('git', 'add', 'file.txt')
+        command.output('git', 'commit', '-m', 'Initial commit')
+
+        # Create 'upstream' branch as a tracking point
+        command.output('git', 'branch', 'upstream')
+
+        # Create feature commits
+        for i in range(1, 5):
+            tools.write_file(f'file{i}.txt', f'content {i}\n', binary=False)
+            command.output('git', 'add', f'file{i}.txt')
+            command.output('git', 'commit', '-m', f'Commit {i}')
+
+        # Set upstream tracking
+        command.output('git', 'branch', '--set-upstream-to=upstream')
+
+    def teardown_git_repo(self):
+        """Return to original directory"""
+        os.chdir(self.orig_dir)
+
+    def git_run(self, *args):
+        """Run git command, ignoring errors (for cleanup)"""
+        command.run_one('git', *args, raise_on_error=False, **CAPTURE)
+
+
 def make_args(**kwargs):
     """Create an argparse.Namespace with default CI arguments"""
     defaults = {
@@ -863,7 +906,7 @@ class TestGitSubcommand(TestBase):
                 return 'origin/main'
             return ''
 
-        with mock.patch('uman_pkg.cmdgit.git_output', mock_git_output):
+        with mock.patch('uman_pkg.cmdgit.git_output_quiet', mock_git_output):
             upstream = cmdgit.get_upstream()
         self.assertEqual('origin/main', upstream)
 
@@ -1674,47 +1717,19 @@ class TestGitSubcommand(TestBase):
         self.assertIn('Patch number required', err.getvalue())
 
 
-class TestGitRebase(TestBase):
+class TestGitRebase(TestBase, GitRepoMixin):
     """Integration tests for git rebase subcommands using real git repos"""
 
     def setUp(self):
         """Create a test git repository with commits"""
         super().setUp()
         tout.init(tout.NOTICE)
-        self.orig_dir = os.getcwd()
-        os.chdir(self.test_dir)
-
-        # Configure git for the test repo
-        command.output('git', 'init')
-        command.output('git', 'config', 'user.email', 'test@test.com')
-        command.output('git', 'config', 'user.name', 'Test User')
-
-        # Create initial commit on main branch
-        tools.write_file('file.txt', 'initial\n', binary=False)
-        command.output('git', 'add', 'file.txt')
-        command.output('git', 'commit', '-m', 'Initial commit')
-
-        # Create 'upstream' branch as a tracking point
-        command.output('git', 'branch', 'upstream')
-
-        # Create feature commits (each modifying a different file to avoid
-        # conflicts during rebase)
-        for i in range(1, 5):
-            tools.write_file(f'file{i}.txt', f'content {i}\n', binary=False)
-            command.output('git', 'add', f'file{i}.txt')
-            command.output('git', 'commit', '-m', f'Commit {i}')
-
-        # Set upstream tracking
-        command.output('git', 'branch', '--set-upstream-to=upstream')
+        self.setup_git_repo()
 
     def tearDown(self):
         """Return to original directory and clean up"""
-        os.chdir(self.orig_dir)
+        self.teardown_git_repo()
         super().tearDown()
-
-    def git_run(self, *args):
-        """Run git command, ignoring errors (for cleanup)"""
-        command.run_one('git', *args, raise_on_error=False, **CAPTURE)
 
     def is_rebasing(self):
         """Check if a rebase is in progress"""
@@ -1723,6 +1738,20 @@ class TestGitRebase(TestBase):
     def get_head_subject(self):
         """Get the subject of HEAD commit"""
         return command.output('git', 'log', '-1', '--format=%s').strip()
+
+    def test_get_upstream_no_stderr(self):
+        """Test get_upstream doesn't print git errors in detached HEAD"""
+        # Detach HEAD so @{upstream} will fail
+        head = command.output('git', 'rev-parse', 'HEAD').strip()
+        command.run_one('git', 'checkout', head, **CAPTURE)
+
+        with terminal.capture() as (out, err):
+            result = cmdgit.get_upstream()
+
+        # Should not have git's "fatal:" error message
+        self.assertNotIn('fatal:', err.getvalue())
+        # Should still find upstream via @{-1} fallback
+        self.assertIsNotNone(result)
 
     def test_rb_stops_at_upstream(self):
         """Test rb rebases to upstream and stops before first commit"""

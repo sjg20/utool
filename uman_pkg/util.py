@@ -161,6 +161,26 @@ def git_output(*args):
     return command.output('git', *args).strip()
 
 
+def git_output_quiet(*args):
+    """Run a git command and return its output, suppressing stderr
+
+    Like git_output() but captures and discards stderr to avoid error
+    messages being printed when commands fail expectedly.
+
+    Args:
+        *args: Arguments to pass to git (e.g., 'rev-parse', '--abbrev-ref')
+
+    Returns:
+        str: Command output (stdout), stripped of trailing whitespace
+
+    Raises:
+        command.CommandExc: If the command fails
+    """
+    result = command.run_pipe([['git'] + list(args)], capture=True,
+                              capture_stderr=True, raise_on_error=True)
+    return result.stdout.strip()
+
+
 def git(*args, env=None, dry_run=False):
     """Run a git command, capturing output
 

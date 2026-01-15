@@ -16,7 +16,7 @@ import re
 from u_boot_pylib import command
 from u_boot_pylib import tout
 
-from uman_pkg.util import git, git_output
+from uman_pkg.util import git, git_output, git_output_quiet
 
 
 def get_rebase_position():
@@ -94,9 +94,9 @@ def get_upstream():
     Returns:
         str: Upstream branch name, or None if not found
     """
-    # Try @{upstream} first
+    # Try @{upstream} first (use quiet version to suppress stderr)
     try:
-        upstream = git_output('rev-parse', '--abbrev-ref', '@{upstream}')
+        upstream = git_output_quiet('rev-parse', '--abbrev-ref', '@{upstream}')
         if upstream:
             return upstream
     except command.CommandExc:
@@ -104,7 +104,7 @@ def get_upstream():
 
     # Maybe we are in a rebase - try @{-1}
     try:
-        upstream = git_output('rev-parse', '--abbrev-ref', '@{-1}')
+        upstream = git_output_quiet('rev-parse', '--abbrev-ref', '@{-1}')
         if upstream:
             tout.warning(f'Using upstream branch {upstream}')
             return upstream
