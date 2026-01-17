@@ -487,20 +487,18 @@ def do_us(args):
 
     Args:
         args (argparse.Namespace): Arguments from cmdline
-            args.arg: Not used (upstream passed separately)
+            args.arg: Upstream branch name (default: m/master)
 
     Returns:
         int: Exit code (0 for success)
     """
-    del args  # unused for now - could add upstream argument later
     try:
         branch = git_output('rev-parse', '--abbrev-ref', 'HEAD')
     except command.CommandExc:
         tout.error('Cannot determine current branch')
         return 1
 
-    # Default upstream is m/master
-    upstream = 'm/master'
+    upstream = args.arg or 'm/master'
 
     result = git('branch', '--set-upstream-to', upstream, branch)
     if result.return_code == 0:
